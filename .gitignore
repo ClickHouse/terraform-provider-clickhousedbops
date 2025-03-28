@@ -1,8 +1,6 @@
 .terraform*
 terraform.tfstate*
 
-terraform-provider-clickhousedbops
-
 node_modules/
 secrets.tfvars
 dev/
@@ -11,4 +9,5 @@ dev/
 
 **/variables.tfvars
 /tmp/build-errors.log
-/tmp/terraform-provider-clickhouse-rbac
+/tmp/terraform-provider-clickhousedbops
+/terraform-provider-clickhousedbops

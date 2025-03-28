@@ -1,7 +1,7 @@
 TEST?=$$(go list ./... | grep -v 'vendor')
 HOSTNAME=clickhouse.cloud
 NAMESPACE=terraform
-NAME=clickhouse-rbac
+NAME=clickhousedbops
 BINARY=terraform-provider-${NAME}
 VERSION=0.1
 OS_ARCH=darwin_arm64
@@ -39,7 +39,7 @@ enable_git_hooks: ## Add githooks for code validation before commit, as symlink 
 	echo "Git hooks were updated from .githooks/ into .git/hooks/"
 
 docs: ensure-tfplugindocs
-	$(TFPLUGINDOCS) generate --provider-name=clickhouse-rbac
+	$(TFPLUGINDOCS) generate --provider-name=clickhousedbops
 
 fmt: ensure-golangci-lint
 	go fmt ./...
