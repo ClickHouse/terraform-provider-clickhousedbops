@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
-	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/rbac"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/project"
 )
 
@@ -99,7 +98,6 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
-	var clickhouseClient clickhouseclient.ClickhouseClient
 	{
 		switch data.Protocol {
 		case protocolNative:
@@ -125,7 +123,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				return
 			}
 
-			clickhouseClient, err = clickhouseclient.NewNativeClient(clickhouseclient.NativeClientConfig{
+			_, err = clickhouseclient.NewNativeClient(clickhouseclient.NativeClientConfig{
 				Host:             data.Host,
 				Port:             data.Port,
 				UserPasswordAuth: auth,
@@ -137,14 +135,6 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	if err != nil {
 		resp.Diagnostics.AddError("error initializing query runner", fmt.Sprintf("%+v\n", err))
 	}
-
-	client, err := rbac.New(clickhouseClient)
-	if err != nil {
-		resp.Diagnostics.AddError("error initializing rbac client", fmt.Sprintf("%+v\n", err))
-	}
-
-	resp.DataSourceData = client
-	resp.ResourceData = client
 }
 
 func (p *Provider) Resources(ctx context.Context) []func() tfresource.Resource {
