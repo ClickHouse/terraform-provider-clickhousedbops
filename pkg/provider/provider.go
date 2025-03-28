@@ -15,9 +15,6 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/rbac"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/project"
-	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/database"
-	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/role"
-	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/user"
 )
 
 const (
@@ -151,11 +148,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 }
 
 func (p *Provider) Resources(ctx context.Context) []func() tfresource.Resource {
-	return []func() tfresource.Resource{
-		database.NewResource,
-		role.NewResource,
-		user.NewResource,
-	}
+	return []func() tfresource.Resource{}
 }
 
 func (p *Provider) DataSources(ctx context.Context) []func() datasource.DataSource {
