@@ -32,18 +32,18 @@ var (
 	availableAuthStrategies = []string{authStrategyPassword}
 )
 
-// Ensure ClickhouseRBACProvider satisfies various provider interfaces.
-var _ provider.Provider = &ClickhouseRBACProvider{}
+// Ensure Provider satisfies various provider interfaces.
+var _ provider.Provider = &Provider{}
 
-// ClickhouseRBACProvider defines the provider implementation.
-type ClickhouseRBACProvider struct{}
+// Provider defines the provider implementation.
+type Provider struct{}
 
-func (p *ClickhouseRBACProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+func (p *Provider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "clickhousedbops"
 	resp.Version = project.Version()
 }
 
-func (p *ClickhouseRBACProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"protocol": schema.StringAttribute{
@@ -92,7 +92,7 @@ func (p *ClickhouseRBACProvider) Schema(ctx context.Context, req provider.Schema
 	}
 }
 
-func (p *ClickhouseRBACProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var data Model
 	var err error
 
@@ -150,7 +150,7 @@ func (p *ClickhouseRBACProvider) Configure(ctx context.Context, req provider.Con
 	resp.ResourceData = client
 }
 
-func (p *ClickhouseRBACProvider) Resources(ctx context.Context) []func() tfresource.Resource {
+func (p *Provider) Resources(ctx context.Context) []func() tfresource.Resource {
 	return []func() tfresource.Resource{
 		database.NewResource,
 		role.NewResource,
@@ -158,12 +158,12 @@ func (p *ClickhouseRBACProvider) Resources(ctx context.Context) []func() tfresou
 	}
 }
 
-func (p *ClickhouseRBACProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *Provider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{}
 }
 
 func New() func() provider.Provider {
 	return func() provider.Provider {
-		return &ClickhouseRBACProvider{}
+		return &Provider{}
 	}
 }
