@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -61,7 +62,12 @@ func NewNativeClient(config NativeClientConfig) (ClickhouseClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = conn.Ping(context.Background())
+
+	// Default timeout of native client is 30 seconds.
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelFunc()
+
+	err = conn.Ping(ctx)
 	if err != nil {
 		return nil, err
 	}
