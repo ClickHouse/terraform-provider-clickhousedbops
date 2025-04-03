@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pingcap/errors"
@@ -53,6 +52,8 @@ func NewHTTPClient(config HTTPClientConfig) (ClickhouseClient, error) {
 		return nil, errors.WithMessage(err, "cannot parse URL")
 	}
 
+	baseUrl.Path = "/"
+
 	if config.BasicAuth != nil {
 		if config.BasicAuth.Password == "" {
 			baseUrl.User = url.User(config.BasicAuth.Username)
@@ -61,32 +62,9 @@ func NewHTTPClient(config HTTPClientConfig) (ClickhouseClient, error) {
 		}
 	}
 
-	client := &http.Client{}
-
-	// Attempt ping to clickhouse to ensure config is correct.
-	{
-		pingUrl, _ := url.Parse(baseUrl.String())
-		pingUrl.Path = "/ping"
-
-		ctx, cancelFunc := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancelFunc()
-
-		pingRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, pingUrl.String(), nil)
-		if err != nil {
-			return nil, errors.WithMessage(err, "cannot prepare ping request")
-		}
-
-		_, err = client.Do(pingRequest)
-		if err != nil {
-			return nil, errors.WithMessage(err, "cannot ping server")
-		}
-	}
-
-	baseUrl.Path = "/"
-
 	return &httpClient{
 		baseUrl: *baseUrl,
-		client:  client,
+		client:  &http.Client{},
 	}, nil
 }
 
