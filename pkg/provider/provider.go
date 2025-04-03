@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/project"
 )
 
@@ -101,7 +102,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
-	var _ clickhouseclient.ClickhouseClient
+	var clickhouseClient clickhouseclient.ClickhouseClient
 	{
 		switch data.Protocol {
 		case protocolNative:
@@ -166,13 +167,23 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				config.Protocol = "https"
 			}
 
-			_, err = clickhouseclient.NewHTTPClient(config)
+			clickhouseClient, err = clickhouseclient.NewHTTPClient(config)
 		}
 	}
 
 	if err != nil {
-		resp.Diagnostics.AddError("error initializing query runner", fmt.Sprintf("%+v\n", err))
+		resp.Diagnostics.AddError("error initializing clickhouse client", fmt.Sprintf("%+v\n", err))
+		return
 	}
+
+	dbopsClient, err := dbops.NewClient(clickhouseClient)
+	if err != nil {
+		resp.Diagnostics.AddError("error initializing dbops client", fmt.Sprintf("%+v\n", err))
+		return
+	}
+
+	resp.ResourceData = dbopsClient
+	resp.DataSourceData = dbopsClient
 }
 
 func (p *Provider) Resources(ctx context.Context) []func() tfresource.Resource {
