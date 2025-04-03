@@ -19,13 +19,16 @@ import (
 const (
 	protocolNative       = "native"
 	protocolNativeSecure = "nativesecure"
+	protocolHTTP         = "http"
+	protocolHTTPS        = "https"
 
-	authStrategyPassword = "password"
+	authStrategyPassword  = "password"
+	authStrategyBasicAuth = "basicauth"
 )
 
 var (
-	availableProtocols      = []string{protocolNative, protocolNativeSecure}
-	availableAuthStrategies = []string{authStrategyPassword}
+	availableProtocols      = []string{protocolNative, protocolNativeSecure, protocolHTTP, protocolHTTPS}
+	availableAuthStrategies = []string{authStrategyPassword, authStrategyBasicAuth}
 )
 
 // Ensure Provider satisfies various provider interfaces.
@@ -98,6 +101,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
+	var _ clickhouseclient.ClickhouseClient
 	{
 		switch data.Protocol {
 		case protocolNative:
@@ -129,6 +133,40 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				UserPasswordAuth: auth,
 				EnableTLS:        data.Protocol == protocolNativeSecure,
 			})
+		case protocolHTTP:
+			fallthrough
+		case protocolHTTPS:
+			var auth *clickhouseclient.BasicAuth
+			switch data.AuthConfig.Strategy {
+			case authStrategyBasicAuth:
+				auth = &clickhouseclient.BasicAuth{
+					Username: data.AuthConfig.Username,
+				}
+
+				if data.AuthConfig.Password != nil {
+					auth.Password = *data.AuthConfig.Password
+				}
+
+				valid, errorStrings := auth.ValidateConfig()
+				if !valid {
+					resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid authentication strategy configuration. %s", strings.Join(errorStrings, ", ")))
+				}
+			default:
+				resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid authentication strategy %q. %s protocol only supports %q", data.AuthConfig.Strategy, protocolHTTP, authStrategyBasicAuth))
+				return
+			}
+
+			config := clickhouseclient.HTTPClientConfig{
+				Host:      data.Host,
+				Port:      data.Port,
+				BasicAuth: auth,
+			}
+
+			if data.Protocol == protocolHTTPS {
+				config.Protocol = "https"
+			}
+
+			_, err = clickhouseclient.NewHTTPClient(config)
 		}
 	}
 
