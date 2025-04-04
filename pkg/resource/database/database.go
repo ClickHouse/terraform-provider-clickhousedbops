@@ -47,6 +47,10 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
+			"uuid": schema.StringAttribute{
+				Computed:    true,
+				Description: "The system-assigned UUID for the database",
+			},
 			"name": schema.StringAttribute{
 				Required:    true,
 				Description: "Name of the database",
@@ -98,7 +102,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	state, err := r.syncDatabaseState(ctx, db.Name)
+	state, err := r.syncDatabaseState(ctx, db.UUID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error syncing database",
@@ -122,7 +126,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	state, err := r.syncDatabaseState(ctx, plan.Name.ValueString())
+	state, err := r.syncDatabaseState(ctx, plan.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error syncing database",
@@ -150,7 +154,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.DeleteDatabase(ctx, plan.Name.ValueString())
+	err := r.client.DeleteDatabase(ctx, dbops.Database{Name: plan.Name.ValueString()})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting database",
@@ -161,12 +165,12 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), req.ID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), req.ID)...)
 }
 
 // syncDatabaseState reads database settings from clickhouse and returns a DatabaseResourceModel
-func (r *Resource) syncDatabaseState(ctx context.Context, name string) (*Database, error) {
-	db, err := r.client.GetDatabase(ctx, name)
+func (r *Resource) syncDatabaseState(ctx context.Context, uuid string) (*Database, error) {
+	db, err := r.client.GetDatabase(ctx, uuid)
 	if err != nil {
 		return nil, errors.WithMessage(err, "cannot get database")
 	}
@@ -177,6 +181,7 @@ func (r *Resource) syncDatabaseState(ctx context.Context, name string) (*Databas
 	}
 
 	state := &Database{
+		UUID:    types.StringValue(db.UUID),
 		Name:    types.StringValue(db.Name),
 		Comment: comment,
 	}

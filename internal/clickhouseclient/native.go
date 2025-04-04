@@ -9,6 +9,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pingcap/errors"
 )
@@ -105,6 +106,8 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 			switch v := v.(type) {
 			case *string:
 				ret.Set(rows.Columns()[i], *v)
+			case *uuid.UUID:
+				ret.Set(rows.Columns()[i], v.String())
 			default:
 				return errors.New(fmt.Sprintf("unsupported column type: %s", reflect.TypeOf(v)))
 			}

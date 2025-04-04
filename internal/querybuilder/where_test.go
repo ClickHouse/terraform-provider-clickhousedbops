@@ -27,17 +27,17 @@ func Test_Where_String(t *testing.T) {
 		{
 			name:  "String",
 			where: Where("name", "mark"),
-			want:  "`name` = 'mark'",
+			want:  "WHERE `name` = 'mark'",
 		},
 		{
 			name:  "Numeric",
 			where: Where("age", 3),
-			want:  "`age` = 3",
+			want:  "WHERE `age` = 3",
 		},
 		{
 			name:  "String with backtick in name",
 			where: Where("te`st", "value"),
-			want:  "`te\\`st` = 'value'",
+			want:  "WHERE `te\\`st` = 'value'",
 		},
 	}
 	for _, tt := range tests {

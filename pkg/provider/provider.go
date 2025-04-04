@@ -129,7 +129,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				return
 			}
 
-			_, err = clickhouseclient.NewNativeClient(clickhouseclient.NativeClientConfig{
+			clickhouseClient, err = clickhouseclient.NewNativeClient(clickhouseclient.NativeClientConfig{
 				Host:             data.Host,
 				Port:             data.Port,
 				UserPasswordAuth: auth,

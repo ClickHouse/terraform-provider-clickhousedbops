@@ -8,6 +8,8 @@ import (
 
 const (
 	resourceTypeDatabase = "DATABASE"
+	resourceTypeRole     = "ROLE"
+	resourceTypeUser     = "USER"
 
 	actionCreate = "CREATE"
 	actionDrop   = "DROP"
@@ -20,12 +22,28 @@ type createDropQueryBuilder struct {
 	options          []Option
 }
 
+func NewCreateRole(resourceName string) QueryBuilder {
+	return newCreate(resourceTypeRole, resourceName)
+}
+
 func NewCreateDatabase(resourceName string) QueryBuilder {
 	return newCreate(resourceTypeDatabase, resourceName)
 }
 
+func NewCreateUser(resourceName string) QueryBuilder {
+	return newCreate(resourceTypeUser, resourceName)
+}
+
+func NewDropRole(resourceName string) QueryBuilder {
+	return newDrop(resourceTypeRole, resourceName)
+}
+
 func NewDropDatabase(resourceName string) QueryBuilder {
 	return newDrop(resourceTypeDatabase, resourceName)
+}
+
+func NewDropUser(resourceName string) QueryBuilder {
+	return newDrop(resourceTypeUser, resourceName)
 }
 
 func newCreate(resourceTypeName string, resourceName string) QueryBuilder {
