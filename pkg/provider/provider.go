@@ -15,6 +15,7 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/project"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/database"
 )
 
 const (
@@ -187,7 +188,9 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 }
 
 func (p *Provider) Resources(ctx context.Context) []func() tfresource.Resource {
-	return []func() tfresource.Resource{}
+	return []func() tfresource.Resource{
+		database.NewResource,
+	}
 }
 
 func (p *Provider) DataSources(ctx context.Context) []func() datasource.DataSource {
