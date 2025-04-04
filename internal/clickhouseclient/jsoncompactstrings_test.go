@@ -9,7 +9,7 @@ func Test_jsonCompatStrings_Rows(t *testing.T) {
 	tests := []struct {
 		name              string
 		jsonCompatStrings jsonCompatStrings
-		want              []map[string]string
+		want              []Row
 	}{
 		{
 			name: "Basic test",
@@ -32,13 +32,13 @@ func Test_jsonCompatStrings_Rows(t *testing.T) {
 					},
 				},
 			},
-			want: []map[string]string{
-				{
+			want: []Row{
+				rowFromMap(map[string]string{
 					"name": "john",
-				},
-				{
+				}),
+				rowFromMap(map[string]string{
 					"name": "frank",
-				},
+				}),
 			},
 		},
 	}
@@ -51,4 +51,14 @@ func Test_jsonCompatStrings_Rows(t *testing.T) {
 			}
 		})
 	}
+}
+
+func rowFromMap(data map[string]string) Row {
+	row := Row{}
+
+	for k, v := range data {
+		row.Set(k, v)
+	}
+
+	return row
 }
