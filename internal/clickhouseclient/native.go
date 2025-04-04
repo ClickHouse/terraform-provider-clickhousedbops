@@ -55,7 +55,7 @@ func NewNativeClient(config NativeClientConfig) (ClickhouseClient, error) {
 	}
 
 	if config.EnableTLS {
-		options.TLS = &tls.Config{}
+		options.TLS = &tls.Config{} //nolint:gosec
 	}
 
 	conn, err := clickhouse.Open(&options)
