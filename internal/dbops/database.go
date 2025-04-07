@@ -96,7 +96,17 @@ func (i *impl) GetDatabase(ctx context.Context, uuid string) (*Database, error) 
 	return database, nil
 }
 
-func (i *impl) DeleteDatabase(ctx context.Context, database Database) error {
+func (i *impl) DeleteDatabase(ctx context.Context, uuid string) error {
+	database, err := i.GetDatabase(ctx, uuid)
+	if err != nil {
+		return errors.WithMessage(err, "error getting database name")
+	}
+
+	if database == nil {
+		// This is desired state.
+		return nil
+	}
+
 	sql, err := querybuilder.NewDropDatabase(database.Name).Build()
 	if err != nil {
 		return errors.WithMessage(err, "error building query")
