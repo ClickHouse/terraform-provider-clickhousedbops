@@ -154,7 +154,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.DeleteDatabase(ctx, dbops.Database{Name: plan.Name.ValueString()})
+	err := r.client.DeleteDatabase(ctx, plan.UUID.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting database",
