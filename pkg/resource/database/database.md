@@ -1,4 +1,4 @@
-Use the *clickhouse_database* resource to create a database in a ClickHouse instance.
+Use the *clickhousedbops_database* resource to create a database in a ClickHouse instance.
 
 Known limitations:
 
