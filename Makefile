@@ -39,7 +39,7 @@ enable_git_hooks: ## Add githooks for code validation before commit, as symlink 
 	echo "Git hooks were updated from .githooks/ into .git/hooks/"
 
 docs: ensure-tfplugindocs
-	$(TFPLUGINDOCS) generate --provider-name=clickhousedbops
+	$(TFPLUGINDOCS) generate --provider-name=clickhousedbops --tf-version v1.11.3
 
 fmt: ensure-golangci-lint
 	go fmt ./...
