@@ -117,7 +117,6 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	state := User{
 		ID:                        types.StringValue(createdUser.ID),
 		Name:                      types.StringValue(createdUser.Name),
-		PasswordSha256Hash:        types.StringValue(createdUser.PasswordSha256Hash),
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
 	}
 

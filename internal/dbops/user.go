@@ -58,9 +58,6 @@ func (i *impl) CreateUser(ctx context.Context, user User) (*User, error) {
 		return nil, errors.WithMessage(err, "error getting user")
 	}
 
-	// We don't get the SHA back from clickhouse, so we assume the operation was successful and return it to the client.
-	createdUser.PasswordSha256Hash = user.PasswordSha256Hash
-
 	return createdUser, nil
 }
 
@@ -91,7 +88,7 @@ func (i *impl) GetUser(ctx context.Context, id string) (*User, error) { // nolin
 	}
 
 	if user == nil {
-		// Role not found
+		// User not found
 		return nil, nil
 	}
 
