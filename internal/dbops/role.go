@@ -52,7 +52,7 @@ func (i *impl) CreateRole(ctx context.Context, role Role) (*Role, error) {
 	return i.GetRole(ctx, id)
 }
 
-func (i *impl) GetRole(ctx context.Context, id string) (*Role, error) {
+func (i *impl) GetRole(ctx context.Context, id string) (*Role, error) { // nolint:dupl
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("name")},
 		"system.roles",

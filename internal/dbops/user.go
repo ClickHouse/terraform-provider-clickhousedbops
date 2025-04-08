@@ -64,7 +64,7 @@ func (i *impl) CreateUser(ctx context.Context, user User) (*User, error) {
 	return createdUser, nil
 }
 
-func (i *impl) GetUser(ctx context.Context, id string) (*User, error) {
+func (i *impl) GetUser(ctx context.Context, id string) (*User, error) { // nolint:dupl
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("name")},
 		"system.users",
