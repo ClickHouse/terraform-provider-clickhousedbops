@@ -66,6 +66,11 @@ jobs:
           name: terraform-provider-clickhousedbops
           path: .
 
+      - name: Adjust permissions
+        run: |
+          chmod +x ./terraform-provider-clickhousedbops
+          ls -lah
+
       - name: Install terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -76,6 +81,7 @@ jobs:
         run: |
           cd tests/
           docker compose up -d
+          sleep 5
           docker compose ps
           docker compose logs clickhouse
 
