@@ -1,0 +1,67 @@
+name: Run E2E tests
+
+on:
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  tf_release: "1.11.3"
+
+jobs:
+  list-examples:
+    outputs:
+      examples: ${{ steps.list.outputs.examples }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - id: list
+        run: |
+          examples="$(find examples/tests/ -name main.tf | xargs -n1 dirname | xargs -n1 basename| jq -cRn '[inputs]')"
+          echo "examples=${examples}" >> "$GITHUB_OUTPUT"
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        example: ${{ fromJSON(needs.list-examples.outputs.examples) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build terraform provider
+        run: |
+          CGO_ENABLED=0 go build -o terraform-provider-clickhousedbops
+
+      - name: Install terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.tf_release }}
+          terraform_wrapper: false
+
+      - name: Prepare test env
+        run: |
+          cd tests/
+          docker compose up -d
+
+      - name: Run e2e test
+        run: |
+          cd tests/
+          export example=${{ matrix.example }}
+          docker-compose exec shell ash -c "cd $example && terraform apply -auto-approve && terraform destroy -auto-approve"
+
+      - name: Stop test env
+        run: |
+          cd tests/
+          docker compose kill
+          docker compose rm -f

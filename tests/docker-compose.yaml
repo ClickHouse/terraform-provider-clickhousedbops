@@ -1,0 +1,20 @@
+services:
+  clickhouse:
+    image: 'clickhouse/clickhouse-server:${CHVER:-latest}'
+    user: '101:101'
+    container_name: clickhouse
+    hostname: clickhouse
+    volumes:
+      - ${PWD}/config.xml:/etc/clickhouse-server/config.d/config.xml
+      - ${PWD}/users.xml:/etc/clickhouse-server/users.d/users.xml
+  shell:
+    image: hashicorp/terraform:${TFVER:-1.11}
+    entrypoint: [ "sleep" ]
+    command: ["infinity"]
+    working_dir: /tests
+    environment:
+      TF_VAR_host: clickhouse
+    volumes:
+      - ${PWD}/../examples/tests:/tests
+      - ${PWD}/../terraform-provider-clickhousedbops:/tmp/terraform-provider-clickhousedbops/terraform-provider-clickhousedbops
+      - ${PWD}/terraformrc:/root/.terraformrc
