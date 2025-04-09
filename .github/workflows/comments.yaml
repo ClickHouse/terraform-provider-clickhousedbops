@@ -23,7 +23,7 @@ jobs:
         if: ${{ steps.action.outputs.action != '' }}
         id: check-membership
         run: |
-          ORG_NAME="ClickHouse"
+          ORG_NAME="${{ github.repository_owner }}"
           USERNAME="${{ github.event.comment.user.login }}"
           MEMBERSHIP_URL="https://api.github.com/orgs/$ORG_NAME/members/$USERNAME"
 
