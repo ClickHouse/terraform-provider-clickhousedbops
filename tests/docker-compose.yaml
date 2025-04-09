@@ -1,6 +1,6 @@
 services:
   clickhouse:
-    image: 'clickhouse/clickhouse-server:${CHVER:-latest}'
+    image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
     user: '101:101'
     container_name: clickhouse
     hostname: clickhouse

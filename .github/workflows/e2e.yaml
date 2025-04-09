@@ -23,6 +23,18 @@ jobs:
           examples="$(find examples/tests/ -name main.tf | xargs -n1 dirname | xargs -n1 basename| jq -cRn '[inputs]')"
           echo "examples=${examples}" >> "$GITHUB_OUTPUT"
 
+  list-clickhouse-version:
+    outputs:
+      versions: ${{ steps.list.outputs.versions }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - id: list
+        run: |
+          versions='["25.3", "24.8"]'
+          echo "versions=${versions}" >> "$GITHUB_OUTPUT"
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -51,11 +63,12 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    needs: ['build', 'list-examples']
+    needs: ['build', 'list-examples', 'list-clickhouse-version']
     strategy:
       fail-fast: false
       max-parallel: 10
       matrix:
+        clickhouse_version: ${{ fromJSON(needs.list-clickhouse-version.outputs.versions) }}
         example: ${{ fromJSON(needs.list-examples.outputs.examples) }}
     steps:
       - name: Checkout
@@ -80,10 +93,17 @@ jobs:
       - name: Prepare test env
         run: |
           cd tests/
+          export CLICKHOUSE_VERSION="${{ matrix.clickhouse_version }}"
           docker compose up -d
           sleep 5
-          docker compose ps
-          docker compose logs clickhouse
+          
+          # Check containers are running or display logs
+          for svc in clickhouse shell ; do
+            if [ -z $(docker compose ps -q $svc) ] || [ -z $(docker ps -q --no-trunc | grep $(docker-compose ps -q $svc)) ]; then
+              echo "Failed running $svc"
+              docker compose logs $svc
+            fi
+          done
 
       - name: Run e2e test
         run: |
@@ -92,6 +112,7 @@ jobs:
           docker compose exec shell ash -c "cd $example && terraform apply -auto-approve && terraform destroy -auto-approve"
 
       - name: Stop test env
+        if: always()
         run: |
           cd tests/
           docker compose kill
