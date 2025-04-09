@@ -13,9 +13,7 @@ jobs:
       - name: Check comment
         id: action
         run: |
-          comment="${{ github.event.comment.body }}"
-          
-          case "$comment"
+          case "${{ github.event.comment.body }}" in
           /test)
             echo "action=test" >> "$GITHUB_OUTPUT"
           ;;
