@@ -17,7 +17,7 @@ With this Terraform provider you can:
 
 ## Getting started
 
-TBD
+Check examples in the [examples/test](https://github.com/ClickHouse/terraform-provider-clickhousedbops/tree/main/examples/tests) folder.
 
 ## Development and contributing
 
