@@ -9,13 +9,17 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/querybuilder"
 )
 
-type Role struct {
-	ID   string `json:"id" ch:"id"`
-	Name string `json:"name" ch:"name"`
+type User struct {
+	ID                 string `json:"id"`
+	Name               string `json:"name"`
+	PasswordSha256Hash string `json:"-"`
 }
 
-func (i *impl) CreateRole(ctx context.Context, role Role) (*Role, error) {
-	sql, err := querybuilder.NewCreateRole(role.Name).Build()
+func (i *impl) CreateUser(ctx context.Context, user User) (*User, error) {
+	sql, err := querybuilder.
+		NewCreateUser(user.Name).
+		With(querybuilder.Identified(querybuilder.IdentificationSHA256Hash, user.PasswordSha256Hash)).
+		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -25,13 +29,13 @@ func (i *impl) CreateRole(ctx context.Context, role Role) (*Role, error) {
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	// Get ID of newly created role.
+	// Get ID of newly created user
 	var id string
 	{
 		sql, err := querybuilder.NewSelect(
 			[]querybuilder.Field{querybuilder.NewField("id")},
-			"system.roles",
-		).With(querybuilder.Where("name", role.Name)).Build()
+			"system.users",
+		).With(querybuilder.Where("name", user.Name)).Build()
 		if err != nil {
 			return nil, errors.WithMessage(err, "error building query")
 		}
@@ -49,26 +53,31 @@ func (i *impl) CreateRole(ctx context.Context, role Role) (*Role, error) {
 		}
 	}
 
-	return i.GetRole(ctx, id)
+	createdUser, err := i.GetUser(ctx, id)
+	if err != nil {
+		return nil, errors.WithMessage(err, "error getting user")
+	}
+
+	return createdUser, nil
 }
 
-func (i *impl) GetRole(ctx context.Context, id string) (*Role, error) { // nolint:dupl
+func (i *impl) GetUser(ctx context.Context, id string) (*User, error) { // nolint:dupl
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("name")},
-		"system.roles",
+		"system.users",
 	).With(querybuilder.Where("id", id)).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
 
-	var role *Role
+	var user *User
 
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
 		n, err := data.Get("name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'name' field")
 		}
-		role = &Role{
+		user = &User{
 			ID:   id,
 			Name: n,
 		}
@@ -78,26 +87,26 @@ func (i *impl) GetRole(ctx context.Context, id string) (*Role, error) { // nolin
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	if role == nil {
-		// Role not found
+	if user == nil {
+		// User not found
 		return nil, nil
 	}
 
-	return role, nil
+	return user, nil
 }
 
-func (i *impl) DeleteRole(ctx context.Context, id string) error {
-	role, err := i.GetRole(ctx, id)
+func (i *impl) DeleteUser(ctx context.Context, id string) error {
+	user, err := i.GetUser(ctx, id)
 	if err != nil {
-		return errors.WithMessage(err, "error getting role")
+		return errors.WithMessage(err, "error getting user")
 	}
 
-	if role == nil {
-		// That's what we want.
+	if user == nil {
+		// This is the desired state.
 		return nil
 	}
 
-	sql, err := querybuilder.NewDropRole(role.Name).Build()
+	sql, err := querybuilder.NewDropUser(user.Name).Build()
 	if err != nil {
 		return errors.WithMessage(err, "error building query")
 	}

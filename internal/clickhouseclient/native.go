@@ -80,6 +80,7 @@ func NewNativeClient(config NativeClientConfig) (ClickhouseClient, error) {
 
 func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row) error) error {
 	ctx = tflog.SetField(ctx, "Query", qry)
+	tflog.Debug(ctx, "Running Query")
 
 	rows, err := i.connection.Query(ctx, qry)
 	if err != nil {
@@ -118,20 +119,17 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 		}
 	}
 
-	tflog.Debug(ctx, "Run Query")
-
 	return nil
 }
 
 func (i *nativeClient) Exec(ctx context.Context, qry string) error {
 	ctx = tflog.SetField(ctx, "Query", qry)
+	tflog.Debug(ctx, "Running Query")
 
 	err := i.connection.Exec(ctx, qry)
 	if err != nil {
 		return errors.WithMessage(err, "error executing query")
 	}
-
-	tflog.Debug(ctx, "Run Query")
 
 	return nil
 }
