@@ -29,6 +29,8 @@ jobs:
 
           RESULT=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" $MEMBERSHIP_URL)
 
+          echo "$RESULT"
+
           if echo "$RESULT" | jq -e '.state == "active"'; then
             echo "User ${{ github.event.comment.user.login }} is a member of $ORG_NAME"
           else
