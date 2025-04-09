@@ -5,7 +5,8 @@ on:
     types: [created]
 
 jobs:
-  trigger-workflow:
+  check-comment:
+    name: Parse action from comment
     if: github.event.issue.pull_request
     runs-on: ubuntu-latest
     steps:
@@ -15,8 +16,9 @@ jobs:
           comment="${{ github.event.comment.body }}"
           
           case "$comment"
-          when "/test")
+          /test)
             echo "action=test" >> "$GITHUB_OUTPUT"
+          ;;
           esac
 
       - name: Check Organization Membership
