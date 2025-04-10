@@ -69,6 +69,10 @@ jobs:
 #            /repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions \
 #            -f "content=$content"
 
+      - name: Checkout
+        if: ${{ steps.action.outputs.action != '' && steps.check-membership.outputs.ok == 'true' }}
+        uses: actions/checkout@v4
+
       - name: Trigger e2e tests
         if: ${{ steps.check-membership.outputs.ok == 'true' && steps.action.outputs.action == 'test' }}
         env:
