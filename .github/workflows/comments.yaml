@@ -6,6 +6,7 @@ on:
 
 jobs:
   check-comment:
+    permissions: write-all
     name: Parse action from comment
     if: github.event.issue.pull_request
     runs-on: ubuntu-latest
