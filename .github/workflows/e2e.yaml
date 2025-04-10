@@ -176,5 +176,6 @@ jobs:
             /repos/${{ github.repository }}/statuses/${{ github.sha }} \
             -f "state=$state" \
             -f "target_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            -f "description=$description"
+            -f "description=$description" \
+            -f "context=E2E tests"
           
