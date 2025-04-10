@@ -75,7 +75,9 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          base_ref_name="$(gh pr view ${{ github.issue.number }} -R ${{ github.repository }} --json 'headRefName' | jq .headRefName)"
+          set -o pipefail
+          
+          base_ref_name="$(gh pr view ${{ github.event.issue.number }} -R ${{ github.repository }} --json 'headRefName' | jq .headRefName)"
           
           echo "base_ref_name=$base_ref_name" >> "$GITHUB_OUTPUT"
 
