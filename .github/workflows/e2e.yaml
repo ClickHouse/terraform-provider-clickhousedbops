@@ -138,7 +138,7 @@ jobs:
         run: exit 0
 
       - name: Generate Token
-        if: ${{ inputs.pr_id != '' && contains(needs.*.result, 'failure') }}
+        if: ${{ inputs.pr_id != '' }}
         id: generate-token
         uses: actions/create-github-app-token@v1
         with:
