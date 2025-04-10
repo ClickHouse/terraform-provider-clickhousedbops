@@ -60,6 +60,8 @@ jobs:
             content="-1"
           fi
           
+          echo "/repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions"
+          
           gh api \
             --method POST \
             -H "Accept: application/vnd.github+json" \
