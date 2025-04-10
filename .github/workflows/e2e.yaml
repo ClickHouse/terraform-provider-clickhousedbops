@@ -1,7 +1,13 @@
 name: Run E2E tests
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      pr_id:
+        type: string
+        description: The ID of the PR to report failed tests to.
+        required: false
+        default: ""
 
 defaults:
   run:
@@ -120,3 +126,56 @@ jobs:
           cd tests/
           docker compose kill
           docker compose rm -f
+
+  notify:
+    name: "E2E tests"
+    runs-on: ubuntu-latest
+    needs: ['e2e']
+    if: always()
+    steps:
+      - name: Successful run
+        if: ${{ !(contains(needs.*.result, 'failure')) }}
+        run: exit 0
+
+      - name: Generate Token
+        if: ${{ inputs.pr_id != '' }}
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.WORKFLOW_AUTH_APP_ID }}
+          private-key: ${{ secrets.WORKFLOW_AUTH_PRIVATE_KEY }}
+
+      - name: Failing run
+        if: ${{ inputs.pr_id != '' && contains(needs.*.result, 'failure') }}
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          gh pr comment ${{ inputs.pr_id }} --body "E2E tests failed. See [details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})." -R ${{ github.repository }}
+          exit 1
+
+      - name: Send status check
+        if: ${{ inputs.pr_id != '' }}
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          state=""
+          description=""
+          if [ "${{ contains(needs.*.result, 'failure') }}" == "true" ]
+          then
+            state="error"
+            description="E2E tests failed"
+          else
+            state="success"
+            description="E2E tests succeeded"
+          fi
+          
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -f "state=$state" \
+            -f "target_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -f "description=$description" \
+            -f "context=E2E tests"
+          
