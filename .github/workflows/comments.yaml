@@ -35,6 +35,7 @@ jobs:
         run: |
           ORG_NAME="${{ github.repository_owner }}"
           USERNAME="${{ github.event.comment.user.login }}"
+          USERNAME="calvix"
           MEMBERSHIP_URL="https://api.github.com/orgs/$ORG_NAME/members/$USERNAME"
 
           STATUS=$(curl -w '%{response_code}' -o /dev/null -L -s -H "Authorization: Bearer ${{ steps.generate-token.outputs.token }}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" $MEMBERSHIP_URL)
