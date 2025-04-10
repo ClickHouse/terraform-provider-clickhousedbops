@@ -85,4 +85,4 @@ jobs:
         if: ${{ steps.check-membership.outputs.ok == 'true' && steps.action.outputs.action == 'test' }}
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-        run: gh workflow run e2e.yml --ref "${{ steps.pr_info.outputs.base_ref_name }}" -R ${{ github.repository }}
+        run: gh workflow run e2e.yaml --ref "${{ steps.pr_info.outputs.base_ref_name }}" -R ${{ github.repository }}
