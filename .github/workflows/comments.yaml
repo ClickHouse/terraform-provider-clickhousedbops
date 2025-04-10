@@ -12,12 +12,22 @@ jobs:
     steps:
       - name: Check comment
         id: action
+        env:
+          BODY: ${{ github.event.comment.body }}
         run: |
-          case "${{ github.event.comment.body }}" in
+          case "${BODY}" in
           /test)
             echo "action=test" >> "$GITHUB_OUTPUT"
           ;;
           esac
+
+      - name: Generate Token
+        if: ${{ steps.action.outputs.action != '' }}
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.WORKFLOW_AUTH_APP_ID }}
+          private-key: ${{ secrets.WORKFLOW_AUTH_PRIVATE_KEY }}
 
       - name: Check Organization Membership
         if: ${{ steps.action.outputs.action != '' }}
@@ -27,7 +37,7 @@ jobs:
           USERNAME="${{ github.event.comment.user.login }}"
           MEMBERSHIP_URL="https://api.github.com/orgs/$ORG_NAME/members/$USERNAME"
 
-          RESULT=$(curl -L -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" $MEMBERSHIP_URL)
+          RESULT=$(curl -L -s -H "Authorization: Bearer ${{ steps.generate-token.outputs.token }} -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" $MEMBERSHIP_URL)
 
           echo "$RESULT"
 
