@@ -140,7 +140,7 @@ jobs:
       - name: Generate Token
         if: ${{ inputs.pr_id != '' && contains(needs.*.result, 'failure') }}
         id: generate-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.WORKFLOW_AUTH_APP_ID }}
           private-key: ${{ secrets.WORKFLOW_AUTH_PRIVATE_KEY }}
