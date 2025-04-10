@@ -50,24 +50,24 @@ jobs:
             echo "ok=false" >> "$GITHUB_OUTPUT"
           fi
           
-#      - name: React to comment
-#        env:
-#          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-#        run: |
-#          content=""
-#          if [ "${{ steps.check-membership.outputs.ok }}" == "true" ]
-#          then
-#            content="+1"
-#          else
-#            content="-1"
-#          fi
-#
-#          gh api \
-#            --method POST \
-#            -H "Accept: application/vnd.github+json" \
-#            -H "X-GitHub-Api-Version: 2022-11-28" \
-#            /repos/${{ github.repository }}/pulls/comments/${{ github.event.comment.id }}/reactions \
-#            -f "content=$content"
+      - name: React to comment
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          content=""
+          if [ "${{ steps.check-membership.outputs.ok }}" == "true" ]
+          then
+            content="+1"
+          else
+            content="-1"
+          fi
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f "content=$content"
 
       - name: Checkout
         if: ${{ steps.action.outputs.action != '' && steps.check-membership.outputs.ok == 'true' }}
