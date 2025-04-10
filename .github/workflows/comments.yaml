@@ -60,7 +60,7 @@ jobs:
             content="-1"
           fi
           
-          echo "${{ github.event }}"
+          echo "${{ toJSON(github.event) }}"
 
 #          gh api \
 #            --method POST \
