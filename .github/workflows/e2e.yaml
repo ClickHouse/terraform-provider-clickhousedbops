@@ -152,3 +152,29 @@ jobs:
         run: |
           gh pr comment ${{ inputs.pr_id }} --body "E2E tests failed. See [details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})." -R ${{ github.repository }}
           exit 1
+
+      - name: Send status check
+        if: ${{ inputs.pr_id != '' }}
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          state=""
+          description=""
+          if [ "${{ contains(needs.*.result, 'failure') }}" == "true" ]
+          then
+            state="error"
+            description="E2E tests failed"
+          else
+            state="success"
+            description="E2E tests succeeded"
+          fi
+          
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -f "state=$state" \
+            -f "target_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -f "description=$description"
+          
