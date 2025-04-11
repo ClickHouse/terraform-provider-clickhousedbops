@@ -17,9 +17,9 @@ type createDatabaseQueryBuilder struct {
 	comment      *string
 }
 
-func NewCreateDatabase(resourceName string) CreateDatabaseQueryBuilder {
+func NewCreateDatabase(name string) CreateDatabaseQueryBuilder {
 	return &createDatabaseQueryBuilder{
-		databaseName: resourceName,
+		databaseName: name,
 	}
 }
 
