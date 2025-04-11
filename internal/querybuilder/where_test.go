@@ -13,17 +13,17 @@ func Test_SimpleWhere_Clause(t *testing.T) {
 		{
 			name:  "String",
 			where: SimpleWhere("name", "mark"),
-			want:  "WHERE `name` = 'mark'",
+			want:  "`name` = 'mark'",
 		},
 		{
 			name:  "Numeric",
 			where: SimpleWhere("age", 3),
-			want:  "WHERE `age` = 3",
+			want:  "`age` = 3",
 		},
 		{
 			name:  "String with backtick in name",
 			where: SimpleWhere("te`st", "value"),
-			want:  "WHERE `te\\`st` = 'value'",
+			want:  "`te\\`st` = 'value'",
 		},
 	}
 	for _, tt := range tests {
