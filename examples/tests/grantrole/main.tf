@@ -14,8 +14,8 @@ resource "clickhousedbops_grant_role" "role_to_role" {
 
 resource "clickhousedbops_user" "user" {
   name                           = "user"
- password_sha256_hash_wo         = sha256("test")
- password_sha256_hash_wo_version = 1
+  password_sha256_hash_wo         = sha256("test")
+  password_sha256_hash_wo_version = 1
 }
 
 resource "clickhousedbops_grant_role" "role_to_user" {

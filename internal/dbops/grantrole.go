@@ -102,7 +102,7 @@ func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, grantee
 	}
 
 	if grantRole == nil {
-		// User not found
+		// Grant not found
 		return nil, nil
 	}
 
