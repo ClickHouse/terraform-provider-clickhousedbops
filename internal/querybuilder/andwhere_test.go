@@ -13,22 +13,22 @@ func Test_AndWhere_String(t *testing.T) {
 		{
 			name:  "2 clauses",
 			where: AndWhere(WhereMock("clause1"), WhereMock("clause2")),
-			want:  "WHERE (clause1 AND clause2)",
+			want:  "(clause1 AND clause2)",
 		},
 		{
 			name:  "1 clause",
 			where: AndWhere(WhereMock("clause1")),
-			want:  "WHERE (clause1)",
+			want:  "(clause1)",
 		},
 		{
 			name:  "3 clauses",
 			where: AndWhere(WhereMock("clause1"), WhereMock("clause2"), WhereMock("clause3")),
-			want:  "WHERE (clause1 AND clause2 AND clause3)",
+			want:  "(clause1 AND clause2 AND clause3)",
 		},
 		{
 			name:  "nested",
 			where: AndWhere(AndWhere(WhereMock("clause1"), WhereMock("clause2")), WhereMock("clause3")),
-			want:  "WHERE ((clause1 AND clause2) AND clause3)",
+			want:  "((clause1 AND clause2) AND clause3)",
 		},
 	}
 	for _, tt := range tests {

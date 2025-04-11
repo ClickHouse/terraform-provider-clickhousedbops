@@ -19,8 +19,8 @@ func (s *andWhere) Clause() string {
 	tokens := make([]string, 0)
 
 	for _, c := range s.clauses {
-		tokens = append(tokens, strings.TrimPrefix(c.Clause(), "WHERE "))
+		tokens = append(tokens, c.Clause())
 	}
 
-	return fmt.Sprintf("WHERE (%s)", strings.Join(tokens, " AND "))
+	return fmt.Sprintf("(%s)", strings.Join(tokens, " AND "))
 }
