@@ -68,11 +68,3 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 		})
 	}
 }
-
-type whereMock struct {
-	mock string
-}
-
-func (w whereMock) Clause() string {
-	return w.mock
-}

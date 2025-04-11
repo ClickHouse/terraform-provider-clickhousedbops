@@ -1,7 +1,6 @@
 package querybuilder
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -16,7 +15,7 @@ type SelectQueryBuilder interface {
 type selectQueryBuilder struct {
 	tableName string
 	fields    []Field
-	where     []Where
+	where     Where
 }
 
 func NewSelect(fields []Field, from string) SelectQueryBuilder {
@@ -27,7 +26,7 @@ func NewSelect(fields []Field, from string) SelectQueryBuilder {
 }
 
 func (q *selectQueryBuilder) Where(where ...Where) SelectQueryBuilder {
-	q.where = where
+	q.where = AndWhere(where...)
 	return q
 }
 
@@ -60,19 +59,9 @@ func (q *selectQueryBuilder) Build() (string, error) {
 		from,
 	}
 
-	{
-		clauses := make([]string, 0)
-		for _, c := range q.where {
-			clause := c.Clause()
-			if strings.HasPrefix(clause, "WHERE ") {
-				clause = clause[6:]
-			}
-			clauses = append(clauses, clause)
-		}
-
-		if len(clauses) > 0 {
-			tokens = append(tokens, fmt.Sprintf("WHERE (%s)", strings.Join(clauses, " AND ")))
-		}
+	// Handle WHERE
+	if q.where != nil {
+		tokens = append(tokens, q.where.Clause())
 	}
 
 	return strings.Join(tokens, " ") + ";", nil
