@@ -38,7 +38,7 @@ func Test_createdatabase(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var q CreateDatabaseQueryBuilder
 			q = &createDatabaseQueryBuilder{
-				resourceName: tt.resourceName,
+				databaseName: tt.resourceName,
 			}
 			if tt.comment != nil {
 				q = q.WithComment(*tt.comment)

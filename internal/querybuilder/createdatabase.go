@@ -1,7 +1,6 @@
 package querybuilder
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -14,13 +13,13 @@ type CreateDatabaseQueryBuilder interface {
 }
 
 type createDatabaseQueryBuilder struct {
-	resourceName string
+	databaseName string
 	comment      *string
 }
 
 func NewCreateDatabase(resourceName string) CreateDatabaseQueryBuilder {
 	return &createDatabaseQueryBuilder{
-		resourceName: resourceName,
+		databaseName: resourceName,
 	}
 }
 
@@ -30,17 +29,17 @@ func (q *createDatabaseQueryBuilder) WithComment(comment string) CreateDatabaseQ
 }
 
 func (q *createDatabaseQueryBuilder) Build() (string, error) {
-	if q.resourceName == "" {
-		return "", errors.New("resourceName cannot be empty for CREATE and DROP queries")
+	if q.databaseName == "" {
+		return "", errors.New("databaseName cannot be empty for CREATE DATABASE queries")
 	}
 
 	tokens := []string{
 		"CREATE",
 		"DATABASE",
-		backtick(q.resourceName),
+		backtick(q.databaseName),
 	}
 	if q.comment != nil {
-		tokens = append(tokens, fmt.Sprintf("COMMENT %s", quote(*q.comment)))
+		tokens = append(tokens, "COMMENT", quote(*q.comment))
 	}
 
 	return strings.Join(tokens, " ") + ";", nil

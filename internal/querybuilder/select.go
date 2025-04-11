@@ -61,8 +61,7 @@ func (q *selectQueryBuilder) Build() (string, error) {
 
 	// Handle WHERE
 	if q.where != nil {
-		tokens = append(tokens, "WHERE")
-		tokens = append(tokens, q.where.Clause())
+		tokens = append(tokens, "WHERE", q.where.Clause())
 	}
 
 	return strings.Join(tokens, " ") + ";", nil
