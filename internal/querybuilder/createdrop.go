@@ -55,7 +55,7 @@ func newDrop(resourceTypeName string, resourceName string) QueryBuilder {
 
 func (q *createDropQueryBuilder) Build() (string, error) {
 	if q.resourceName == "" {
-		return "", errors.New("databaseName cannot be empty for CREATE and DROP queries")
+		return "", errors.New("resourceName cannot be empty for CREATE and DROP queries")
 	}
 
 	tokens := []string{
