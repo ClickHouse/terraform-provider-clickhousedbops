@@ -8,20 +8,20 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 	tests := []struct {
 		name    string
 		fields  []Field
-		options []Option
+		where   []Where
 		from    string
 		want    string
 		wantErr bool
 	}{
 		{
-			name:    "Select one with",
+			name:    "NewSelect one with",
 			fields:  []Field{NewField("name")},
 			from:    "users",
 			want:    "SELECT `name` FROM `users`;",
 			wantErr: false,
 		},
 		{
-			name:    "Select two fields",
+			name:    "NewSelect two fields",
 			fields:  []Field{NewField("name"), NewField("surname")},
 			from:    "users",
 			want:    "SELECT `name`, `surname` FROM `users`;",
@@ -35,19 +35,27 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "Select with where",
+			name:    "NewSelect with single where",
 			fields:  []Field{NewField("name")},
-			options: []Option{OptionMock("mock_where_clause")},
+			where:   []Where{whereMock{"mock_where_clause"}},
 			from:    "users",
-			want:    "SELECT `name` FROM `users` mock_where_clause;",
+			want:    "SELECT `name` FROM `users` WHERE (mock_where_clause);",
+			wantErr: false,
+		},
+		{
+			name:    "NewSelect with multiple where",
+			fields:  []Field{NewField("name")},
+			where:   []Where{whereMock{"mock_where_clause"}, whereMock{"mock_where_clause_2"}},
+			from:    "users",
+			want:    "SELECT `name` FROM `users` WHERE (mock_where_clause AND mock_where_clause_2);",
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			q := NewSelect(tt.fields, tt.from)
-			for _, o := range tt.options {
-				q = q.With(o)
+			if tt.where != nil {
+				q = q.Where(tt.where...)
 			}
 			got, err := q.Build()
 			if (err != nil) != tt.wantErr {
@@ -59,4 +67,12 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			}
 		})
 	}
+}
+
+type whereMock struct {
+	mock string
+}
+
+func (w whereMock) Clause() string {
+	return w.mock
 }

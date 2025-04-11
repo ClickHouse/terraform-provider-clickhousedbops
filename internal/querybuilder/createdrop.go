@@ -19,19 +19,10 @@ type createDropQueryBuilder struct {
 	action           string
 	resourceTypeName string
 	resourceName     string
-	options          []Option
 }
 
 func NewCreateRole(resourceName string) QueryBuilder {
 	return newCreate(resourceTypeRole, resourceName)
-}
-
-func NewCreateDatabase(resourceName string) QueryBuilder {
-	return newCreate(resourceTypeDatabase, resourceName)
-}
-
-func NewCreateUser(resourceName string) QueryBuilder {
-	return newCreate(resourceTypeUser, resourceName)
 }
 
 func NewDropRole(resourceName string) QueryBuilder {
@@ -62,11 +53,6 @@ func newDrop(resourceTypeName string, resourceName string) QueryBuilder {
 	}
 }
 
-func (q *createDropQueryBuilder) With(option Option) QueryBuilder {
-	q.options = append(q.options, option)
-	return q
-}
-
 func (q *createDropQueryBuilder) Build() (string, error) {
 	if q.resourceName == "" {
 		return "", errors.New("resourceName cannot be empty for CREATE and DROP queries")
@@ -76,9 +62,6 @@ func (q *createDropQueryBuilder) Build() (string, error) {
 		q.action,
 		q.resourceTypeName,
 		backtick(q.resourceName),
-	}
-	for _, o := range q.options {
-		tokens = append(tokens, o.String())
 	}
 
 	return strings.Join(tokens, " ") + ";", nil

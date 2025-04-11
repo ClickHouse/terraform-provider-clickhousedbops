@@ -106,9 +106,16 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 		for i, v := range vars {
 			switch v := v.(type) {
 			case *string:
+				// Non-nullable string, return string value.
 				ret.Set(rows.Columns()[i], *v)
 			case *uuid.UUID:
+				// Return string representation.
 				ret.Set(rows.Columns()[i], v.String())
+			case **string:
+				// Nullable string, return either nil or a pointer to the string
+				ret.Set(rows.Columns()[i], *v)
+			case *uint8:
+				ret.Set(rows.Columns()[i], *v)
 			default:
 				return errors.New(fmt.Sprintf("unsupported column type: %s", reflect.TypeOf(v)))
 			}

@@ -18,7 +18,7 @@ type User struct {
 func (i *impl) CreateUser(ctx context.Context, user User) (*User, error) {
 	sql, err := querybuilder.
 		NewCreateUser(user.Name).
-		With(querybuilder.Identified(querybuilder.IdentificationSHA256Hash, user.PasswordSha256Hash)).
+		Identified(querybuilder.IdentificationSHA256Hash, user.PasswordSha256Hash).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
@@ -35,13 +35,13 @@ func (i *impl) CreateUser(ctx context.Context, user User) (*User, error) {
 		sql, err := querybuilder.NewSelect(
 			[]querybuilder.Field{querybuilder.NewField("id")},
 			"system.users",
-		).With(querybuilder.Where("name", user.Name)).Build()
+		).Where(querybuilder.SimpleWhere("name", user.Name)).Build()
 		if err != nil {
 			return nil, errors.WithMessage(err, "error building query")
 		}
 
 		err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-			id, err = data.Get("id")
+			id, err = data.GetString("id")
 			if err != nil {
 				return errors.WithMessage(err, "error scanning query result, missing 'id' field")
 			}
@@ -65,7 +65,7 @@ func (i *impl) GetUser(ctx context.Context, id string) (*User, error) { // nolin
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("name")},
 		"system.users",
-	).With(querybuilder.Where("id", id)).Build()
+	).Where(querybuilder.SimpleWhere("id", id)).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -73,7 +73,7 @@ func (i *impl) GetUser(ctx context.Context, id string) (*User, error) { // nolin
 	var user *User
 
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-		n, err := data.Get("name")
+		n, err := data.GetString("name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'name' field")
 		}

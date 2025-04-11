@@ -18,7 +18,7 @@ type Database struct {
 func (i *impl) CreateDatabase(ctx context.Context, database Database) (*Database, error) {
 	builder := querybuilder.NewCreateDatabase(database.Name)
 	if database.Comment != "" {
-		builder.With(querybuilder.Comment(database.Comment))
+		builder.WithComment(database.Comment)
 	}
 	sql, err := builder.Build()
 	if err != nil {
@@ -36,13 +36,13 @@ func (i *impl) CreateDatabase(ctx context.Context, database Database) (*Database
 		sql, err := querybuilder.NewSelect(
 			[]querybuilder.Field{querybuilder.NewField("uuid")},
 			"system.databases",
-		).With(querybuilder.Where("name", database.Name)).Build()
+		).Where(querybuilder.SimpleWhere("name", database.Name)).Build()
 		if err != nil {
 			return nil, errors.WithMessage(err, "error building query")
 		}
 
 		err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-			uuid, err = data.Get("uuid")
+			uuid, err = data.GetString("uuid")
 			if err != nil {
 				return errors.WithMessage(err, "error scanning query result, missing 'uuid' field")
 			}
@@ -61,7 +61,7 @@ func (i *impl) GetDatabase(ctx context.Context, uuid string) (*Database, error) 
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("name"), querybuilder.NewField("comment")},
 		"system.databases",
-	).With(querybuilder.Where("uuid", uuid)).Build()
+	).Where(querybuilder.SimpleWhere("uuid", uuid)).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -69,11 +69,11 @@ func (i *impl) GetDatabase(ctx context.Context, uuid string) (*Database, error) 
 	var database *Database
 
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-		n, err := data.Get("name")
+		n, err := data.GetString("name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'name' field")
 		}
-		c, err := data.Get("comment")
+		c, err := data.GetString("comment")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'comment' field")
 		}

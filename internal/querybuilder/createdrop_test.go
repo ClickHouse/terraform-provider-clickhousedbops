@@ -10,33 +10,16 @@ func Test_create_drop(t *testing.T) {
 		action       string
 		resourceType string
 		resourceName string
-		options      []Option
+		comment      string
+		identified   string
 		want         string
 		wantErr      bool
 	}{
-		{
-			name:         "Create database with complex name",
-			action:       actionCreate,
-			resourceType: resourceTypeDatabase,
-			resourceName: "data`base",
-			want:         "CREATE DATABASE `data\\`base`;",
-			wantErr:      false,
-		},
-		{
-			name:         "Create database with comment",
-			action:       actionCreate,
-			resourceType: resourceTypeDatabase,
-			resourceName: "database",
-			options:      []Option{Comment("this is the comment")},
-			want:         "CREATE DATABASE `database` COMMENT 'this is the comment';",
-			wantErr:      false,
-		},
 		{
 			name:         "Drop database",
 			action:       actionDrop,
 			resourceType: resourceTypeDatabase,
 			resourceName: "db1",
-			options:      nil,
 			want:         "DROP DATABASE `db1`;",
 			wantErr:      false,
 		},
@@ -45,7 +28,6 @@ func Test_create_drop(t *testing.T) {
 			action:       actionDrop,
 			resourceType: resourceTypeDatabase,
 			resourceName: "data`base",
-			options:      nil,
 			want:         "DROP DATABASE `data\\`base`;",
 			wantErr:      false,
 		},
@@ -98,39 +80,6 @@ func Test_create_drop(t *testing.T) {
 			wantErr:      true,
 		},
 		{
-			name:         "Create user with simple name and no password",
-			action:       actionCreate,
-			resourceType: resourceTypeUser,
-			resourceName: "john",
-			want:         "CREATE USER `john`;",
-			wantErr:      false,
-		},
-		{
-			name:         "Create user with funky name and no password",
-			action:       actionCreate,
-			resourceType: resourceTypeUser,
-			resourceName: "jo`hn",
-			want:         "CREATE USER `jo\\`hn`;",
-			wantErr:      false,
-		},
-		{
-			name:         "Create user with simple name and password",
-			action:       actionCreate,
-			resourceType: resourceTypeUser,
-			resourceName: "john",
-			options:      []Option{Identified(IdentificationSHA256Hash, "blah")},
-			want:         "CREATE USER `john` IDENTIFIED WITH sha256_hash BY 'blah';",
-			wantErr:      false,
-		},
-		{
-			name:         "Create user fails when no user name is set",
-			action:       actionCreate,
-			resourceType: resourceTypeUser,
-			resourceName: "",
-			want:         "",
-			wantErr:      true,
-		},
-		{
 			name:         "Drop user with simple name",
 			action:       actionDrop,
 			resourceType: resourceTypeUser,
@@ -161,8 +110,8 @@ func Test_create_drop(t *testing.T) {
 				action:           tt.action,
 				resourceTypeName: tt.resourceType,
 				resourceName:     tt.resourceName,
-				options:          tt.options,
 			}
+
 			got, err := q.Build()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Build() error = %v, wantErr %v", err, tt.wantErr)
