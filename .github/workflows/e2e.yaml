@@ -97,7 +97,7 @@ jobs:
           export CLICKHOUSE_VERSION="${{ matrix.clickhouse_version }}"
           export TF_VAR_protocol=${{ matrix.protocol }}
           
-          case "TF_VAR_protocol" in
+          case "$TF_VAR_protocol" in
             native)
               export TF_VAR_port=9000
               export TF_VAR_auth_strategy=password
