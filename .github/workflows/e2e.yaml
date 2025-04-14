@@ -126,7 +126,7 @@ jobs:
         run: |
           cd tests/
           export example=${{ matrix.example }}
-          docker compose exec shell ash -c "cd $example && set && terraform apply -auto-approve && terraform destroy -auto-approve"
+          docker compose exec shell ash -c "cd $example && terraform apply -auto-approve && terraform destroy -auto-approve"
 
       - name: Stop test env
         if: always()
