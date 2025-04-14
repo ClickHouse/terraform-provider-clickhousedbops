@@ -12,8 +12,6 @@
 
     <users>
         <default>
-            <password></password>
-
             <networks>
                 <ip>::/0</ip>
             </networks>

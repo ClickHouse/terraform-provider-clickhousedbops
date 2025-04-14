@@ -15,7 +15,7 @@ provider "clickhousedbops" {
   port = var.port
 
   auth_config = {
-    strategy = "password"
+    strategy = var.auth_strategy
     username = var.username
     password = var.password
   }

@@ -1,5 +1,11 @@
 package clickhouseclient
 
+import (
+	"strconv"
+)
+
+const nullString = "ᴺᵁᴸᴸ"
+
 // jsonCompatStrings is used to parse clickhouse query output when using 'jsonCompatStrings' format.
 type jsonCompatStrings struct {
 	Meta []struct {
@@ -12,10 +18,12 @@ type jsonCompatStrings struct {
 func (j jsonCompatStrings) Rows() []Row {
 	ret := make([]Row, 0)
 
-	// Extract slice of column names in the result.
+	// Extract slice of column names and column data types in the result.
 	colNames := make([]string, 0)
+	colTypes := make([]string, 0)
 	for _, entry := range j.Meta {
 		colNames = append(colNames, entry.Name)
+		colTypes = append(colTypes, entry.Type)
 	}
 
 	// Create a slice of Rows associating the value to each column name.
@@ -23,11 +31,36 @@ func (j jsonCompatStrings) Rows() []Row {
 		data := Row{}
 
 		for i, field := range row {
-			data.Set(colNames[i], field)
+			switch colTypes[i] {
+			case "String":
+				data.Set(colNames[i], field)
+			case "Nullable(String)":
+				if field == nullString {
+					data.Set(colNames[i], nilPtr[string]())
+				} else {
+					data.Set(colNames[i], &field)
+				}
+			case "UInt8":
+				val, err := strconv.ParseUint(field, 10, 8)
+				if err != nil {
+					// Failed parsing as number, return value as-is.
+					data.Set(colNames[i], field)
+					break
+				} else {
+					data.Set(colNames[i], uint8(val))
+				}
+			default:
+				data.Set(colNames[i], field)
+			}
 		}
 
 		ret = append(ret, data)
 	}
 
 	return ret
+}
+
+func nilPtr[T any]() *T {
+	var r *T
+	return r
 }

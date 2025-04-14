@@ -13,6 +13,11 @@ variable "port" {
   default = 9000
 }
 
+variable "auth_strategy" {
+  type = string
+  default = "password"
+}
+
 variable "username" {
   type = string
   default = "default"

@@ -69,6 +69,7 @@ jobs:
       max-parallel: 10
       matrix:
         clickhouse_version: ${{ fromJSON(needs.list-clickhouse-version.outputs.versions) }}
+        protocol: ["native", "http"]
         example: ${{ fromJSON(needs.list-examples.outputs.examples) }}
     steps:
       - name: Checkout
@@ -94,6 +95,19 @@ jobs:
         run: |
           cd tests/
           export CLICKHOUSE_VERSION="${{ matrix.clickhouse_version }}"
+          export TF_VAR_protocol=${{ matrix.protocol }}
+          
+          case "TF_VAR_protocol" in
+            native)
+              export TF_VAR_port=9000
+              export TF_VAR_auth_strategy=password
+              ;;
+            http)
+              export TF_VAR_port=8123
+              export TF_VAR_auth_strategy=basicauth
+              ;;
+          esac
+          
           docker compose up -d
           sleep 5
           
@@ -106,13 +120,13 @@ jobs:
             fi
           done
           
-          docker compose exec clickhouse clickhouse client "select version()"
+          docker compose exec clickhouse clickhouse client --password "test" "select version()"
 
       - name: Run e2e test
         run: |
           cd tests/
           export example=${{ matrix.example }}
-          docker compose exec shell ash -c "cd $example && terraform apply -auto-approve && terraform destroy -auto-approve"
+          docker compose exec shell ash -c "cd $example && set && terraform apply -auto-approve && terraform destroy -auto-approve"
 
       - name: Stop test env
         if: always()

@@ -4,16 +4,25 @@ services:
     user: '101:101'
     container_name: clickhouse
     hostname: clickhouse
+    environment:
+      - CLICKHOUSE_SKIP_USER_SETUP=1
     volumes:
-      - ${PWD}/config.xml:/etc/clickhouse-server/config.d/config.xml
-      - ${PWD}/users.xml:/etc/clickhouse-server/users.d/users.xml
+      - ${PWD}/config.xml:/etc/clickhouse-server/config.xml
+      - ${PWD}/users.xml:/etc/clickhouse-server/users.xml
+    ports:
+      - "9000:9000"
   shell:
     image: hashicorp/terraform:${TFVER:-1.11}
     entrypoint: [ "sleep" ]
     command: ["infinity"]
     working_dir: /tests
     environment:
-      TF_VAR_host: clickhouse
+      - TF_VAR_host=clickhouse
+      - TF_VAR_auth_strategy=${TF_VAR_auth_strategy}
+      - TF_VAR_username=default
+      - TF_VAR_password=test
+      - TF_VAR_protocol=${TF_VAR_protocol}
+      - TF_VAR_port=${TF_VAR_port}
     volumes:
       - ${PWD}/../examples/tests:/tests
       - ${PWD}/../terraform-provider-clickhousedbops:/tmp/terraform-provider-clickhousedbops/terraform-provider-clickhousedbops
