@@ -32,8 +32,22 @@ jobs:
         uses: actions/checkout@v4
       - id: list
         run: |
-          versions='["25.3", "24.8"]'
-          echo "versions=${versions}" >> "$GITHUB_OUTPUT"
+          set -o pipefail
+          versions=()
+          
+          # Get list of most recent clickhouse OS version.
+          RELEASES="$(curl -s -L -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/ClickHouse/clickhouse/releases|jq -r '.[] |.tag_name')"
+          
+          # Get major.minor of latest LTS and latest Stable releases.
+          LATEST_LTS="$(echo "$RELEASES" | grep lts | sort -Vr |head -n1 | cut -d "." -f 1,2 | sed 's/v//')"
+          LATEST_STABLE="$(echo "$RELEASES" | grep stable | sort -Vr |head -n1 | cut -d "." -f 1,2 | sed 's/v//')"
+          
+          versions+=(${LATEST_LTS})
+          versions+=(${LATEST_STABLE})
+          
+          # Ensure no duplicate versions and turn into JSON.
+          json="$(printf '%s\n' "${versions[@]}" | jq -R . | uniq |jq -cs .)"
+          echo "versions=${json}" >> "$GITHUB_OUTPUT"
 
   build:
     runs-on: ubuntu-latest
