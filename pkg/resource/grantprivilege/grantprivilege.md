@@ -1,4 +1,4 @@
-You can use the `clickhousedbops_grant_privilege` resource to grant privileges on databases and tables to either a `clickhouse_user` or a `clickhouse_role`.
+You can use the `clickhousedbops_grant_privilege` resource to grant privileges on databases and tables to either a `clickhousedbops_user` or a `clickhousedbops_role`.
 
 Known limitations:
 
