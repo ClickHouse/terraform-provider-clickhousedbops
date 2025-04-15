@@ -47,8 +47,8 @@ func (q *grantPrivilegeQueryBuilder) WithColumn(column *string) GrantPrivilegeQu
 	return q
 }
 
-func (q *grantPrivilegeQueryBuilder) WithGrantOption(adminOption bool) GrantPrivilegeQueryBuilder {
-	q.grantOption = adminOption
+func (q *grantPrivilegeQueryBuilder) WithGrantOption(grantOption bool) GrantPrivilegeQueryBuilder {
+	q.grantOption = grantOption
 	return q
 }
 
