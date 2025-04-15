@@ -20,4 +20,8 @@ type Client interface {
 	GrantRole(ctx context.Context, grantRole GrantRole) (*GrantRole, error)
 	GetGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string) (*GrantRole, error)
 	RevokeGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string) error
+
+	GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege) (*GrantPrivilege, error)
+	GetGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string) (*GrantPrivilege, error)
+	RevokeGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string) error
 }

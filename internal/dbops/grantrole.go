@@ -2,7 +2,6 @@ package dbops
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pingcap/errors"
 
@@ -25,7 +24,7 @@ func (i *impl) GrantRole(ctx context.Context, grantRole GrantRole) (*GrantRole, 
 		} else if grantRole.GranteeRoleName != nil {
 			to = *grantRole.GranteeRoleName
 		} else {
-			return nil, fmt.Errorf("either GranteeUserName or GranteeRoleName must be set")
+			return nil, errors.New("either GranteeUserName or GranteeRoleName must be set")
 		}
 	}
 
@@ -50,7 +49,7 @@ func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, grantee
 		} else if granteeRoleName != nil {
 			granteeWhere = querybuilder.SimpleWhere("role_name", *granteeRoleName)
 		} else {
-			return nil, fmt.Errorf("either GranteeUserName or GranteeRoleName must be set")
+			return nil, errors.New("either GranteeUserName or GranteeRoleName must be set")
 		}
 	}
 
@@ -117,7 +116,7 @@ func (i *impl) RevokeGrantRole(ctx context.Context, grantedRoleName string, gran
 		} else if granteeRoleName != nil {
 			grantee = *granteeRoleName
 		} else {
-			return fmt.Errorf("either GranteeUserName or GranteeRoleName must be set")
+			return errors.New("either GranteeUserName or GranteeRoleName must be set")
 		}
 	}
 	sql, err := querybuilder.RevokeRole(grantedRoleName, grantee).Build()

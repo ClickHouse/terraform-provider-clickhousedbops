@@ -25,6 +25,11 @@ func Test_SimpleWhere_Clause(t *testing.T) {
 			where: SimpleWhere("te`st", "value"),
 			want:  "`te\\`st` = 'value'",
 		},
+		{
+			name:  "Null",
+			where: IsNull("age"),
+			want:  "`age` IS NULL",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
