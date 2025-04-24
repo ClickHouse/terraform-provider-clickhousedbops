@@ -23,6 +23,9 @@ jobs:
       - name: Run fmt
         run: make fmt
 
+      - name: Run generate
+        run: make generate
+
       - name: Check for changes
         run: git diff --exit-code
 

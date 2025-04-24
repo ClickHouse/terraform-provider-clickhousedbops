@@ -24,6 +24,7 @@ import (
 //go:embed grantprivilege.md
 var grantPrivilegeDescription string
 
+//go:generate curl -so grants.tsv https://raw.githubusercontent.com/ClickHouse/ClickHouse/master/tests/queries/0_stateless/01271_show_privileges.reference
 //go:embed grants.tsv
 var grants string
 

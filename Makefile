@@ -45,8 +45,8 @@ fmt: ensure-golangci-lint
 	go fmt ./...
 	$(GOLANGCILINT) run --fix --allow-serial-runners
 
-import-privilege-list:
-	@curl -so pkg/resource/grantprivilege/grants.tsv https://raw.githubusercontent.com/ClickHouse/ClickHouse/master/tests/queries/0_stateless/01271_show_privileges.reference
+generate:
+	go generate ./...
 
 TFPLUGINDOCS = /tmp/tfplugindocs
 ensure-tfplugindocs: ## Download tfplugindocs locally if necessary.

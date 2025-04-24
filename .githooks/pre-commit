@@ -6,7 +6,6 @@
   (make fmt)
   (make docs)
   (make build)
-  (make import-privilege-list)
   exit_code=$?
   end=$(date +%s)
   echo "========== Finished pre-commit git hook with error code $exit_code at $(date -R). The duration is $((end - start)) second(-s) =========="
