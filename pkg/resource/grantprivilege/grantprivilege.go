@@ -346,6 +346,9 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 	}
 }
 
+// parseGrants reads the grants.tsv file and turns it into a data structure to get information about all available permissions users can grants.
+// The .tsv file comes from clickhouse core code and should be updated every time there is a change in permissions upstream.
+// information returned by this function is used for validation of user settings.
 func parseGrants() availableGrants {
 	aliases := make(map[string]string)
 	groups := make(map[string][]string)
