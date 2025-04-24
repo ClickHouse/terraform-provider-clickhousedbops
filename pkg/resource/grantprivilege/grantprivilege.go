@@ -266,6 +266,14 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	if createdGrant == nil {
+		resp.Diagnostics.AddError(
+			"Error Creating ClickHouse Privilege Grant",
+			"The grant operation was successful but it didn't create the expected entry in system.grants table. This normally means there is an already granted privilege to the same grantee that already includes the one you tried to apply.",
+		)
+		return
+	}
+
 	state := GrantPrivilege{
 		Privilege:       types.StringValue(createdGrant.AccessType),
 		Database:        types.StringPointerValue(createdGrant.DatabaseName),
