@@ -1,11 +1,9 @@
 package grantprivilege
 
 import (
-	"bufio"
 	"context"
 	_ "embed"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -23,10 +21,6 @@ import (
 
 //go:embed grantprivilege.md
 var grantPrivilegeDescription string
-
-//go:generate curl -so grants.tsv https://raw.githubusercontent.com/ClickHouse/ClickHouse/master/tests/queries/0_stateless/01271_show_privileges.reference
-//go:embed grants.tsv
-var grants string
 
 type availableGrants struct {
 	Aliases map[string]string   `json:"aliases"`
@@ -99,6 +93,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				},
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
+					stringvalidator.NoneOf("*"),
 				},
 			},
 			"column_name": schema.StringAttribute{
@@ -268,6 +263,36 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	if createdGrant == nil {
+		existing, err := r.client.GetAllGrantsForGrantee(ctx, grant.GranteeUserName, grant.GranteeRoleName)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error checking for existing overlapping privileges",
+				"internal error while checking for existing overlapping privileges. Please try again",
+			)
+			return
+		}
+
+		overlappingExplanations := make([]string, 0)
+		for _, e := range existing {
+			if overlaps(plan, e) {
+				// Prepare human-readable explanation of the overlap.
+				overlappingExplanations = append(overlappingExplanations, explainOverlap(plan, e))
+			}
+		}
+
+		if len(overlappingExplanations) > 0 {
+			details := fmt.Sprintf(`While trying to apply this resource, we found some privileges already granted to the same grantee that are overlapping with this resource:
+%s
+
+This is a configuration error that prevents further actions. Please note that these privileges might have been granted outside terraform.`, strings.Join(overlappingExplanations, "\n"))
+
+			resp.Diagnostics.AddError(
+				"Overlapping Privilege",
+				details,
+			)
+			return
+		}
+
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse Privilege Grant",
 			"The grant operation was successful but it didn't create the expected entry in system.grants table. This normally means there is an already granted privilege to the same grantee that already includes the one you tried to apply.",
@@ -345,52 +370,4 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		)
 		return
 	}
-}
-
-// parseGrants reads the grants.tsv file and turns it into a data structure to get information about all available permissions users can grants.
-// The .tsv file comes from clickhouse core code and should be updated every time there is a change in permissions upstream.
-// information returned by this function is used for validation of user settings.
-func parseGrants() availableGrants {
-	aliases := make(map[string]string)
-	groups := make(map[string][]string)
-	scopes := make(map[string]string)
-
-	scanner := bufio.NewScanner(strings.NewReader(grants))
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		splitted := strings.Split(line, "\t")
-
-		clean := strings.ReplaceAll(strings.Trim(splitted[1], "[]"), "'", "")
-		if clean != "" {
-			for _, a := range strings.Split(clean, ",") {
-				if a != splitted[0] {
-					aliases[a] = splitted[0]
-				}
-			}
-		}
-
-		if splitted[3] != "\\N" {
-			if groups[splitted[3]] == nil {
-				groups[splitted[3]] = make([]string, 0)
-			}
-			groups[splitted[3]] = append(groups[splitted[3]], splitted[0])
-		}
-
-		if splitted[2] != "\\N" {
-			scopes[splitted[0]] = splitted[2]
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	ret := availableGrants{
-		Aliases: aliases,
-		Groups:  groups,
-		Scopes:  scopes,
-	}
-
-	return ret
 }

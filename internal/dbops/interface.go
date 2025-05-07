@@ -24,4 +24,5 @@ type Client interface {
 	GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege) (*GrantPrivilege, error)
 	GetGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string) (*GrantPrivilege, error)
 	RevokeGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string) error
+	GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string) ([]GrantPrivilege, error)
 }

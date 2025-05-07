@@ -180,3 +180,81 @@ func (i *impl) RevokeGrantPrivilege(ctx context.Context, accessType string, data
 
 	return nil
 }
+
+func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string) ([]GrantPrivilege, error) {
+	// Get all grants for the same grantee.
+	var to querybuilder.Where
+	{
+		if granteeUsername != nil {
+			to = querybuilder.SimpleWhere("user_name", *granteeUsername)
+		} else if granteeRoleName != nil {
+			to = querybuilder.SimpleWhere("role_name", *granteeRoleName)
+		} else {
+			return nil, errors.New("either granteeUsername or GranteeRoleName must be set")
+		}
+	}
+
+	sql, err := querybuilder.NewSelect([]querybuilder.Field{
+		querybuilder.NewField("access_type"),
+		querybuilder.NewField("database"),
+		querybuilder.NewField("table"),
+		querybuilder.NewField("column"),
+		querybuilder.NewField("user_name"),
+		querybuilder.NewField("role_name"),
+		querybuilder.NewField("grant_option"),
+	}, "system.grants").Where(to).Build()
+
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building query")
+	}
+
+	ret := make([]GrantPrivilege, 0)
+
+	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+		accessType, err := data.GetString("access_type")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'access_type' field")
+		}
+		database, err := data.GetNullableString("database")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'database' field")
+		}
+		table, err := data.GetNullableString("table")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'table' field")
+		}
+		column, err := data.GetNullableString("column")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'column' field")
+		}
+		granteeUserName, err := data.GetNullableString("user_name")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'user_name' field")
+		}
+		granteeRoleName, err := data.GetNullableString("role_name")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'role_name' field")
+		}
+		grantOption, err := data.GetBool("grant_option")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'grant_option' field")
+		}
+
+		ret = append(ret, GrantPrivilege{
+			AccessType:      accessType,
+			DatabaseName:    database,
+			TableName:       table,
+			ColumnName:      column,
+			GranteeUserName: granteeUserName,
+			GranteeRoleName: granteeRoleName,
+			GrantOption:     grantOption,
+		})
+
+		return nil
+	})
+	if err != nil {
+		return nil, errors.WithMessage(err, "error running query")
+	}
+
+	return ret, nil
+}
