@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -165,7 +166,26 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), req.ID)...)
+	// This resource can be imported by specifying either the name or the UUID of the database.
+	// Check if user input is a UUID
+	_, err := uuid.Parse(req.ID)
+	if err != nil {
+		// Failed parsing UUID, try importing using the database name
+
+		db, err := r.client.FindDatabaseByName(ctx, req.ID)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Cannot find database",
+				fmt.Sprintf("%+v\n", err),
+			)
+			return
+		}
+
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), db.UUID)...)
+	} else {
+		// User passed a UUID
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), req.ID)...)
+	}
 }
 
 // syncDatabaseState reads database settings from clickhouse and returns a DatabaseResourceModel

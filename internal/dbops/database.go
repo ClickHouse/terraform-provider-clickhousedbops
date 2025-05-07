@@ -119,3 +119,29 @@ func (i *impl) DeleteDatabase(ctx context.Context, uuid string) error {
 
 	return nil
 }
+
+func (i *impl) FindDatabaseByName(ctx context.Context, name string) (*Database, error) {
+	sql, err := querybuilder.NewSelect(
+		[]querybuilder.Field{querybuilder.NewField("uuid")},
+		"system.databases",
+	).Where(querybuilder.SimpleWhere("name", name)).Build()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building query")
+	}
+
+	var uuid string
+
+	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+		uuid, err = data.GetString("uuid")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'uuid' field")
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, errors.WithMessage(err, "error running query")
+	}
+
+	return i.GetDatabase(ctx, uuid)
+}
