@@ -3,6 +3,16 @@
 When migrating resources from the `terraform-provider-clickhouse` to the new `terraform-provider-clickhousedbops` provider, you need to declare a new provider in your terraform files:
 
 ```
+terraform {
+  required_providers {
+    ...
+    clickhousedbops = {
+      # version = "<uncomment and set desired version or leave field commented to use latest available>"
+      source  = "ClickHouse/clickhousedbops"
+    }
+  }
+}
+
 provider "clickhousedbops" {
 ...
 }
