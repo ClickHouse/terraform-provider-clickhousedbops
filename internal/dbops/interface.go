@@ -13,6 +13,7 @@ type Client interface {
 	CreateRole(ctx context.Context, role Role) (*Role, error)
 	GetRole(ctx context.Context, id string) (*Role, error)
 	DeleteRole(ctx context.Context, id string) error
+	FindRoleByName(ctx context.Context, name string) (*Role, error)
 
 	CreateUser(ctx context.Context, user User) (*User, error)
 	GetUser(ctx context.Context, id string) (*User, error)

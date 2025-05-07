@@ -109,3 +109,29 @@ func (i *impl) DeleteRole(ctx context.Context, id string) error {
 
 	return nil
 }
+
+func (i *impl) FindRoleByName(ctx context.Context, name string) (*Role, error) {
+	sql, err := querybuilder.NewSelect(
+		[]querybuilder.Field{querybuilder.NewField("id")},
+		"system.roles",
+	).Where(querybuilder.SimpleWhere("name", name)).Build()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building query")
+	}
+
+	var uuid string
+
+	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+		uuid, err = data.GetString("id")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'id' field")
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, errors.WithMessage(err, "error running query")
+	}
+
+	return i.GetRole(ctx, uuid)
+}

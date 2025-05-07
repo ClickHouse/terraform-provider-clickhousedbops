@@ -38,3 +38,4 @@ provider "clickhousedbops" {
 ## Migrating resources
 
 To migrate from a `clickhouse_database` to a `clickhousedbops_database` please read [Migrating database](https://github.com/ClickHouse/terraform-provider-clickhousedbops/blob/main/migrating/database.md).  
+To migrate from a `clickhouse_role` to a `clickhousedbops_role` please read [Migrating roles](https://github.com/ClickHouse/terraform-provider-clickhousedbops/blob/main/migrating/role.md).  
