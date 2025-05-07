@@ -147,7 +147,7 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	// Check if user input is a UUID
 	_, err := uuid.Parse(req.ID)
 	if err != nil {
-		// Failed parsing UUID, try importing using the database name
+		// Failed parsing UUID, try importing using the role name
 
 		role, err := r.client.FindRoleByName(ctx, req.ID)
 		if err != nil {
