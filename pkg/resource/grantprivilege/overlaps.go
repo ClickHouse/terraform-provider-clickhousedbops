@@ -106,7 +106,6 @@ func overlaps(current GrantPrivilege, existing dbops.GrantPrivilege) bool {
 				}
 			} else {
 				if strings.HasSuffix(*existing.DatabaseName, "*") {
-
 				} else {
 					// Both DatabaseNames do not have wildcard and are different.
 					return false
@@ -133,7 +132,6 @@ func overlaps(current GrantPrivilege, existing dbops.GrantPrivilege) bool {
 				}
 			} else {
 				if strings.HasSuffix(*existing.TableName, "*") {
-
 				} else {
 					// Both TableNames do not have wildcard and are different.
 					return false

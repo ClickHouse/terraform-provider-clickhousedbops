@@ -203,7 +203,6 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		querybuilder.NewField("role_name"),
 		querybuilder.NewField("grant_option"),
 	}, "system.grants").Where(to).Build()
-
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
