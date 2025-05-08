@@ -118,3 +118,29 @@ func (i *impl) DeleteUser(ctx context.Context, id string) error {
 
 	return nil
 }
+
+func (i *impl) FindUserByName(ctx context.Context, name string) (*User, error) {
+	sql, err := querybuilder.NewSelect(
+		[]querybuilder.Field{querybuilder.NewField("id")},
+		"system.users",
+	).Where(querybuilder.SimpleWhere("name", name)).Build()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building query")
+	}
+
+	var uuid string
+
+	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+		uuid, err = data.GetString("id")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'id' field")
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, errors.WithMessage(err, "error running query")
+	}
+
+	return i.GetUser(ctx, uuid)
+}

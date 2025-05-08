@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -177,5 +178,24 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
+	// This resource can be imported by specifying either the name or the UUID of the user.
+	// Check if user input is a UUID
+	_, err := uuid.Parse(req.ID)
+	if err != nil {
+		// Failed parsing UUID, try importing using the user name
+
+		user, err := r.client.FindUserByName(ctx, req.ID)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Cannot find user",
+				fmt.Sprintf("%+v\n", err),
+			)
+			return
+		}
+
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), user.ID)...)
+	} else {
+		// User passed a UUID
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
+	}
 }

@@ -18,6 +18,7 @@ type Client interface {
 	CreateUser(ctx context.Context, user User) (*User, error)
 	GetUser(ctx context.Context, id string) (*User, error)
 	DeleteUser(ctx context.Context, id string) error
+	FindUserByName(ctx context.Context, name string) (*User, error)
 
 	GrantRole(ctx context.Context, grantRole GrantRole) (*GrantRole, error)
 	GetGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string) (*GrantRole, error)
