@@ -1,0 +1,286 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        description: "The semver formatted version for the new release i.e 0.3.1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Validate the input
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Check input
+        id: check
+        run: |
+          version="${{ inputs.version }}"
+          version="${version#v}"
+          
+          # validate semver.
+          if [[ $version =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$ ]]; then
+            echo "Valid release version: $version"
+          
+            if [[ $version =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              # Release is something like x.y.z
+              enable_alpha="false"
+              goreleaser_config=".goreleaser-stable.yml"
+            else
+              # Release is something like x.y.z-something
+              enable_alpha="true"
+              goreleaser_config=".goreleaser-alpha.yml"
+            fi
+          else
+            echo "Invalid semver: \"$version\". Must be something like 1.2.3"
+            exit 1
+          fi
+          
+          echo "version=${version}" >> $GITHUB_OUTPUT
+
+  list-examples:
+    outputs:
+      examples: ${{ steps.list.outputs.examples }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - id: list
+        run: |
+          examples="$(find examples/tests/ -name main.tf | xargs -n1 dirname | xargs -n1 basename| jq -cRn '[inputs]')"
+          echo "examples=${examples}" >> "$GITHUB_OUTPUT"
+
+  list-clickhouse-version:
+    outputs:
+      versions: ${{ steps.list.outputs.versions }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/find-clickhouse-releases
+        id: list
+
+  list-terraform-version:
+    outputs:
+      versions: ${{ steps.list.outputs.versions }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/find-tf-releases
+        id: list
+        with:
+          count: '3'
+          min: '1.11.0'
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Create tmp dir
+        run: |
+          TMPDIR="$(mktemp -d)"
+          echo "TMPDIR=$TMPDIR" >> $GITHUB_ENV
+
+      - name: Build terraform provider
+        run: |
+          CGO_ENABLED=0 go build -o $TMPDIR/terraform-provider-clickhousedbops
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-provider-clickhousedbops
+          path: ${{ env.TMPDIR }}
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [ 'build', 'list-examples', 'list-clickhouse-version', 'list-terraform-version' ]
+    strategy:
+      fail-fast: false
+      matrix:
+        terraform_version: ${{ fromJSON(needs.list-terraform-version.outputs.versions) }}
+        clickhouse_version: ${{ fromJSON(needs.list-clickhouse-version.outputs.versions) }}
+        protocol: [ "native", "http" ]
+        example: ${{ fromJSON(needs.list-examples.outputs.examples) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: terraform-provider-clickhousedbops
+          path: .
+
+      - name: Adjust permissions
+        run: |
+          chmod +x ./terraform-provider-clickhousedbops
+          ls -lah
+
+      - name: Install terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.terraform_version }}
+          terraform_wrapper: false
+
+      - name: Prepare test env
+        run: |
+          cd tests/
+          export CLICKHOUSE_VERSION="${{ matrix.clickhouse_version }}"
+          export TFVER="${{ matrix.terraform_version }}"
+          export TF_VAR_protocol=${{ matrix.protocol }}
+
+          case "$TF_VAR_protocol" in
+            native)
+              export TF_VAR_port=9000
+              export TF_VAR_auth_strategy=password
+              ;;
+            http)
+              export TF_VAR_port=8123
+              export TF_VAR_auth_strategy=basicauth
+              ;;
+          esac
+
+          docker compose up -d
+          sleep 5
+
+          # Check containers are running or display logs
+          for svc in clickhouse shell ; do
+            if [ -z $(docker compose ps -q $svc) ] || [ -z $(docker ps -q --no-trunc | grep $(docker compose ps -q $svc)) ]; then
+              echo "Failed running $svc"
+              docker compose logs $svc
+              exit 1
+            fi
+          done
+
+          docker compose exec clickhouse clickhouse client --password "test" "select version()"
+
+      - name: Run e2e test
+        run: |
+          cd tests/
+          export example=${{ matrix.example }}
+          docker compose exec shell ash -c "cd $example && terraform apply -auto-approve && terraform destroy -auto-approve"
+
+      - name: Stop test env
+        if: always()
+        run: |
+          cd tests/
+          docker compose kill
+          docker compose rm -f
+
+  report:
+    runs-on: ubuntu-latest
+    needs: [ 'e2e' ]
+    if: always()
+    steps:
+      - name: Successful run
+        if: ${{ !(contains(needs.*.result, 'failure')) }}
+        run: exit 0
+      - name: Report error on github UI
+        if: ${{ contains(needs.*.result, 'failure') }}
+        run: |
+          exit 1
+
+  # Bump the provider version in the examples directory
+  bump-examples:
+    needs: [ "validate", "e2e" ]
+    if: ${{ !(contains(needs.*.result, 'failure')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ssh-key: ${{secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Bump provider version in examples for stable version
+        run: |
+          version="${{ needs.validate.outputs.version }}"
+
+          # Bump semver in examples
+          export CLICKHOUSE_TERRAFORM_PROVIDER_VERSION="$version"
+          for f in `find . -name provider.tf.template`
+          do
+            dst="${f%.template}"
+            cat $f | envsubst > $dst
+
+            sed -i '1s/^/# This file is generated automatically please do not edit\n/' $dst
+          done
+
+      - name: Commit
+        run: |
+          git diff --quiet --exit-code && (echo "No changes detected" && exit 0)
+          git config --global user.name "Release Github Action"
+          git config --global user.email "bot@users.noreply.github.com"
+          git commit -a -m "Bump provider version in examples to ${{ needs.validate.outputs.version }}"
+          git push
+
+  # Create tag for the release
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    needs: [ "e2e", "bump-examples" ]
+    if: ${{ !(contains(needs.*.result, 'failure')) }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        ref: "main"
+    - name: Create tag
+      run: |
+        tag="v${{ needs.validate.outputs.version }}"
+        git tag $tag
+        git push origin $tag
+        
+  # Make a new release out of the tag
+  goreleaser:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    needs: [ "validate", "tag", "e2e" ]
+    if: ${{ !(contains(needs.*.result, 'failure')) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.validate.outputs.version }}
+          # Allow goreleaser to access older tag information.
+          fetch-depth: 0
+
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        id: import_gpg
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release --clean --config ${{ needs.validate.outputs.goreleaser_config }}
+        env:
+          # GitHub sets the GITHUB_TOKEN secret automatically.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
