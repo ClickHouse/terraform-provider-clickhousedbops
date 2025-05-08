@@ -4,18 +4,19 @@
 [![Dependabot Updates](https://github.com/ClickHouse/terraform-provider-clickhousedbops/actions/workflows/dependabot/dependabot-updates/badge.svg)](https://github.com/ClickHouse/terraform-provider-clickhouse/actions/workflows/dependabot/dependabot-updates)
 [![Unit tests](https://github.com/ClickHouse/terraform-provider-clickhousedbops/actions/workflows/test.yaml/badge.svg)](https://github.com/ClickHouse/terraform-provider-clickhousedbops/actions/workflows/test.yaml)
 
-
 This is the official Terraform provider for ClickHouse database operations.
 
 With this Terraform provider you can:
 
-- Manage `databases` in a `ClickHouse` instance
-- Manage `users` in a `ClickHouse` instance
-- Manage `roles` in a `ClickHouse` instance
-- Manage `role grants` in a `ClickHouse` instance
-- Manage `permission grants` in a `ClickHouse` instance
+- Manage `databases` in a `ClickHouse` instance using the `clickhousedbops_database` resource
+- Manage `users` in a `ClickHouse` instance using the `clickhousedbops_user` resource
+- Manage `roles` in a `ClickHouse` instance using the `clickhousedbops_role` resource
+- Manage `role grants` in a `ClickHouse` instance using the `clickhousedbops_grant_role` resource
+- Manage `permission grants` in a `ClickHouse` instance using the `clickhousedbops_grant_permission` resource
 
 ## Getting started
+
+The `clickhousedbops_user` requires at least terraform 1.11, while the other resources should work with older versions too.
 
 You can find examples in the [examples/tests](https://github.com/ClickHouse/terraform-provider-clickhousedbops/tree/main/examples/tests) directory.
 

@@ -49,6 +49,18 @@ jobs:
           json="$(printf '%s\n' "${versions[@]}" | jq -R . | uniq |jq -cs .)"
           echo "versions=${json}" >> "$GITHUB_OUTPUT"
 
+  list-terraform-version:
+    outputs:
+      versions: ${{ steps.list.outputs.releases }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/find-tf-releases
+        id: list
+        with:
+          count: '3'
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -77,11 +89,11 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    needs: ['build', 'list-examples', 'list-clickhouse-version']
+    needs: ['build', 'list-examples', 'list-clickhouse-version', 'list-terraform-version']
     strategy:
       fail-fast: false
-      max-parallel: 10
       matrix:
+        terraform_version: ${{ fromJSON(needs.list-terraform-version.outputs.versions) }}
         clickhouse_version: ${{ fromJSON(needs.list-clickhouse-version.outputs.versions) }}
         protocol: ["native", "http"]
         example: ${{ fromJSON(needs.list-examples.outputs.examples) }}
@@ -102,13 +114,14 @@ jobs:
       - name: Install terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ env.tf_release }}
+          terraform_version: ${{ matrix.terraform_version }}
           terraform_wrapper: false
 
       - name: Prepare test env
         run: |
           cd tests/
           export CLICKHOUSE_VERSION="${{ matrix.clickhouse_version }}"
+          export TFVER="${{ matrix.terraform_version }}"
           export TF_VAR_protocol=${{ matrix.protocol }}
           
           case "$TF_VAR_protocol" in
