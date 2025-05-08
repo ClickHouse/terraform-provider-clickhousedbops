@@ -32,7 +32,7 @@ jobs:
 
   list-terraform-version:
     outputs:
-      versions: ${{ steps.list.outputs.releases }}
+      versions: ${{ steps.list.outputs.versions }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

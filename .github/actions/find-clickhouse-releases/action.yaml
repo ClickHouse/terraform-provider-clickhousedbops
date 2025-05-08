@@ -3,9 +3,9 @@ description: "Return names of latest clickhouse releases"
 inputs: {}
 
 outputs:
-  releases:
+  versions:
     description: "The json encoded array of release names"
-    value: ${{steps.find-ch-releases.outputs.releases}}
+    value: ${{steps.find-ch-releases.outputs.versions}}
 
 runs:
   using: "composite"

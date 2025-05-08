@@ -11,9 +11,9 @@ inputs:
     description: "The number of releases to return"
 
 outputs:
-  releases:
+  versions:
     description: "The json encoded array of release names"
-    value: ${{steps.find-tf-releases.outputs.releases}}
+    value: ${{steps.find-tf-releases.outputs.versions}}
 
 runs:
   using: "composite"
@@ -60,4 +60,4 @@ runs:
         done
       
         json="$(printf '%s\n' "${versions[@]}" | jq -R . | jq -cs .)"
-        echo "releases=${json}" >> "$GITHUB_OUTPUT"
+        echo "versions=${json}" >> "$GITHUB_OUTPUT"
