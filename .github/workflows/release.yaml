@@ -107,7 +107,7 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    needs: [ 'build', 'list-examples', 'list-clickhouse-version', 'list-terraform-version' ]
+    needs: [ 'validate', 'build', 'list-examples', 'list-clickhouse-version', 'list-terraform-version' ]
     strategy:
       fail-fast: false
       matrix:
@@ -235,7 +235,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    needs: [ "e2e", "bump-examples" ]
+    needs: [ "validate", "e2e", "bump-examples" ]
     if: ${{ !(contains(needs.*.result, 'failure')) }}
     steps:
     - name: Checkout
