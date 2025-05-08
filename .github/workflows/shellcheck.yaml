@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Run
         run: |
-          for FILE in ${find .github/actions -name '*.sh'}; do
+          for FILE in $(find .github/actions -name '*.sh'); do
             echo "Running shellchek for ${FILE}"
             shellcheck "${FILE}"
           done
