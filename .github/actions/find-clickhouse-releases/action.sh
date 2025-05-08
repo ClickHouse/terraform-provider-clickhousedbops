@@ -10,8 +10,8 @@ RELEASES="$(curl -s -L -H "Accept: application/vnd.github+json" -H "X-GitHub-Api
 LATEST_LTS="$(echo "$RELEASES" | grep lts | sort -Vr |head -n1 | cut -d "." -f 1,2 | sed 's/v//')"
 LATEST_STABLE="$(echo "$RELEASES" | grep stable | sort -Vr |head -n1 | cut -d "." -f 1,2 | sed 's/v//')"
 
-versions+=(${LATEST_LTS})
-versions+=(${LATEST_STABLE})
+versions+=("${LATEST_LTS}")
+versions+=("${LATEST_STABLE}")
 
 # Get latest minor of previous major
 latest_major="$(echo "$LATEST_LTS" | cut -d"." -f1)"
@@ -24,7 +24,7 @@ do
   candidate_minor="$(echo "$candidate" | cut -d "." -f2)"
 
   if [ "$candidate_major" != "${latest_major}" ]; then
-    versions+=(${candidate_major}.${candidate_minor})
+    versions+=("${candidate_major}.${candidate_minor}")
     break
   fi
 done

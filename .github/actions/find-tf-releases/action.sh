@@ -46,7 +46,7 @@ do
     if [ "${min}" != "" ]
     then
       # Breaks the for loop at first occourence of a candidate older than the min.
-      vergte $candidate $min || break
+      vergte "$candidate" "$min" || break
     fi
 
     # Keep major.minor for each release to check if it changes since last iteration
@@ -54,11 +54,11 @@ do
 
     if [ "$nopatch" != "${current_nopatch}" ]; then
       # First time we see this major.minor, this is a good candidate
-      versions+=(${candidate})
+      versions+=("${candidate}")
       current_nopatch=${nopatch}
     fi
   fi
-  [ ${#versions[@]} -ge $want ] && break
+  [ ${#versions[@]} -ge "$want" ] && break
 done
 
 json="$(printf '%s\n' "${versions[@]}" | jq -R . | jq -cs .)"
