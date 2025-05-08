@@ -17,7 +17,7 @@ terraform state rm clickhouse_user.john
 ```
 
 Then make the following changes:
-- change the resource type to `clickhousedbops_role`
+- change the resource type to `clickhousedbops_user`
 - remove the `service_id` field.
 - rename the `password_sha256_hash` field to `password_sha256_hash_wo`
 - add a new field `password_sha256_hash_wo_version` with a value of 1.
