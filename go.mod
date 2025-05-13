@@ -6,7 +6,7 @@ require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.34.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/terraform-plugin-framework v1.14.1
-	github.com/hashicorp/terraform-plugin-framework-validators v0.17.0
+	github.com/hashicorp/terraform-plugin-framework-validators v0.18.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/pingcap/errors v0.11.4
 )
