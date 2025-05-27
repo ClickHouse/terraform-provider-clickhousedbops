@@ -44,3 +44,9 @@ resource "clickhousedbops_grant_privilege" "grant_select_on_single_column_on_tab
   grantee_user_name = clickhousedbops_user.john.name
   grant_option      = true
 }
+
+resource "clickhousedbops_grant_privilege" "grant_create_user" {
+  privilege_name    = "CREATE USER"
+  grantee_user_name = clickhousedbops_user.john.name
+  grant_option      = false
+}
