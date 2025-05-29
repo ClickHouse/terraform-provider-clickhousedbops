@@ -12,7 +12,7 @@ With this Terraform provider you can:
 - Manage `users` in a `ClickHouse` instance using the `clickhousedbops_user` resource
 - Manage `roles` in a `ClickHouse` instance using the `clickhousedbops_role` resource
 - Manage `role grants` in a `ClickHouse` instance using the `clickhousedbops_grant_role` resource
-- Manage `permission grants` in a `ClickHouse` instance using the `clickhousedbops_grant_permission` resource
+- Manage `privilege grants` in a `ClickHouse` instance using the `clickhousedbops_grant_privilege` resource
 
 ## Getting started
 
