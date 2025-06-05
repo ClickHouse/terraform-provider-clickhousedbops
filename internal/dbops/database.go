@@ -119,5 +119,9 @@ func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName 
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
+	if uuid == "" {
+		return nil, errors.New("database with such name not found")
+	}
+
 	return i.GetDatabase(ctx, uuid, clusterName)
 }

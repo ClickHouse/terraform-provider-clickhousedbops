@@ -4,8 +4,11 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -22,9 +25,9 @@ var databaseResourceDescription string
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &Resource{}
-	_ resource.ResourceWithConfigure = &Resource{}
-	//_ resource.ResourceWithImportState = &Resource{}
+	_ resource.Resource                = &Resource{}
+	_ resource.ResourceWithConfigure   = &Resource{}
+	_ resource.ResourceWithImportState = &Resource{}
 )
 
 // NewResource is a helper function to simplify the provider implementation.
@@ -187,28 +190,41 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 	}
 }
 
-//func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-//	// This resource can be imported by specifying either the name or the UUID of the database.
-//	// Check if user input is a UUID
-//	_, err := uuid.Parse(req.ID)
-//	if err != nil {
-//		// Failed parsing UUID, try importing using the database name
-//
-//		db, err := r.client.FindDatabaseByName(ctx, req.ID)
-//		if err != nil {
-//			resp.Diagnostics.AddError(
-//				"Cannot find database",
-//				fmt.Sprintf("%+v\n", err),
-//			)
-//			return
-//		}
-//
-//		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), db.UUID)...)
-//	} else {
-//		// User passed a UUID
-//		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), req.ID)...)
-//	}
-//}
+func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	// req.ID can either be in the form <cluster name>:<database ref> or just <database ref>
+	// database ref can either be the name or the UUID of the database.
+
+	// Check if cluster name is specified
+	var ref = req.ID
+	var clusterName *string
+	if strings.Index(req.ID, ":") >= 0 {
+		clusterName = &strings.Split(req.ID, ":")[0]
+		ref = strings.Split(req.ID, ":")[1]
+	}
+
+	// Check if ref is a UUID
+	_, err := uuid.Parse(ref)
+	if err != nil {
+		// Failed parsing UUID, try importing using the database name
+		db, err := r.client.FindDatabaseByName(ctx, ref, clusterName)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Cannot find database",
+				fmt.Sprintf("%+v\n", err),
+			)
+			return
+		}
+
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), db.UUID)...)
+	} else {
+		// User passed a UUID
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), ref)...)
+	}
+
+	if clusterName != nil {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	}
+}
 
 // syncDatabaseState reads database settings from clickhouse and returns a DatabaseResourceModel
 func (r *Resource) syncDatabaseState(ctx context.Context, uuid string, clusterName *string) (*Database, error) {
