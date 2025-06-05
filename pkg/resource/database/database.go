@@ -102,12 +102,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	dbSpec := dbops.Database{
-		Name:    plan.Name.ValueString(),
-		Comment: plan.Comment.ValueString(),
-	}
-
-	db, err := r.client.CreateDatabase(ctx, dbSpec, plan.ClusterName.ValueStringPointer())
+	db, err := r.client.CreateDatabase(ctx, dbops.Database{Name: plan.Name.ValueString(), Comment: plan.Comment.ValueString()}, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating database",
