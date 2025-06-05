@@ -71,7 +71,7 @@ services:
     environment:
       - TF_LOG=debug
       - TF_VAR_host=${TF_VAR_host}
-      - TF_VAR_cluster_name=${TF_VAR_cluster_name}
+      - TF_VAR_cluster_name
       - TF_VAR_auth_strategy=${TF_VAR_auth_strategy}
       - TF_VAR_username=default
       - TF_VAR_password=test
