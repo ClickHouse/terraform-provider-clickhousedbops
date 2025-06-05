@@ -69,6 +69,7 @@ services:
     command: ["infinity"]
     working_dir: /tests
     environment:
+      - TF_LOG=debug
       - TF_VAR_host=${TF_VAR_host}
       - TF_VAR_cluster_name=${TF_VAR_cluster_name}
       - TF_VAR_auth_strategy=${TF_VAR_auth_strategy}
