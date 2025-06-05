@@ -127,6 +127,9 @@ jobs:
             export TF_VAR_cluster_name=cluster1
           esac
           
+          docker version
+          docker compose version
+          
           docker compose up -d
           sleep 5
           
