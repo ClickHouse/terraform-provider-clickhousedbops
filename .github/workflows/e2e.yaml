@@ -127,9 +127,8 @@ jobs:
             export TF_VAR_cluster_name=cluster1
           esac
           
-          docker version
-          docker compose version
-          
+          docker pull clickhouse/clickhouse-server:${CLICKHOUSE_VERSION}
+                    
           docker compose up -d
           sleep 5
           
