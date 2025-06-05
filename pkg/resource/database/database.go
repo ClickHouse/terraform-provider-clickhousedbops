@@ -48,7 +48,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Optional:    true,
-				Description: "Name of the cluster",
+				Description: "Name of the cluster to create the database into. If omitted, the database will be created on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

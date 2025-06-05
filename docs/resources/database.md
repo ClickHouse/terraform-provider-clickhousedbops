@@ -33,7 +33,7 @@ resource "clickhousedbops_database" "logs" {
 
 ### Optional
 
-- `cluster_name` (String) Name of the cluster
+- `cluster_name` (String) Name of the cluster to create the database into. If omitted, the database will be created on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.
 - `comment` (String) Comment associated with the database
 
 ### Read-Only
