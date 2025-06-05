@@ -192,7 +192,7 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	// Check if cluster name is specified
 	ref := req.ID
 	var clusterName *string
-	if strings.Index(req.ID, ":") >= 0 {
+	if strings.Contains(req.ID, ":") {
 		clusterName = &strings.Split(req.ID, ":")[0]
 		ref = strings.Split(req.ID, ":")[1]
 	}
