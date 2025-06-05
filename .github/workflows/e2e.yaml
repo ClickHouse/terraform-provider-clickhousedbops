@@ -124,7 +124,7 @@ jobs:
             ;;
             *)
             export TF_VAR_host=ch01
-            export TF_VAR_cluster_name=cluster1
+            export TF_VAR_cluster_name="${{ matrix.cluster }}"
           esac
           
           # This is needed until docker compose 1.36 to avoid concurrent map write error.
