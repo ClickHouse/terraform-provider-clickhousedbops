@@ -41,7 +41,7 @@ func Test_createdatabase(t *testing.T) {
 			resourceType: resourceTypeDatabase,
 			resourceName: "database",
 			clusterName:  &clusterName,
-			want:         "CREATE DATABASE `database` ON CLUSTER `default`;",
+			want:         "CREATE DATABASE `database` ON CLUSTER 'default';",
 			wantErr:      false,
 		},
 	}

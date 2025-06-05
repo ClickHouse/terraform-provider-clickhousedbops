@@ -5,6 +5,8 @@ import (
 )
 
 func Test_create_drop(t *testing.T) {
+	cluster := "cluster1"
+
 	tests := []struct {
 		name         string
 		action       string
@@ -12,6 +14,7 @@ func Test_create_drop(t *testing.T) {
 		resourceName string
 		comment      string
 		identified   string
+		clusterName  *string
 		want         string
 		wantErr      bool
 	}{
@@ -21,6 +24,15 @@ func Test_create_drop(t *testing.T) {
 			resourceType: resourceTypeDatabase,
 			resourceName: "db1",
 			want:         "DROP DATABASE `db1`;",
+			wantErr:      false,
+		},
+		{
+			name:         "Drop database on cluster",
+			action:       actionDrop,
+			resourceType: resourceTypeDatabase,
+			resourceName: "db1",
+			clusterName:  &cluster,
+			want:         "DROP DATABASE `db1` ON CLUSTER 'cluster1';",
 			wantErr:      false,
 		},
 		{
@@ -110,6 +122,7 @@ func Test_create_drop(t *testing.T) {
 				action:           tt.action,
 				resourceTypeName: tt.resourceType,
 				resourceName:     tt.resourceName,
+				clusterName:      tt.clusterName,
 			}
 
 			got, err := q.Build()

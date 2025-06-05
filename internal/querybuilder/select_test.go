@@ -10,18 +10,27 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 		fields  []Field
 		where   []Where
 		from    string
+		cluster string
 		want    string
 		wantErr bool
 	}{
 		{
-			name:    "NewSelect one with",
+			name:    "Select one with",
 			fields:  []Field{NewField("name")},
 			from:    "users",
 			want:    "SELECT `name` FROM `users`;",
 			wantErr: false,
 		},
 		{
-			name:    "NewSelect two fields",
+			name:    "Select With Cluster",
+			fields:  []Field{NewField("name")},
+			from:    "users",
+			cluster: "cluster1",
+			want:    "SELECT `name` FROM cluster('cluster1', `users`);",
+			wantErr: false,
+		},
+		{
+			name:    "Select two fields",
 			fields:  []Field{NewField("name"), NewField("surname")},
 			from:    "users",
 			want:    "SELECT `name`, `surname` FROM `users`;",
@@ -35,7 +44,7 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "NewSelect with single where",
+			name:    "Select with single where",
 			fields:  []Field{NewField("name")},
 			where:   []Where{whereMock{"mock_where_clause"}},
 			from:    "users",
@@ -43,7 +52,7 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "NewSelect with multiple where",
+			name:    "Select with multiple where",
 			fields:  []Field{NewField("name")},
 			where:   []Where{whereMock{"mock_where_clause"}, whereMock{"mock_where_clause_2"}},
 			from:    "users",
@@ -56,6 +65,9 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			q := NewSelect(tt.fields, tt.from)
 			if tt.where != nil {
 				q = q.Where(tt.where...)
+			}
+			if tt.cluster != "" {
+				q = q.WithCluster(&tt.cluster)
 			}
 			got, err := q.Build()
 			if (err != nil) != tt.wantErr {
