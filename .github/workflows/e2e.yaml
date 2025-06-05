@@ -118,7 +118,7 @@ jobs:
               ;;
           esac
           
-          case "${{ matrix.cluster }}"
+          case "${{ matrix.cluster }}" in
             null)
             export TF_VAR_host=clickhouse
             ;;
