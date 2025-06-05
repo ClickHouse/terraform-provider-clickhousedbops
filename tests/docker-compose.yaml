@@ -1,4 +1,53 @@
 services:
+  zookeeper:
+    image: zookeeper:3.4.9
+    container_name: ch-zookeeper
+    environment:
+      - TZ=Europe/Rome
+      - ZOO_MY_ID=1
+
+  ch01:
+    image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
+    user: '101:101'
+    container_name: ch01
+    hostname: ch01
+    depends_on:
+      - zookeeper
+    environment:
+      - CLICKHOUSE_SKIP_USER_SETUP=1
+    ports:
+      - "9000:9000"
+    volumes:
+      - type: 'bind'
+        source: './config-cluster.xml'
+        target: '/etc/clickhouse-server/config.d/config.xml'
+      - type: 'bind'
+        source: './use-keeper.xml'
+        target: '/etc/clickhouse-server/config.d/use-keeper.xml'
+      - type: 'bind'
+        source: './users.xml'
+        target: '/etc/clickhouse-server/users.xml'
+
+  ch02:
+    image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
+    user: '101:101'
+    container_name: ch02
+    hostname: ch02
+    depends_on:
+      - zookeeper
+    environment:
+      - CLICKHOUSE_SKIP_USER_SETUP=1
+    volumes:
+      - type: 'bind'
+        source: './config-cluster.xml'
+        target: '/etc/clickhouse-server/config.d/config.xml'
+      - type: 'bind'
+        source: './use-keeper.xml'
+        target: '/etc/clickhouse-server/config.d/use-keeper.xml'
+      - type: 'bind'
+        source: './users.xml'
+        target: '/etc/clickhouse-server/users.xml'
+
   clickhouse:
     image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
     user: '101:101'
@@ -7,17 +56,21 @@ services:
     environment:
       - CLICKHOUSE_SKIP_USER_SETUP=1
     volumes:
-      - ${PWD}/config.xml:/etc/clickhouse-server/config.xml
-      - ${PWD}/users.xml:/etc/clickhouse-server/users.xml
-    ports:
-      - "9000:9000"
+      - type: 'bind'
+        source: './config-single.xml'
+        target: '/etc/clickhouse-server/config.d/config.xml'
+      - type: 'bind'
+        source: './users.xml'
+        target: '/etc/clickhouse-server/users.xml'
+
   shell:
     image: hashicorp/terraform:${TFVER:-1.11}
     entrypoint: [ "sleep" ]
     command: ["infinity"]
     working_dir: /tests
     environment:
-      - TF_VAR_host=clickhouse
+      - TF_VAR_host=${TF_VAR_host}
+      - TF_VAR_cluster_name=${TF_VAR_cluster_name}
       - TF_VAR_auth_strategy=${TF_VAR_auth_strategy}
       - TF_VAR_username=default
       - TF_VAR_password=test

@@ -15,8 +15,8 @@ type Database struct {
 	Comment string `json:"comment" ch:"comment"`
 }
 
-func (i *impl) CreateDatabase(ctx context.Context, database Database) (*Database, error) {
-	builder := querybuilder.NewCreateDatabase(database.Name)
+func (i *impl) CreateDatabase(ctx context.Context, database Database, clusterName *string) (*Database, error) {
+	builder := querybuilder.NewCreateDatabase(database.Name).WithCluster(clusterName)
 	if database.Comment != "" {
 		builder.WithComment(database.Comment)
 	}
@@ -30,38 +30,14 @@ func (i *impl) CreateDatabase(ctx context.Context, database Database) (*Database
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	// Get UUID of newly created database.
-	var uuid string
-	{
-		sql, err := querybuilder.NewSelect(
-			[]querybuilder.Field{querybuilder.NewField("uuid")},
-			"system.databases",
-		).Where(querybuilder.SimpleWhere("name", database.Name)).Build()
-		if err != nil {
-			return nil, errors.WithMessage(err, "error building query")
-		}
-
-		err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-			uuid, err = data.GetString("uuid")
-			if err != nil {
-				return errors.WithMessage(err, "error scanning query result, missing 'uuid' field")
-			}
-
-			return nil
-		})
-		if err != nil {
-			return nil, errors.WithMessage(err, "error running query")
-		}
-	}
-
-	return i.GetDatabase(ctx, uuid)
+	return i.FindDatabaseByName(ctx, database.Name, clusterName)
 }
 
-func (i *impl) GetDatabase(ctx context.Context, uuid string) (*Database, error) {
+func (i *impl) GetDatabase(ctx context.Context, uuid string, clusterName *string) (*Database, error) {
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("name"), querybuilder.NewField("comment")},
 		"system.databases",
-	).Where(querybuilder.SimpleWhere("uuid", uuid)).Build()
+	).WithCluster(clusterName).Where(querybuilder.SimpleWhere("uuid", uuid)).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -96,8 +72,8 @@ func (i *impl) GetDatabase(ctx context.Context, uuid string) (*Database, error) 
 	return database, nil
 }
 
-func (i *impl) DeleteDatabase(ctx context.Context, uuid string) error {
-	database, err := i.GetDatabase(ctx, uuid)
+func (i *impl) DeleteDatabase(ctx context.Context, uuid string, clusterName *string) error {
+	database, err := i.GetDatabase(ctx, uuid, clusterName)
 	if err != nil {
 		return errors.WithMessage(err, "error getting database name")
 	}
@@ -107,7 +83,7 @@ func (i *impl) DeleteDatabase(ctx context.Context, uuid string) error {
 		return nil
 	}
 
-	sql, err := querybuilder.NewDropDatabase(database.Name).Build()
+	sql, err := querybuilder.NewDropDatabase(database.Name).WithCluster(clusterName).Build()
 	if err != nil {
 		return errors.WithMessage(err, "error building query")
 	}
@@ -120,11 +96,11 @@ func (i *impl) DeleteDatabase(ctx context.Context, uuid string) error {
 	return nil
 }
 
-func (i *impl) FindDatabaseByName(ctx context.Context, name string) (*Database, error) {
+func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName *string) (*Database, error) {
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("uuid")},
 		"system.databases",
-	).Where(querybuilder.SimpleWhere("name", name)).Build()
+	).WithCluster(clusterName).Where(querybuilder.SimpleWhere("name", name)).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -143,5 +119,5 @@ func (i *impl) FindDatabaseByName(ctx context.Context, name string) (*Database, 
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.GetDatabase(ctx, uuid)
+	return i.GetDatabase(ctx, uuid, clusterName)
 }

@@ -33,6 +33,7 @@ resource "clickhousedbops_database" "logs" {
 
 ### Optional
 
+- `cluster_name` (String) Name of the cluster
 - `comment` (String) Comment associated with the database
 
 ### Read-Only

@@ -78,6 +78,7 @@ jobs:
         terraform_version: ${{ fromJSON(needs.list-terraform-version.outputs.versions) }}
         clickhouse_version: ${{ fromJSON(needs.list-clickhouse-version.outputs.versions) }}
         protocol: ["native", "http"]
+        cluster: ["null", "cluster1"]
         example: ${{ fromJSON(needs.list-examples.outputs.examples) }}
     steps:
       - name: Checkout
@@ -117,6 +118,15 @@ jobs:
               ;;
           esac
           
+          case "${{ matrix.cluster }}"
+            null)
+            export TF_VAR_host=clickhouse
+            ;;
+            *)
+            export TF_VAR_host=ch01
+            export TF_VAR_cluster_name=cluster1
+          esac
+          
           docker compose up -d
           sleep 5
           
@@ -130,6 +140,7 @@ jobs:
           done
           
           docker compose exec clickhouse clickhouse client --password "test" "select version()"
+          docker compose exec ch01 clickhouse client --password "test" "select version()"
 
       - name: Run e2e test
         run: |

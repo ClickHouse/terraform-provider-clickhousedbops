@@ -6,12 +6,14 @@ import (
 
 func Test_createdatabase(t *testing.T) {
 	comment := "this is the comment"
+	clusterName := "default"
 	tests := []struct {
 		name         string
 		action       string
 		resourceType string
 		resourceName string
 		comment      *string
+		clusterName  *string
 		identified   string
 		want         string
 		wantErr      bool
@@ -33,12 +35,24 @@ func Test_createdatabase(t *testing.T) {
 			want:         "CREATE DATABASE `database` COMMENT 'this is the comment';",
 			wantErr:      false,
 		},
+		{
+			name:         "Create database with cluster",
+			action:       actionCreate,
+			resourceType: resourceTypeDatabase,
+			resourceName: "database",
+			clusterName:  &clusterName,
+			want:         "CREATE DATABASE `database` ON CLUSTER `default`;",
+			wantErr:      false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var q CreateDatabaseQueryBuilder
 			q = &createDatabaseQueryBuilder{
 				databaseName: tt.resourceName,
+			}
+			if tt.clusterName != nil {
+				q = q.WithCluster(tt.clusterName)
 			}
 			if tt.comment != nil {
 				q = q.WithComment(*tt.comment)

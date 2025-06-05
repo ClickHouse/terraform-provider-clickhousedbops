@@ -1,0 +1,61 @@
+<clickhouse>
+    <logger>
+        <level>trace</level>
+        <console>true</console>
+    </logger>
+
+    <http_port>8123</http_port>
+    <tcp_port>9000</tcp_port>
+    <mysql_port>9004</mysql_port>
+
+    <mlock_executable>true</mlock_executable>
+
+    <remote_servers replace="true">
+        <cluster1>
+            <shard>
+                <replica>
+                    <host>ch01</host>
+                    <port>9000</port>
+                    <user>default</user>
+                    <password>test</password>
+                </replica>
+                <replica>
+                    <host>ch02</host>
+                    <port>9000</port>
+                    <user>default</user>
+                    <password>test</password>
+                </replica>
+            </shard>
+        </cluster1>
+    </remote_servers>
+
+    <users>
+        <default>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+
+            <profile>default</profile>
+            <quota>default</quota>
+
+            <access_management>1</access_management>
+            <named_collection_control>1</named_collection_control>
+        </default>
+    </users>
+    <user_directories>
+        <users_xml>
+            <path>users.xml</path>
+        </users_xml>
+        <local_directory>
+            <path>/var/lib/clickhouse/access/</path>
+        </local_directory>
+    </user_directories>
+
+    <profiles>
+        <default/>
+    </profiles>
+
+    <quotas>
+        <default />
+    </quotas>
+</clickhouse>

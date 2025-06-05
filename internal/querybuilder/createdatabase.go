@@ -10,11 +10,13 @@ import (
 type CreateDatabaseQueryBuilder interface {
 	QueryBuilder
 	WithComment(comment string) CreateDatabaseQueryBuilder
+	WithCluster(clusterName *string) CreateDatabaseQueryBuilder
 }
 
 type createDatabaseQueryBuilder struct {
 	databaseName string
 	comment      *string
+	clusterName  *string
 }
 
 func NewCreateDatabase(name string) CreateDatabaseQueryBuilder {
@@ -28,6 +30,11 @@ func (q *createDatabaseQueryBuilder) WithComment(comment string) CreateDatabaseQ
 	return q
 }
 
+func (q *createDatabaseQueryBuilder) WithCluster(clusterName *string) CreateDatabaseQueryBuilder {
+	q.clusterName = clusterName
+	return q
+}
+
 func (q *createDatabaseQueryBuilder) Build() (string, error) {
 	if q.databaseName == "" {
 		return "", errors.New("databaseName cannot be empty for CREATE DATABASE queries")
@@ -37,6 +44,9 @@ func (q *createDatabaseQueryBuilder) Build() (string, error) {
 		"CREATE",
 		"DATABASE",
 		backtick(q.databaseName),
+	}
+	if q.clusterName != nil {
+		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
 	}
 	if q.comment != nil {
 		tokens = append(tokens, "COMMENT", quote(*q.comment))

@@ -1,6 +1,7 @@
 package querybuilder
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -10,12 +11,14 @@ import (
 type SelectQueryBuilder interface {
 	QueryBuilder
 	Where(...Where) SelectQueryBuilder
+	WithCluster(clusterName *string) SelectQueryBuilder
 }
 
 type selectQueryBuilder struct {
-	tableName string
-	fields    []Field
-	where     Where
+	tableName   string
+	fields      []Field
+	where       Where
+	clusterName *string
 }
 
 func NewSelect(fields []Field, from string) SelectQueryBuilder {
@@ -27,6 +30,11 @@ func NewSelect(fields []Field, from string) SelectQueryBuilder {
 
 func (q *selectQueryBuilder) Where(where ...Where) SelectQueryBuilder {
 	q.where = AndWhere(where...)
+	return q
+}
+
+func (q *selectQueryBuilder) WithCluster(clusterName *string) SelectQueryBuilder {
+	q.clusterName = clusterName
 	return q
 }
 
@@ -49,7 +57,13 @@ func (q *selectQueryBuilder) Build() (string, error) {
 		for _, s := range strings.Split(q.tableName, ".") {
 			tokens = append(tokens, backtick(s))
 		}
-		from = strings.Join(tokens, ".")
+		tableName := strings.Join(tokens, ".")
+
+		if q.clusterName != nil {
+			from = fmt.Sprintf("cluster(%s, %s)", quote(*q.clusterName), tableName)
+		} else {
+			from = tableName
+		}
 	}
 
 	tokens := []string{

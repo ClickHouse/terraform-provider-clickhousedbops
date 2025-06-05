@@ -1,4 +1,5 @@
 resource "clickhousedbops_database" "logs" {
-  name = "logs"
-  comment = "Database for logs"
+  cluster_name = var.cluster_name
+  name         = "logs"
+  comment      = "Database for logs"
 }
