@@ -195,7 +195,7 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	// database ref can either be the name or the UUID of the database.
 
 	// Check if cluster name is specified
-	var ref = req.ID
+	ref := req.ID
 	var clusterName *string
 	if strings.Index(req.ID, ":") >= 0 {
 		clusterName = &strings.Split(req.ID, ":")[0]
