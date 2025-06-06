@@ -1,6 +1,10 @@
 name: "Find terraform releases"
 description: "Return names of latest terraform cli releases"
 inputs:
+  repo:
+    required: true
+    default: ""
+    description: "Repo name in the form owner/name"
   min:
     required: false
     default: ""
@@ -22,4 +26,4 @@ runs:
       id: find-tf-releases
       run: |
         chmod +x .github/actions/find-tf-releases/action.sh
-        .github/actions/find-tf-releases/action.sh --min="${{inputs.min}}" --want="${{inputs.want}}"
+        .github/actions/find-tf-releases/action.sh --repo "${{inputs.repo}}" --min="${{inputs.min}}" --want="${{inputs.want}}"

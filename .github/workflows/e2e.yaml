@@ -37,11 +37,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - uses: ./.github/actions/find-tf-releases
-        id: list
+      - id: terraform
+        uses: ./.github/actions/find-github-releases
         with:
+          repo: "hashicorp/terraform"
           count: '3'
           min: '1.11.0'
+      - id: opentofu
+        uses: ./.github/actions/find-github-releases
+        with:
+          repo: "opentofu/opentofu"
+          count: '3'
+      - id: list
+        run: |
+          # Get the two list of releases
+          # and bundle them in a JSON array
+          # in the form [{ "binary": "terraform", "version": "1.2.3" }, { "binary": "opentofu", "version": "4.5.6" }, { ... }]
+          jq -n --argjson tf "${{ steps.terraform.outputs.versions }}" --argjson ot "${{ steps.opentofu.outputs.versions }}" '[($tf[] | {"binary": "terraform", "version": .}),($ot[] | {"binary": "opentofu", "version": .})]'
 
   build:
     runs-on: ubuntu-latest
@@ -75,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        terraform_version: ${{ fromJSON(needs.list-terraform-version.outputs.versions) }}
+        terraform: ${{ fromJSON(needs.list-terraform-version.outputs.versions) }}
         clickhouse_version: ${{ fromJSON(needs.list-clickhouse-version.outputs.versions) }}
         protocol: ["native", "http"]
         cluster: ["null", "cluster1"]
@@ -95,10 +107,18 @@ jobs:
           ls -lah
 
       - name: Install terraform
+        if: ${{ matrix.terraform.binary == 'terraform' }}
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ matrix.terraform_version }}
+          terraform_version: ${{ matrix.terraform.version }}
           terraform_wrapper: false
+
+      - name: Install opentofu
+        if: ${{ matrix.terraform.binary == 'opentofu' }}
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ matrix.terraform.version }}
+          tofu_wrapper: false
 
       - name: Prepare test env
         run: |
@@ -149,7 +169,7 @@ jobs:
         run: |
           cd tests/
           export example=${{ matrix.example }}
-          docker compose exec shell ash -c "cd $example && terraform apply -auto-approve && terraform destroy -auto-approve"
+          docker compose exec shell ash -c "cd $example && ${{ matrix.terraform.binary }} apply -auto-approve && ${{ matrix.terraform.binary }} destroy -auto-approve"
 
       - name: Stop test env
         if: always()
