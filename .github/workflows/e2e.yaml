@@ -53,7 +53,8 @@ jobs:
           # Get the two list of releases
           # and bundle them in a JSON array
           # in the form [{ "binary": "terraform", "version": "1.2.3" }, { "binary": "opentofu", "version": "4.5.6" }, { ... }]
-          jq -n --argjson tf '${{ steps.terraform.outputs.versions }}' --argjson ot '${{ steps.opentofu.outputs.versions }}' '[($tf[] | {"binary": "terraform", "version": .}),($ot[] | {"binary": "opentofu", "version": .})]'
+          json="$(jq -cs . -n --argjson tf '${{ steps.terraform.outputs.versions }}' --argjson ot '${{ steps.opentofu.outputs.versions }}' '[($tf[] | {"binary": "terraform", "version": .}),($ot[] | {"binary": "opentofu", "version": .})]'")
+          echo "versions=${json}" >> "$GITHUB_OUTPUT"
 
   build:
     runs-on: ubuntu-latest
