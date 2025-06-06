@@ -25,5 +25,5 @@ runs:
     - shell: bash
       id: find-tf-releases
       run: |
-        chmod +x .github/actions/find-tf-releases/action.sh
-        .github/actions/find-tf-releases/action.sh --repo "${{inputs.repo}}" --min="${{inputs.min}}" --want="${{inputs.want}}"
+        chmod +x .github/actions/find-github-releases/action.sh
+        .github/actions/find-github-releases/action.sh --repo "${{inputs.repo}}" --min="${{inputs.min}}" --want="${{inputs.want}}"
