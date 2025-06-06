@@ -74,7 +74,7 @@ services:
       - TF_VAR_cluster_name
       - TF_VAR_auth_strategy=${TF_VAR_auth_strategy}
       - TF_VAR_username=default
-      - TF_VAR_password=testd
+      - TF_VAR_password=test
       - TF_VAR_protocol=${TF_VAR_protocol}
       - TF_VAR_port=${TF_VAR_port}
     volumes:
