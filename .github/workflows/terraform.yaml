@@ -1,4 +1,4 @@
-name: Run E2E tests
+name: Run E2E tests with terraform
 
 on:
   workflow_dispatch: {}
@@ -37,9 +37,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - uses: ./.github/actions/find-tf-releases
-        id: list
+      - id: list
+        uses: ./.github/actions/find-github-releases
         with:
+          repo: "hashicorp/terraform"
           count: '3'
           min: '1.11.0'
 
@@ -63,7 +64,7 @@ jobs:
       - name: Build terraform provider
         run: |
           CGO_ENABLED=0 go build -o $TMPDIR/terraform-provider-clickhousedbops
-          
+
       - uses: actions/upload-artifact@v4
         with:
           name: terraform-provider-clickhousedbops
@@ -97,7 +98,7 @@ jobs:
       - name: Install terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ matrix.terraform_version }}
+          terraform_version: ${{ matrix.terraform.version }}
           terraform_wrapper: false
 
       - name: Prepare test env
@@ -129,7 +130,7 @@ jobs:
           
           # This is needed until docker compose 1.36 to avoid concurrent map write error.
           docker pull clickhouse/clickhouse-server:${CLICKHOUSE_VERSION}
-                    
+          
           docker compose up -d
           sleep 5
           

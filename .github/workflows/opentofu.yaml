@@ -1,0 +1,202 @@
+name: Run E2E tests with opentofu
+
+on:
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  list-examples:
+    outputs:
+      examples: ${{ steps.list.outputs.examples }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - id: list
+        run: |
+          examples="$(find examples/tests/ -name main.tf | xargs -n1 dirname | xargs -n1 basename| jq -cRn '[inputs]')"
+          echo "examples=${examples}" >> "$GITHUB_OUTPUT"
+
+  list-clickhouse-version:
+    outputs:
+      versions: ${{ steps.list.outputs.versions }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/find-clickhouse-releases
+        id: list
+
+  list-terraform-version:
+    outputs:
+      versions: ${{ steps.list.outputs.versions }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - id: list
+        uses: ./.github/actions/find-github-releases
+        with:
+          repo: "opentofu/opentofu"
+          count: '3'
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Create tmp dir
+        run: |
+          TMPDIR="$(mktemp -d)"
+          echo "TMPDIR=$TMPDIR" >> $GITHUB_ENV
+
+      - name: Build terraform provider
+        run: |
+          CGO_ENABLED=0 go build -o $TMPDIR/terraform-provider-clickhousedbops
+          
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-provider-clickhousedbops
+          path: ${{ env.TMPDIR }}
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: ['build', 'list-examples', 'list-clickhouse-version', 'list-terraform-version']
+    strategy:
+      fail-fast: false
+      matrix:
+        terraform_version: ${{ fromJSON(needs.list-terraform-version.outputs.versions) }}
+        clickhouse_version: ${{ fromJSON(needs.list-clickhouse-version.outputs.versions) }}
+        protocol: ["native", "http"]
+        cluster: ["null", "cluster1"]
+        example: ${{ fromJSON(needs.list-examples.outputs.examples) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: terraform-provider-clickhousedbops
+          path: .
+
+      - name: Adjust permissions
+        run: |
+          chmod +x ./terraform-provider-clickhousedbops
+          ls -lah
+
+      - name: Install opentofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ matrix.terraform.version }}
+          tofu_wrapper: false
+
+      - name: Prepare test env
+        run: |
+          cd tests/
+          export CLICKHOUSE_VERSION="${{ matrix.clickhouse_version }}"
+          export TFVER="${{ matrix.terraform_version }}"
+          export TF_VAR_protocol=${{ matrix.protocol }}
+          
+          case "$TF_VAR_protocol" in
+            native)
+              export TF_VAR_port=9000
+              export TF_VAR_auth_strategy=password
+              ;;
+            http)
+              export TF_VAR_port=8123
+              export TF_VAR_auth_strategy=basicauth
+              ;;
+          esac
+          
+          case "${{ matrix.cluster }}" in
+            null)
+            export TF_VAR_host=clickhouse
+            ;;
+            *)
+            export TF_VAR_host=ch01
+            export TF_VAR_cluster_name="${{ matrix.cluster }}"
+          esac
+          
+          # This is needed until docker compose 1.36 to avoid concurrent map write error.
+          docker pull clickhouse/clickhouse-server:${CLICKHOUSE_VERSION}
+                    
+          docker compose up -d
+          sleep 5
+          
+          # Check containers are running or display logs
+          for svc in clickhouse shell ; do
+            if [ -z $(docker compose ps -q $svc) ] || [ -z $(docker ps -q --no-trunc | grep $(docker compose ps -q $svc)) ]; then
+              echo "Failed running $svc"
+              docker compose logs $svc
+              exit 1
+            fi
+          done
+          
+          docker compose exec clickhouse clickhouse client --password "test" "select version()"
+          docker compose exec ch01 clickhouse client --password "test" "select version()"
+
+      - name: Run e2e test
+        run: |
+          cd tests/
+          export example=${{ matrix.example }}
+          docker compose exec shell ash -c "cd $example && tofu apply -auto-approve && tofu destroy -auto-approve"
+
+      - name: Stop test env
+        if: always()
+        run: |
+          cd tests/
+          docker compose kill
+          docker compose rm -f
+
+  notify:
+    name: "E2E tests"
+    runs-on: ubuntu-latest
+    needs: ['e2e']
+    if: always()
+    steps:
+      - name: Successful run
+        if: ${{ !(contains(needs.*.result, 'failure')) }}
+        run: exit 0
+
+      - name: Generate Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.WORKFLOW_AUTH_PUBLIC_APP_ID }}
+          private-key: ${{ secrets.WORKFLOW_AUTH_PUBLIC_PRIVATE_KEY }}
+
+      - name: Send status check
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          state=""
+          description=""
+          if [ "${{ contains(needs.*.result, 'failure') }}" == "true" ]
+          then
+            state="error"
+            description="E2E tests failed"
+          else
+            state="success"
+            description="E2E tests succeeded"
+          fi
+          
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -f "state=$state" \
+            -f "target_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -f "description=$description" \
+            -f "context=E2E tests"
+          
