@@ -25,6 +25,10 @@ resource "clickhousedbops_role" "writer" {
 
 - `name` (String) Name of the role
 
+### Optional
+
+- `cluster_name` (String) Name of the cluster to create the role into. If omitted, the role will be created on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.
+
 ### Read-Only
 
 - `id` (String) The system-assigned ID for the role

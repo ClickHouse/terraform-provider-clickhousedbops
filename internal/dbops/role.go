@@ -14,8 +14,8 @@ type Role struct {
 	Name string `json:"name" ch:"name"`
 }
 
-func (i *impl) CreateRole(ctx context.Context, role Role) (*Role, error) {
-	sql, err := querybuilder.NewCreateRole(role.Name).Build()
+func (i *impl) CreateRole(ctx context.Context, role Role, clusterName *string) (*Role, error) {
+	sql, err := querybuilder.NewCreateRole(role.Name).WithCluster(clusterName).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -25,38 +25,14 @@ func (i *impl) CreateRole(ctx context.Context, role Role) (*Role, error) {
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	// Get ID of newly created role.
-	var id string
-	{
-		sql, err := querybuilder.NewSelect(
-			[]querybuilder.Field{querybuilder.NewField("id")},
-			"system.roles",
-		).Where(querybuilder.SimpleWhere("name", role.Name)).Build()
-		if err != nil {
-			return nil, errors.WithMessage(err, "error building query")
-		}
-
-		err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-			id, err = data.GetString("id")
-			if err != nil {
-				return errors.WithMessage(err, "error scanning query result, missing 'id' field")
-			}
-
-			return nil
-		})
-		if err != nil {
-			return nil, errors.WithMessage(err, "error running query")
-		}
-	}
-
-	return i.GetRole(ctx, id)
+	return i.FindRoleByName(ctx, role.Name, clusterName)
 }
 
-func (i *impl) GetRole(ctx context.Context, id string) (*Role, error) { // nolint:dupl
+func (i *impl) GetRole(ctx context.Context, id string, clusterName *string) (*Role, error) { // nolint:dupl
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("name")},
 		"system.roles",
-	).Where(querybuilder.SimpleWhere("id", id)).Build()
+	).WithCluster(clusterName).Where(querybuilder.SimpleWhere("id", id)).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -86,8 +62,8 @@ func (i *impl) GetRole(ctx context.Context, id string) (*Role, error) { // nolin
 	return role, nil
 }
 
-func (i *impl) DeleteRole(ctx context.Context, id string) error {
-	role, err := i.GetRole(ctx, id)
+func (i *impl) DeleteRole(ctx context.Context, id string, clusterName *string) error {
+	role, err := i.GetRole(ctx, id, clusterName)
 	if err != nil {
 		return errors.WithMessage(err, "error getting role")
 	}
@@ -97,7 +73,7 @@ func (i *impl) DeleteRole(ctx context.Context, id string) error {
 		return nil
 	}
 
-	sql, err := querybuilder.NewDropRole(role.Name).Build()
+	sql, err := querybuilder.NewDropRole(role.Name).WithCluster(clusterName).Build()
 	if err != nil {
 		return errors.WithMessage(err, "error building query")
 	}
@@ -110,11 +86,11 @@ func (i *impl) DeleteRole(ctx context.Context, id string) error {
 	return nil
 }
 
-func (i *impl) FindRoleByName(ctx context.Context, name string) (*Role, error) {
+func (i *impl) FindRoleByName(ctx context.Context, name string, clusterName *string) (*Role, error) {
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("id")},
 		"system.roles",
-	).Where(querybuilder.SimpleWhere("name", name)).Build()
+	).Where(querybuilder.SimpleWhere("name", name)).WithCluster(clusterName).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -133,5 +109,5 @@ func (i *impl) FindRoleByName(ctx context.Context, name string) (*Role, error) {
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.GetRole(ctx, uuid)
+	return i.GetRole(ctx, uuid, clusterName)
 }

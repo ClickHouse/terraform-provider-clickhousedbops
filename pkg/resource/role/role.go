@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -40,6 +41,13 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
+			"cluster_name": schema.StringAttribute{
+				Optional:    true,
+				Description: "Name of the cluster to create the role into. If omitted, the role will be created on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "The system-assigned ID for the role",
@@ -72,7 +80,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	createdRole, err := r.client.CreateRole(ctx, dbops.Role{Name: plan.Name.ValueString()})
+	createdRole, err := r.client.CreateRole(ctx, dbops.Role{Name: plan.Name.ValueString()}, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse Role",
@@ -82,8 +90,9 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	state := Role{
-		ID:   types.StringValue(createdRole.ID),
-		Name: types.StringValue(createdRole.Name),
+		ClusterName: plan.ClusterName,
+		ID:          types.StringValue(createdRole.ID),
+		Name:        types.StringValue(createdRole.Name),
 	}
 
 	diags = resp.State.Set(ctx, state)
@@ -101,7 +110,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	role, err := r.client.GetRole(ctx, state.ID.ValueString())
+	role, err := r.client.GetRole(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse Role",
@@ -132,7 +141,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.DeleteRole(ctx, state.ID.ValueString())
+	err := r.client.DeleteRole(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting ClickHouse Role",
@@ -143,13 +152,22 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// This resource can be imported by specifying either the name or the UUID of the role.
-	// Check if user input is a UUID
-	_, err := uuid.Parse(req.ID)
-	if err != nil {
-		// Failed parsing UUID, try importing using the role name
+	// req.ID can either be in the form <cluster name>:<role ref> or just <role ref>
+	// <role ref> can either be the name or the UUID of the role.
 
-		role, err := r.client.FindRoleByName(ctx, req.ID)
+	// Check if cluster name is specified
+	ref := req.ID
+	var clusterName *string
+	if strings.Contains(req.ID, ":") {
+		clusterName = &strings.Split(req.ID, ":")[0]
+		ref = strings.Split(req.ID, ":")[1]
+	}
+
+	// Check if ref is a UUID
+	_, err := uuid.Parse(ref)
+	if err != nil {
+		// Failed parsing UUID, try importing using the database name
+		role, err := r.client.FindRoleByName(ctx, ref, clusterName)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Cannot find role",
@@ -161,6 +179,10 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), role.ID)...)
 	} else {
 		// User passed a UUID
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), ref)...)
+	}
+
+	if clusterName != nil {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
 	}
 }

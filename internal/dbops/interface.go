@@ -10,10 +10,10 @@ type Client interface {
 	DeleteDatabase(ctx context.Context, uuid string, clusterName *string) error
 	FindDatabaseByName(ctx context.Context, name string, clusterName *string) (*Database, error)
 
-	CreateRole(ctx context.Context, role Role) (*Role, error)
-	GetRole(ctx context.Context, id string) (*Role, error)
-	DeleteRole(ctx context.Context, id string) error
-	FindRoleByName(ctx context.Context, name string) (*Role, error)
+	CreateRole(ctx context.Context, role Role, clusterName *string) (*Role, error)
+	GetRole(ctx context.Context, id string, clusterName *string) (*Role, error)
+	DeleteRole(ctx context.Context, id string, clusterName *string) error
+	FindRoleByName(ctx context.Context, name string, clusterName *string) (*Role, error)
 
 	CreateUser(ctx context.Context, user User) (*User, error)
 	GetUser(ctx context.Context, id string) (*User, error)

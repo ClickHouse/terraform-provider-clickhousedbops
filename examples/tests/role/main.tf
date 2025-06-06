@@ -1,3 +1,4 @@
 resource "clickhousedbops_role" "writer" {
- name = "writer"
+  cluster_name = var.cluster_name
+  name = "writer"
 }
