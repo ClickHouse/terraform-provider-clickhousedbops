@@ -15,10 +15,11 @@ type User struct {
 	PasswordSha256Hash string `json:"-"`
 }
 
-func (i *impl) CreateUser(ctx context.Context, user User) (*User, error) {
+func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
 	sql, err := querybuilder.
 		NewCreateUser(user.Name).
 		Identified(querybuilder.IdentificationSHA256Hash, user.PasswordSha256Hash).
+		WithCluster(clusterName).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
@@ -29,43 +30,15 @@ func (i *impl) CreateUser(ctx context.Context, user User) (*User, error) {
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	// Get ID of newly created user
-	var id string
-	{
-		sql, err := querybuilder.NewSelect(
-			[]querybuilder.Field{querybuilder.NewField("id")},
-			"system.users",
-		).Where(querybuilder.SimpleWhere("name", user.Name)).Build()
-		if err != nil {
-			return nil, errors.WithMessage(err, "error building query")
-		}
-
-		err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-			id, err = data.GetString("id")
-			if err != nil {
-				return errors.WithMessage(err, "error scanning query result, missing 'id' field")
-			}
-
-			return nil
-		})
-		if err != nil {
-			return nil, errors.WithMessage(err, "error running query")
-		}
-	}
-
-	createdUser, err := i.GetUser(ctx, id)
-	if err != nil {
-		return nil, errors.WithMessage(err, "error getting user")
-	}
-
-	return createdUser, nil
+	return i.FindUserByName(ctx, user.Name, clusterName)
 }
 
-func (i *impl) GetUser(ctx context.Context, id string) (*User, error) { // nolint:dupl
-	sql, err := querybuilder.NewSelect(
-		[]querybuilder.Field{querybuilder.NewField("name")},
-		"system.users",
-	).Where(querybuilder.SimpleWhere("id", id)).Build()
+func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*User, error) { // nolint:dupl
+	sql, err := querybuilder.
+		NewSelect([]querybuilder.Field{querybuilder.NewField("name")}, "system.users").
+		WithCluster(clusterName).
+		Where(querybuilder.SimpleWhere("id", id)).
+		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -95,8 +68,8 @@ func (i *impl) GetUser(ctx context.Context, id string) (*User, error) { // nolin
 	return user, nil
 }
 
-func (i *impl) DeleteUser(ctx context.Context, id string) error {
-	user, err := i.GetUser(ctx, id)
+func (i *impl) DeleteUser(ctx context.Context, id string, clusterName *string) error {
+	user, err := i.GetUser(ctx, id, clusterName)
 	if err != nil {
 		return errors.WithMessage(err, "error getting user")
 	}
@@ -106,7 +79,7 @@ func (i *impl) DeleteUser(ctx context.Context, id string) error {
 		return nil
 	}
 
-	sql, err := querybuilder.NewDropUser(user.Name).Build()
+	sql, err := querybuilder.NewDropUser(user.Name).WithCluster(clusterName).Build()
 	if err != nil {
 		return errors.WithMessage(err, "error building query")
 	}
@@ -119,11 +92,12 @@ func (i *impl) DeleteUser(ctx context.Context, id string) error {
 	return nil
 }
 
-func (i *impl) FindUserByName(ctx context.Context, name string) (*User, error) {
-	sql, err := querybuilder.NewSelect(
-		[]querybuilder.Field{querybuilder.NewField("id")},
-		"system.users",
-	).Where(querybuilder.SimpleWhere("name", name)).Build()
+func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *string) (*User, error) {
+	sql, err := querybuilder.
+		NewSelect([]querybuilder.Field{querybuilder.NewField("id")}, "system.users").
+		WithCluster(clusterName).
+		Where(querybuilder.SimpleWhere("name", name)).
+		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -142,5 +116,5 @@ func (i *impl) FindUserByName(ctx context.Context, name string) (*User, error) {
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.GetUser(ctx, uuid)
+	return i.GetUser(ctx, uuid, clusterName)
 }

@@ -22,6 +22,7 @@ Known limitations:
 
 ```terraform
 resource "clickhousedbops_user" "john" {
+  cluster_name = "cluster"
   name = "john"
   # You'll want to generate the password and feed it here instead of hardcoding.
   password_sha256_hash_wo = sha256("test")
@@ -40,6 +41,10 @@ resource "clickhousedbops_user" "john" {
 - `password_sha256_hash_wo` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user
 - `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
 
+### Optional
+
+- `cluster_name` (String) Name of the cluster to create the user into. If omitted, the user will be created on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.
+
 ### Read-Only
 
 - `id` (String) The system-assigned ID for the user
@@ -53,4 +58,13 @@ Import is supported using the following syntax:
 # Find the ID of the user by checking system.users table.
 # WARNING: imported users will be recreated during first 'terraform apply' because the password cannot be imported.
 terraform import clickhousedbops_user.example xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# It's also possible to import users using the username:
+
+terraform import clickhousedbops_user.example username
+
+# IMPORTANT: if you have a multi node cluster, you need to specify the cluster name!
+
+terraform import clickhousedbops_user.example cluster:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+terraform import clickhousedbops_user.example cluster:username
 ```

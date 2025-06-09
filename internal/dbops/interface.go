@@ -15,10 +15,10 @@ type Client interface {
 	DeleteRole(ctx context.Context, id string, clusterName *string) error
 	FindRoleByName(ctx context.Context, name string, clusterName *string) (*Role, error)
 
-	CreateUser(ctx context.Context, user User) (*User, error)
-	GetUser(ctx context.Context, id string) (*User, error)
-	DeleteUser(ctx context.Context, id string) error
-	FindUserByName(ctx context.Context, name string) (*User, error)
+	CreateUser(ctx context.Context, user User, clusterName *string) (*User, error)
+	GetUser(ctx context.Context, id string, clusterName *string) (*User, error)
+	DeleteUser(ctx context.Context, id string, clusterName *string) error
+	FindUserByName(ctx context.Context, name string, clusterName *string) (*User, error)
 
 	GrantRole(ctx context.Context, grantRole GrantRole) (*GrantRole, error)
 	GetGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string) (*GrantRole, error)

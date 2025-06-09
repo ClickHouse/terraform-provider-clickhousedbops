@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -43,6 +44,13 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
+			"cluster_name": schema.StringAttribute{
+				Optional:    true,
+				Description: "Name of the cluster to create the user into. If omitted, the user will be created on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "The system-assigned ID for the user",
@@ -106,7 +114,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		PasswordSha256Hash: config.PasswordSha256Hash.ValueString(),
 	}
 
-	createdUser, err := r.client.CreateUser(ctx, user)
+	createdUser, err := r.client.CreateUser(ctx, user, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse User",
@@ -116,6 +124,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	state := User{
+		ClusterName:               plan.ClusterName,
 		ID:                        types.StringValue(createdUser.ID),
 		Name:                      types.StringValue(createdUser.Name),
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
@@ -136,7 +145,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	user, err := r.client.GetUser(ctx, state.ID.ValueString())
+	user, err := r.client.GetUser(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse User",
@@ -167,7 +176,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.DeleteUser(ctx, state.ID.ValueString())
+	err := r.client.DeleteUser(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting ClickHouse User",
@@ -178,13 +187,22 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// This resource can be imported by specifying either the name or the UUID of the user.
-	// Check if user input is a UUID
-	_, err := uuid.Parse(req.ID)
-	if err != nil {
-		// Failed parsing UUID, try importing using the user name
+	// req.ID can either be in the form <cluster name>:<user ref> or just <user ref>
+	// user ref can either be the name or the UUID of the user.
 
-		user, err := r.client.FindUserByName(ctx, req.ID)
+	// Check if cluster name is specified
+	ref := req.ID
+	var clusterName *string
+	if strings.Contains(req.ID, ":") {
+		clusterName = &strings.Split(req.ID, ":")[0]
+		ref = strings.Split(req.ID, ":")[1]
+	}
+
+	// Check if ref is a UUID
+	_, err := uuid.Parse(ref)
+	if err != nil {
+		// Failed parsing UUID, try importing using the database name
+		user, err := r.client.FindUserByName(ctx, ref, clusterName)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Cannot find user",
@@ -196,6 +214,10 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), user.ID)...)
 	} else {
 		// User passed a UUID
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), ref)...)
+	}
+
+	if clusterName != nil {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
 	}
 }
