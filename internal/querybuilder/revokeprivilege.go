@@ -47,8 +47,8 @@ func (q *revokePrivilegeQueryBuilder) WithColumn(column *string) RevokePrivilege
 	return q
 }
 
-func (q *revokePrivilegeQueryBuilder) WithCluster(column *string) RevokePrivilegeQueryBuilder {
-	q.column = column
+func (q *revokePrivilegeQueryBuilder) WithCluster(clusterName *string) RevokePrivilegeQueryBuilder {
+	q.clusterName = clusterName
 	return q
 }
 

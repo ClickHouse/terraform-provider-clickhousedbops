@@ -308,6 +308,7 @@ This is a configuration error that prevents further actions. Please note that th
 	}
 
 	state := GrantPrivilege{
+		ClusterName:     plan.ClusterName,
 		Privilege:       types.StringValue(createdGrant.AccessType),
 		Database:        types.StringPointerValue(createdGrant.DatabaseName),
 		Table:           types.StringPointerValue(createdGrant.TableName),

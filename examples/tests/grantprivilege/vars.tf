@@ -28,3 +28,7 @@ variable "password" {
   default = null
 }
 
+variable "cluster_name" {
+  type = string
+  default = null
+}
