@@ -48,7 +48,7 @@ fi
 
 #############################################################################################
 
-cd tests/
+cd tests/ || exit 1
 export CLICKHOUSE_VERSION="$CLICKHOUSE_VERSION"
 export TFVER="$TERRAFORM_VERSION"
 export TF_VAR_protocol="$PROTOCOL"
@@ -74,14 +74,14 @@ case "${CLUSTER_NAME}" in
 esac
 
 # This is needed until docker compose 1.36 to avoid concurrent map write error.
-docker pull clickhouse/clickhouse-server:${CLICKHOUSE_VERSION}
+docker pull "clickhouse/clickhouse-server:${CLICKHOUSE_VERSION}"
 
 docker compose up -d
 sleep 5
 
 # Check containers are running or display logs
 for svc in clickhouse shell ; do
-  if [ -z $(docker compose ps -q $svc) ] || [ -z $(docker ps -q --no-trunc | grep $(docker compose ps -q $svc)) ]; then
+  if [ -z "$(docker compose ps -q $svc)" ] || [ -z "$(docker ps -q --no-trunc | grep "$(docker compose ps -q $svc)")" ]; then
     echo "Failed running $svc"
     docker compose logs $svc
     exit 1
