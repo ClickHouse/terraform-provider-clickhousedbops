@@ -41,6 +41,13 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
+			"cluster_name": schema.StringAttribute{
+				Optional:    true,
+				Description: "Name of the cluster to use to grant the role. If omitted, the role will be granted only on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"role_name": schema.StringAttribute{
 				Required:    true,
 				Description: "Name of the role to be granted",
@@ -112,7 +119,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		AdminOption:     plan.AdminOption.ValueBool(),
 	}
 
-	createdGrant, err := r.client.GrantRole(ctx, grant)
+	createdGrant, err := r.client.GrantRole(ctx, grant, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse Role Grant",
@@ -122,6 +129,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	state := GrantRole{
+		ClusterName:     plan.ClusterName,
 		RoleName:        types.StringValue(createdGrant.RoleName),
 		GranteeUserName: types.StringPointerValue(createdGrant.GranteeUserName),
 		GranteeRoleName: types.StringPointerValue(createdGrant.GranteeRoleName),
@@ -143,7 +151,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	grant, err := r.client.GetGrantRole(ctx, state.RoleName.ValueString(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer())
+	grant, err := r.client.GetGrantRole(ctx, state.RoleName.ValueString(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse Role Grant",
@@ -177,7 +185,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.RevokeGrantRole(ctx, state.RoleName.ValueString(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer())
+	err := r.client.RevokeGrantRole(ctx, state.RoleName.ValueString(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting ClickHouse Role Grant",

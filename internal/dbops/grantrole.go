@@ -16,7 +16,7 @@ type GrantRole struct {
 	AdminOption     bool    `json:"with_admin_option"`
 }
 
-func (i *impl) GrantRole(ctx context.Context, grantRole GrantRole) (*GrantRole, error) {
+func (i *impl) GrantRole(ctx context.Context, grantRole GrantRole, clusterName *string) (*GrantRole, error) {
 	var to string
 	{
 		if grantRole.GranteeUserName != nil {
@@ -28,7 +28,7 @@ func (i *impl) GrantRole(ctx context.Context, grantRole GrantRole) (*GrantRole, 
 		}
 	}
 
-	sql, err := querybuilder.GrantRole(grantRole.RoleName, to).WithAdminOption(grantRole.AdminOption).Build()
+	sql, err := querybuilder.GrantRole(grantRole.RoleName, to).WithCluster(clusterName).WithAdminOption(grantRole.AdminOption).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -38,10 +38,10 @@ func (i *impl) GrantRole(ctx context.Context, grantRole GrantRole) (*GrantRole, 
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.GetGrantRole(ctx, grantRole.RoleName, grantRole.GranteeUserName, grantRole.GranteeRoleName)
+	return i.GetGrantRole(ctx, grantRole.RoleName, grantRole.GranteeUserName, grantRole.GranteeRoleName, clusterName)
 }
 
-func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string) (*GrantRole, error) {
+func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string, clusterName *string) (*GrantRole, error) {
 	var granteeWhere querybuilder.Where
 	{
 		if granteeUserName != nil {
@@ -60,11 +60,10 @@ func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, grantee
 			querybuilder.NewField("role_name"),
 			querybuilder.NewField("with_admin_option"),
 		},
-		"system.role_grants",
-	).Where(
-		querybuilder.SimpleWhere("granted_role_name", grantedRoleName),
-		granteeWhere,
-	).Build()
+		"system.role_grants").
+		WithCluster(clusterName).
+		Where(querybuilder.SimpleWhere("granted_role_name", grantedRoleName), granteeWhere).
+		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -108,7 +107,7 @@ func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, grantee
 	return grantRole, nil
 }
 
-func (i *impl) RevokeGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string) error {
+func (i *impl) RevokeGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string, clusterName *string) error {
 	var grantee string
 	{
 		if granteeUserName != nil {
@@ -119,7 +118,7 @@ func (i *impl) RevokeGrantRole(ctx context.Context, grantedRoleName string, gran
 			return errors.New("either GranteeUserName or GranteeRoleName must be set")
 		}
 	}
-	sql, err := querybuilder.RevokeRole(grantedRoleName, grantee).Build()
+	sql, err := querybuilder.RevokeRole(grantedRoleName, grantee).WithCluster(clusterName).Build()
 	if err != nil {
 		return errors.WithMessage(err, "error building query")
 	}

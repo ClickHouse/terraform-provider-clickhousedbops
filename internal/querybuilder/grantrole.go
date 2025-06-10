@@ -10,12 +10,14 @@ import (
 type GrantRoleQueryBuilder interface {
 	QueryBuilder
 	WithAdminOption(bool) GrantRoleQueryBuilder
+	WithCluster(clusterName *string) GrantRoleQueryBuilder
 }
 
 type grantQueryBuilder struct {
 	roleName    string
 	to          string
 	adminOption bool
+	clusterName *string
 }
 
 func GrantRole(roleName string, to string) GrantRoleQueryBuilder {
@@ -30,6 +32,11 @@ func (q *grantQueryBuilder) WithAdminOption(adminOption bool) GrantRoleQueryBuil
 	return q
 }
 
+func (q *grantQueryBuilder) WithCluster(clusterName *string) GrantRoleQueryBuilder {
+	q.clusterName = clusterName
+	return q
+}
+
 func (q *grantQueryBuilder) Build() (string, error) {
 	if q.roleName == "" {
 		return "", errors.New("RoleName cannot be empty")
@@ -39,10 +46,13 @@ func (q *grantQueryBuilder) Build() (string, error) {
 	}
 	tokens := []string{
 		"GRANT",
-		backtick(q.roleName),
-		"TO",
-		backtick(q.to),
 	}
+
+	if q.clusterName != nil {
+		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
+	}
+
+	tokens = append(tokens, backtick(q.roleName), "TO", backtick(q.to))
 
 	if q.adminOption {
 		tokens = append(tokens, "WITH ADMIN OPTION")

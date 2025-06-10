@@ -21,6 +21,7 @@ Known limitations:
 
 ```terraform
 resource "clickhousedbops_grant_role" "role_to_user" {
+  cluster_name      = "cluster"
   role_name         = "myrole"
   grantee_user_name = "myuser"
 }
@@ -36,5 +37,6 @@ resource "clickhousedbops_grant_role" "role_to_user" {
 ### Optional
 
 - `admin_option` (Boolean) If true, the grantee will be able to grant `role_name` to other `users` or `roles`.
+- `cluster_name` (String) Name of the cluster to use to grant the role. If omitted, the role will be granted only on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.
 - `grantee_role_name` (String) Name of the `role` to grant `role_name` to.
 - `grantee_user_name` (String) Name of the `user` to grant `role_name` to.
