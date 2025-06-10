@@ -46,6 +46,7 @@ resource "clickhousedbops_grant_privilege" "grant" {
 
 ### Optional
 
+- `cluster_name` (String) Name of the cluster to use to grant the role. If omitted, the role will be granted only on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.
 - `column_name` (String) The name of the column in `table_name` to grant privilege on.
 - `database_name` (String) The name of the database to grant privilege on. Defaults to all databases if left null
 - `grant_option` (Boolean) If true, the grantee will be able to grant the same privileges to others.

@@ -64,6 +64,13 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
+			"cluster_name": schema.StringAttribute{
+				Optional:    true,
+				Description: "Name of the cluster to use to grant the role. If omitted, the role will be granted only on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"privilege_name": schema.StringAttribute{
 				Required:    true,
 				Description: "The privilege to grant, such as `CREATE DATABASE`, `SELECT`, etc. See https://clickhouse.com/docs/en/sql-reference/statements/grant#privileges.",
@@ -253,7 +260,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		GrantOption:     plan.GrantOption.ValueBool(),
 	}
 
-	createdGrant, err := r.client.GrantPrivilege(ctx, grant)
+	createdGrant, err := r.client.GrantPrivilege(ctx, grant, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse Privilege Grant",
@@ -263,7 +270,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	if createdGrant == nil {
-		existing, err := r.client.GetAllGrantsForGrantee(ctx, grant.GranteeUserName, grant.GranteeRoleName)
+		existing, err := r.client.GetAllGrantsForGrantee(ctx, grant.GranteeUserName, grant.GranteeRoleName, plan.ClusterName.ValueStringPointer())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error checking for existing overlapping privileges",
@@ -325,7 +332,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	grant, err := r.client.GetGrantPrivilege(ctx, state.Privilege.ValueString(), state.Database.ValueStringPointer(), state.Table.ValueStringPointer(), state.Column.ValueStringPointer(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer())
+	grant, err := r.client.GetGrantPrivilege(ctx, state.Privilege.ValueString(), state.Database.ValueStringPointer(), state.Table.ValueStringPointer(), state.Column.ValueStringPointer(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse Privilege Grant",
@@ -362,7 +369,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.RevokeGrantPrivilege(ctx, state.Privilege.ValueString(), state.Database.ValueStringPointer(), state.Table.ValueStringPointer(), state.Column.ValueStringPointer(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer())
+	err := r.client.RevokeGrantPrivilege(ctx, state.Privilege.ValueString(), state.Database.ValueStringPointer(), state.Table.ValueStringPointer(), state.Column.ValueStringPointer(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting ClickHouse Privilege Grant",

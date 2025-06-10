@@ -14,6 +14,7 @@ type GrantPrivilegeQueryBuilder interface {
 	WithTable(*string) GrantPrivilegeQueryBuilder
 	WithColumn(*string) GrantPrivilegeQueryBuilder
 	WithGrantOption(bool) GrantPrivilegeQueryBuilder
+	WithCluster(*string) GrantPrivilegeQueryBuilder
 }
 
 type grantPrivilegeQueryBuilder struct {
@@ -23,6 +24,7 @@ type grantPrivilegeQueryBuilder struct {
 	table       *string
 	column      *string
 	grantOption bool
+	clusterName *string
 }
 
 func GrantPrivilege(accessType string, to string) GrantPrivilegeQueryBuilder {
@@ -47,6 +49,11 @@ func (q *grantPrivilegeQueryBuilder) WithColumn(column *string) GrantPrivilegeQu
 	return q
 }
 
+func (q *grantPrivilegeQueryBuilder) WithCluster(clusterName *string) GrantPrivilegeQueryBuilder {
+	q.clusterName = clusterName
+	return q
+}
+
 func (q *grantPrivilegeQueryBuilder) WithGrantOption(grantOption bool) GrantPrivilegeQueryBuilder {
 	q.grantOption = grantOption
 	return q
@@ -62,6 +69,10 @@ func (q *grantPrivilegeQueryBuilder) Build() (string, error) {
 
 	tokens := []string{
 		"GRANT",
+	}
+
+	if q.clusterName != nil {
+		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
 	}
 
 	// Privilege

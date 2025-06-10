@@ -19,7 +19,7 @@ type GrantPrivilege struct {
 	GrantOption     bool    `json:"grant_option"`
 }
 
-func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege) (*GrantPrivilege, error) {
+func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege, clusterName *string) (*GrantPrivilege, error) {
 	var to string
 	{
 		if grantPrivilege.GranteeUserName != nil {
@@ -36,6 +36,7 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		WithTable(grantPrivilege.TableName).
 		WithColumn(grantPrivilege.ColumnName).
 		WithGrantOption(grantPrivilege.GrantOption).
+		WithCluster(clusterName).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
@@ -46,10 +47,10 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.GetGrantPrivilege(ctx, grantPrivilege.AccessType, grantPrivilege.DatabaseName, grantPrivilege.TableName, grantPrivilege.ColumnName, grantPrivilege.GranteeUserName, grantPrivilege.GranteeRoleName)
+	return i.GetGrantPrivilege(ctx, grantPrivilege.AccessType, grantPrivilege.DatabaseName, grantPrivilege.TableName, grantPrivilege.ColumnName, grantPrivilege.GranteeUserName, grantPrivilege.GranteeRoleName, clusterName)
 }
 
-func (i *impl) GetGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string) (*GrantPrivilege, error) {
+func (i *impl) GetGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string, clusterName *string) (*GrantPrivilege, error) {
 	where := make([]querybuilder.Where, 0)
 
 	{
@@ -92,7 +93,7 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, accessType string, databas
 			querybuilder.NewField("grant_option"),
 		},
 		"system.grants",
-	).Where(where...).Build()
+	).WithCluster(clusterName).Where(where...).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -152,7 +153,7 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, accessType string, databas
 	return grantPrivilege, nil
 }
 
-func (i *impl) RevokeGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string) error {
+func (i *impl) RevokeGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string, clusterName *string) error {
 	var from string
 	{
 		if granteeUserName != nil {
@@ -168,6 +169,7 @@ func (i *impl) RevokeGrantPrivilege(ctx context.Context, accessType string, data
 		WithDatabase(database).
 		WithTable(table).
 		WithColumn(column).
+		WithCluster(clusterName).
 		Build()
 	if err != nil {
 		return errors.WithMessage(err, "error building query")
@@ -181,7 +183,7 @@ func (i *impl) RevokeGrantPrivilege(ctx context.Context, accessType string, data
 	return nil
 }
 
-func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string) ([]GrantPrivilege, error) {
+func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string, clusterName *string) ([]GrantPrivilege, error) {
 	// Get all grants for the same grantee.
 	var to querybuilder.Where
 	{
@@ -202,7 +204,7 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		querybuilder.NewField("user_name"),
 		querybuilder.NewField("role_name"),
 		querybuilder.NewField("grant_option"),
-	}, "system.grants").Where(to).Build()
+	}, "system.grants").WithCluster(clusterName).Where(to).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}

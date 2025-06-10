@@ -5,6 +5,7 @@ import (
 )
 
 type GrantPrivilege struct {
+	ClusterName     types.String `tfsdk:"cluster_name"`
 	Privilege       types.String `tfsdk:"privilege_name"`
 	Database        types.String `tfsdk:"database_name"`
 	Table           types.String `tfsdk:"table_name"`

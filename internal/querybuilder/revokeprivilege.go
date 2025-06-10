@@ -13,14 +13,16 @@ type RevokePrivilegeQueryBuilder interface {
 	WithDatabase(*string) RevokePrivilegeQueryBuilder
 	WithTable(*string) RevokePrivilegeQueryBuilder
 	WithColumn(*string) RevokePrivilegeQueryBuilder
+	WithCluster(*string) RevokePrivilegeQueryBuilder
 }
 
 type revokePrivilegeQueryBuilder struct {
-	accessType string
-	from       string
-	database   *string
-	table      *string
-	column     *string
+	accessType  string
+	from        string
+	database    *string
+	table       *string
+	column      *string
+	clusterName *string
 }
 
 func RevokePrivilege(accessType string, from string) RevokePrivilegeQueryBuilder {
@@ -45,6 +47,11 @@ func (q *revokePrivilegeQueryBuilder) WithColumn(column *string) RevokePrivilege
 	return q
 }
 
+func (q *revokePrivilegeQueryBuilder) WithCluster(column *string) RevokePrivilegeQueryBuilder {
+	q.column = column
+	return q
+}
+
 func (q *revokePrivilegeQueryBuilder) Build() (string, error) {
 	if q.accessType == "" {
 		return "", errors.New("AccessType cannot be empty")
@@ -55,6 +62,10 @@ func (q *revokePrivilegeQueryBuilder) Build() (string, error) {
 
 	tokens := []string{
 		"REVOKE",
+	}
+
+	if q.clusterName != nil {
+		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
 	}
 
 	// Privilege
