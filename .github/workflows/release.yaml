@@ -211,6 +211,8 @@ jobs:
 
             sed -i '1s/^/# This file is generated automatically please do not edit\n/' $dst
           done
+          
+          make docs
 
       - name: Commit
         run: |
