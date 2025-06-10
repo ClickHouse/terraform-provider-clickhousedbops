@@ -1,0 +1,23 @@
+name: "Prepare test environemnt"
+description: "Starts clickhouse using docker to run tests"
+inputs:
+  clickhouse_version:
+    required: true
+    description: "The clickhouse version to use"
+  terraform_version:
+    required: true
+    description: "The terraform version to use"
+  protocol:
+    required: true
+    description: "The protocol to use to connect to clickhouse"
+  cluster_name:
+    required: true
+    description: "Name of the clickhouse cluster or 'null'"
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: |
+        chmod +x .github/actions/prepare-test-env/action.sh
+        .github/actions/prepare-test-env/action.sh --clickhouse-version="${{inputs.clickhouse_version}}" --terraform-version="${{inputs.terraform_version}}" --protocol="${{inputs.protocol}}" --cluster-name="${{inputs.cluster_name}}"

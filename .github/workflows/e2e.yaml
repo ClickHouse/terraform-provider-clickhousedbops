@@ -94,56 +94,13 @@ jobs:
           chmod +x ./terraform-provider-clickhousedbops
           ls -lah
 
-      - name: Install terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ matrix.terraform_version }}
-          terraform_wrapper: false
-
       - name: Prepare test env
-        run: |
-          cd tests/
-          export CLICKHOUSE_VERSION="${{ matrix.clickhouse_version }}"
-          export TFVER="${{ matrix.terraform_version }}"
-          export TF_VAR_protocol=${{ matrix.protocol }}
-          
-          case "$TF_VAR_protocol" in
-            native)
-              export TF_VAR_port=9000
-              export TF_VAR_auth_strategy=password
-              ;;
-            http)
-              export TF_VAR_port=8123
-              export TF_VAR_auth_strategy=basicauth
-              ;;
-          esac
-          
-          case "${{ matrix.cluster }}" in
-            null)
-            export TF_VAR_host=clickhouse
-            ;;
-            *)
-            export TF_VAR_host=ch01
-            export TF_VAR_cluster_name="${{ matrix.cluster }}"
-          esac
-          
-          # This is needed until docker compose 1.36 to avoid concurrent map write error.
-          docker pull clickhouse/clickhouse-server:${CLICKHOUSE_VERSION}
-                    
-          docker compose up -d
-          sleep 5
-          
-          # Check containers are running or display logs
-          for svc in clickhouse shell ; do
-            if [ -z $(docker compose ps -q $svc) ] || [ -z $(docker ps -q --no-trunc | grep $(docker compose ps -q $svc)) ]; then
-              echo "Failed running $svc"
-              docker compose logs $svc
-              exit 1
-            fi
-          done
-          
-          docker compose exec clickhouse clickhouse client --password "test" "select version()"
-          docker compose exec ch01 clickhouse client --password "test" "select version()"
+        uses: ./.github/actions/prepare-test-env
+        with:
+          clickhouse_version: ${{ matrix.clickhouse_version }}
+          terraform_version: ${{ matrix.terraform_version }}
+          protocol: ${{ matrix.protocol }}
+          cluster_name: ${{ matrix.cluster }}
 
       - name: Run e2e test
         run: |
