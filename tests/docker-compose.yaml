@@ -64,7 +64,7 @@ services:
         target: '/etc/clickhouse-server/users.xml'
 
   shell:
-    image: hashicorp/terraform:${TFVER:-1.11}
+    image: ${TFIMG:-hashicorp/terraform}:${TFVER:-1.11}
     entrypoint: [ "sleep" ]
     command: ["infinity"]
     working_dir: /tests

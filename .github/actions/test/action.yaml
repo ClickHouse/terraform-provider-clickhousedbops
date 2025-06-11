@@ -1,0 +1,56 @@
+name: "Run test"
+description: "Runs an e2e test"
+inputs:
+  example:
+    required: true
+    description: "The example to run"
+  clickhouse_version:
+    required: true
+    description: "The clickhouse version to use"
+  terraform_image:
+    required: true
+    description: "The terraform docker image to use"
+  terraform_version:
+    required: true
+    description: "The terraform version to use"
+  terraform_binary:
+    required: true
+    description: "Name of the binary to call"
+  protocol:
+    required: true
+    description: "The protocol to use to connect to clickhouse"
+  cluster_name:
+    required: true
+    description: "Name of the clickhouse cluster or 'null'"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: terraform-provider-clickhousedbops
+        path: .
+
+    - shell: bash
+      run: |
+        chmod +x ./terraform-provider-clickhousedbops
+        ls -lah
+
+    - shell: bash
+      run: |
+        chmod +x .github/actions/test/prepare.sh
+        .github/actions/test/prepare.sh --clickhouse-version="${{inputs.clickhouse_version}}" --terraform-version="${{inputs.terraform_version}}" --terraform-image="${{inputs.terraform_image}}" --protocol="${{inputs.protocol}}" --cluster-name="${{inputs.cluster_name}}"
+
+    - name: Run e2e test
+      shell: bash
+      run: |
+        cd tests/
+        docker compose exec shell ash -c "cd ${{ inputs.example }} && ${{ inputs.terraform_binary }} apply -auto-approve && ${{ inputs.terraform_binary }} destroy -auto-approve"
+
+    - name: Stop test env
+      if: always()
+      shell: bash
+      run: |
+        cd tests/
+        docker compose kill
+        docker compose rm -f

@@ -8,19 +8,7 @@ defaults:
     shell: bash
 
 jobs:
-  list-examples:
-    outputs:
-      examples: ${{ steps.list.outputs.examples }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - id: list
-        run: |
-          examples="$(find examples/tests/ -name main.tf | xargs -n1 dirname | xargs -n1 basename| jq -cRn '[inputs]')"
-          echo "examples=${examples}" >> "$GITHUB_OUTPUT"
-
-  list-clickhouse-version:
+  list-clickhouse-versions:
     outputs:
       versions: ${{ steps.list.outputs.versions }}
     runs-on: ubuntu-latest
@@ -30,18 +18,47 @@ jobs:
       - uses: ./.github/actions/find-clickhouse-releases
         id: list
 
-  list-terraform-version:
+  list-terraform-versions:
     outputs:
       versions: ${{ steps.list.outputs.versions }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - uses: ./.github/actions/find-tf-releases
+      - uses: ./.github/actions/find-github-releases
         id: list
         with:
+          repo: 'hashicorp/terraform'
           count: '3'
           min: '1.11.0'
+
+  list-tofu-versions:
+    outputs:
+      versions: ${{ steps.list.outputs.versions }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/find-github-releases
+        id: list
+        with:
+          repo: 'opentofu/opentofu'
+          count: '3'
+
+  prepare-matrix:
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    runs-on: ubuntu-latest
+    needs: ['list-clickhouse-versions', 'list-terraform-versions', 'list-tofu-versions']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - id: matrix
+        uses: ./.github/actions/prepare-matrix
+        with:
+          terraform_versions_json: ${{ needs.list-terraform-versions.outputs.versions }}
+          tofu_versions_json: ${{ needs.list-tofu-versions.outputs.versions }}
+          clickhouse_versions_json: ${{ needs.list-clickhouse-versions.outputs.versions }}
 
   build:
     runs-on: ubuntu-latest
@@ -69,56 +86,115 @@ jobs:
           name: terraform-provider-clickhousedbops
           path: ${{ env.TMPDIR }}
 
-  e2e:
+  database:
     runs-on: ubuntu-latest
-    needs: ['build', 'list-examples', 'list-clickhouse-version', 'list-terraform-version']
+    needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
-      matrix:
-        terraform_version: ${{ fromJSON(needs.list-terraform-version.outputs.versions) }}
-        clickhouse_version: ${{ fromJSON(needs.list-clickhouse-version.outputs.versions) }}
-        protocol: ["native", "http"]
-        cluster: ["null", "cluster1"]
-        example: ${{ fromJSON(needs.list-examples.outputs.examples) }}
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - name: ${{ github.job }} test
+        uses: ./.github/actions/test
         with:
-          name: terraform-provider-clickhousedbops
-          path: .
-
-      - name: Adjust permissions
-        run: |
-          chmod +x ./terraform-provider-clickhousedbops
-          ls -lah
-
-      - name: Prepare test env
-        uses: ./.github/actions/prepare-test-env
-        with:
+          example: ${{ github.job }}
           clickhouse_version: ${{ matrix.clickhouse_version }}
-          terraform_version: ${{ matrix.terraform_version }}
+          terraform_image: ${{ matrix.terraform.image }}
+          terraform_version: ${{ matrix.terraform.version }}
+          terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
           cluster_name: ${{ matrix.cluster }}
 
-      - name: Run e2e test
-        run: |
-          cd tests/
-          export example=${{ matrix.example }}
-          docker compose exec shell ash -c "cd $example && terraform apply -auto-approve && terraform destroy -auto-approve"
+  role:
+    runs-on: ubuntu-latest
+    needs: ['build', 'prepare-matrix']
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Stop test env
-        if: always()
-        run: |
-          cd tests/
-          docker compose kill
-          docker compose rm -f
+      - name: ${{ github.job }} test
+        uses: ./.github/actions/test
+        with:
+          example: ${{ github.job }}
+          clickhouse_version: ${{ matrix.clickhouse_version }}
+          terraform_image: ${{ matrix.terraform.image }}
+          terraform_version: ${{ matrix.terraform.version }}
+          terraform_binary: ${{ matrix.terraform.binary }}
+          protocol: ${{ matrix.protocol }}
+          cluster_name: ${{ matrix.cluster }}
+
+  user:
+    runs-on: ubuntu-latest
+    needs: ['build', 'prepare-matrix']
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: ${{ github.job }} test
+        uses: ./.github/actions/test
+        with:
+          example: ${{ github.job }}
+          clickhouse_version: ${{ matrix.clickhouse_version }}
+          terraform_image: ${{ matrix.terraform.image }}
+          terraform_version: ${{ matrix.terraform.version }}
+          terraform_binary: ${{ matrix.terraform.binary }}
+          protocol: ${{ matrix.protocol }}
+          cluster_name: ${{ matrix.cluster }}
+
+  grantrole:
+    runs-on: ubuntu-latest
+    needs: ['build', 'prepare-matrix']
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: ${{ github.job }} test
+        uses: ./.github/actions/test
+        with:
+          example: ${{ github.job }}
+          clickhouse_version: ${{ matrix.clickhouse_version }}
+          terraform_image: ${{ matrix.terraform.image }}
+          terraform_version: ${{ matrix.terraform.version }}
+          terraform_binary: ${{ matrix.terraform.binary }}
+          protocol: ${{ matrix.protocol }}
+          cluster_name: ${{ matrix.cluster }}
+
+  grantprivilege:
+    runs-on: ubuntu-latest
+    needs: ['build', 'prepare-matrix']
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: ${{ github.job }} test
+        uses: ./.github/actions/test
+        with:
+          example: ${{ github.job }}
+          clickhouse_version: ${{ matrix.clickhouse_version }}
+          terraform_image: ${{ matrix.terraform.image }}
+          terraform_version: ${{ matrix.terraform.version }}
+          terraform_binary: ${{ matrix.terraform.binary }}
+          protocol: ${{ matrix.protocol }}
+          cluster_name: ${{ matrix.cluster }}
 
   notify:
     name: "E2E tests"
     runs-on: ubuntu-latest
-    needs: ['e2e']
+    needs: ['database', 'role', 'user', 'grantrole', 'grantprivilege']
     if: always()
     steps:
       - name: Successful run

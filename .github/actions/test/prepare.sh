@@ -1,6 +1,7 @@
 #!/bin/bash
 
 CLICKHOUSE_VERSION=""
+TERRAFORM_IMAGE=""
 TERRAFORM_VERSION=""
 PROTOCOL=""
 CLUSTER_NAME=""
@@ -12,6 +13,9 @@ for arg in "$@"; do
       ;;
     --terraform-version=*)
       TERRAFORM_VERSION="${arg#*=}"
+      ;;
+    --terraform-image=*)
+      TERRAFORM_IMAGE="${arg#*=}"
       ;;
     --protocol=*)
       PROTOCOL="${arg#*=}"
@@ -36,6 +40,11 @@ then
   echo "--terraform-version=<version> is required"
 fi
 
+if [ "$TERRAFORM_IMAGE" == "" ]
+then
+  echo "--terraform-image=<image> is required"
+fi
+
 if [ "$PROTOCOL" == "" ]
 then
   echo "--protocol=<http|native> is required"
@@ -51,6 +60,7 @@ fi
 cd tests/ || exit 1
 export CLICKHOUSE_VERSION="$CLICKHOUSE_VERSION"
 export TFVER="$TERRAFORM_VERSION"
+export TFIMG="$TERRAFORM_IMAGE"
 export TF_VAR_protocol="$PROTOCOL"
 
 case "$TF_VAR_protocol" in

@@ -1,0 +1,26 @@
+name: "Prepare test matrix"
+description: "Return names of latest terraform cli releases"
+inputs:
+  terraform_versions_json:
+    required: true
+    description: "JSON serialization of an array of terraform releases to test"
+  tofu_versions_json:
+    required: true
+    description: "JSON serialization of an array of tofu releases to test"
+  clickhouse_versions_json:
+    required: true
+    description: "JSON serialization of an array of clickhouse releases to test"
+
+outputs:
+  matrix:
+    description: "The json encoded array of release names"
+    value: ${{steps.matrix.outputs.matrix}}
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      id: matrix
+      run: |
+        chmod +x .github/actions/prepare-matrix/action.sh
+        .github/actions/prepare-matrix/action.sh --terraform-versions='${{inputs.terraform_versions_json}}' --tofu-versions='${{inputs.tofu_versions_json}}' --clickhouse-versions='${{inputs.clickhouse_versions_json}}'
