@@ -155,7 +155,6 @@ jobs:
           path: ${{ env.TMPDIR }}
 
   database:
-    name: "Test ${{github.job}} resource"
     runs-on: ubuntu-latest
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
@@ -177,7 +176,6 @@ jobs:
           cluster_name: ${{ matrix.cluster }}
 
   role:
-    name: "Test ${{github.job}} resource"
     runs-on: ubuntu-latest
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
@@ -199,7 +197,6 @@ jobs:
           cluster_name: ${{ matrix.cluster }}
 
   user:
-    name: "Test ${{github.job}} resource"
     runs-on: ubuntu-latest
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
@@ -221,7 +218,6 @@ jobs:
           cluster_name: ${{ matrix.cluster }}
 
   grantrole:
-    name: "Test ${{github.job}} resource"
     runs-on: ubuntu-latest
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
@@ -243,7 +239,6 @@ jobs:
           cluster_name: ${{ matrix.cluster }}
 
   grantprivilege:
-    name: "Test ${{github.job}} resource"
     runs-on: ubuntu-latest
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
