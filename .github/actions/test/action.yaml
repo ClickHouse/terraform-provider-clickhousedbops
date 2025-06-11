@@ -9,10 +9,10 @@ inputs:
     description: "The clickhouse version to use"
   terraform_image:
     required: true
-    description: "The terraform docker image to use"
+    description: "The terraform/tofu docker image to use"
   terraform_version:
     required: true
-    description: "The terraform version to use"
+    description: "The terraform/tofu docker image version to use"
   terraform_binary:
     required: true
     description: "Name of the binary to call"
