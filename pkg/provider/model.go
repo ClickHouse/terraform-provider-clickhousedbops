@@ -1,11 +1,15 @@
 package provider
 
+import (
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
 // Model describes the provider data model.
 type Model struct {
-	Protocol   string     `tfsdk:"protocol"`
-	Host       string     `tfsdk:"host"`
-	Port       uint16     `tfsdk:"port"`
-	AuthConfig AuthConfig `tfsdk:"auth_config"`
+	Protocol   types.String `tfsdk:"protocol"`
+	Host       types.String `tfsdk:"host"`
+	Port       types.Number `tfsdk:"port"`
+	AuthConfig AuthConfig   `tfsdk:"auth_config"`
 }
 
 type AuthConfig struct {

@@ -109,7 +109,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 
 	var clickhouseClient clickhouseclient.ClickhouseClient
 	{
-		switch data.Protocol {
+		switch data.Protocol.ValueString() {
 		case protocolNative:
 			fallthrough
 		case protocolNativeSecure:
@@ -133,11 +133,18 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				return
 			}
 
+			port := data.Port.ValueBigFloat()
+			portint64, _ := port.Int64()
+			if portint64 > 65535 {
+				resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid port %s.", data.Port.String()))
+				return
+			}
+
 			clickhouseClient, err = clickhouseclient.NewNativeClient(clickhouseclient.NativeClientConfig{
-				Host:             data.Host,
-				Port:             data.Port,
+				Host:             data.Host.ValueString(),
+				Port:             uint16(portint64),
 				UserPasswordAuth: auth,
-				EnableTLS:        data.Protocol == protocolNativeSecure,
+				EnableTLS:        data.Protocol.ValueString() == protocolNativeSecure,
 			})
 		case protocolHTTP:
 			fallthrough
@@ -162,13 +169,24 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				return
 			}
 
+			var port uint16
+			{
+				if !data.Port.IsUnknown() {
+					portint64, _ := data.Port.ValueBigFloat().Int64()
+					if portint64 > 65535 {
+						resp.Diagnostics.AddError("invalid configuration", fmt.Sprintf("invalid port %s.", data.Port.String()))
+						return
+					}
+				}
+			}
+
 			config := clickhouseclient.HTTPClientConfig{
-				Host:      data.Host,
-				Port:      data.Port,
+				Host:      data.Host.ValueString(),
+				Port:      port,
 				BasicAuth: auth,
 			}
 
-			if data.Protocol == protocolHTTPS {
+			if data.Protocol.ValueString() == protocolHTTPS {
 				config.Protocol = "https"
 			}
 
