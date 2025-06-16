@@ -123,7 +123,10 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			case authStrategyPassword:
 				auth = &clickhouseclient.UserPasswordAuth{
 					Username: data.AuthConfig.Username.ValueString(),
-					Password: *data.AuthConfig.Password.ValueStringPointer(),
+				}
+
+				if !data.AuthConfig.Password.IsNull() {
+					auth.Password = data.AuthConfig.Password.ValueString()
 				}
 
 				valid, errorStrings := auth.ValidateConfig()
@@ -162,7 +165,10 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			case authStrategyBasicAuth:
 				auth = &clickhouseclient.BasicAuth{
 					Username: data.AuthConfig.Username.ValueString(),
-					Password: *data.AuthConfig.Password.ValueStringPointer(),
+				}
+
+				if !data.AuthConfig.Password.IsNull() {
+					auth.Password = data.AuthConfig.Password.ValueString()
 				}
 
 				valid, errorStrings := auth.ValidateConfig()
