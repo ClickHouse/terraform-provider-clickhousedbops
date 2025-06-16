@@ -8,12 +8,12 @@ import (
 type Model struct {
 	Protocol   types.String `tfsdk:"protocol"`
 	Host       types.String `tfsdk:"host"`
-	Port       types.Number `tfsdk:"port"`
+	Port       types.Int32  `tfsdk:"port"`
 	AuthConfig AuthConfig   `tfsdk:"auth_config"`
 }
 
 type AuthConfig struct {
-	Strategy string  `tfsdk:"strategy"`
-	Username string  `tfsdk:"username"`
-	Password *string `tfsdk:"password"`
+	Strategy types.String `tfsdk:"strategy"`
+	Username types.String `tfsdk:"username"`
+	Password types.String `tfsdk:"password"`
 }
