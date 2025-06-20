@@ -29,7 +29,7 @@ jobs:
         id: list
         with:
           repo: 'hashicorp/terraform'
-          count: '3'
+          count: '1'
           min: '1.11.0'
 
   list-tofu-versions:
@@ -43,7 +43,7 @@ jobs:
         id: list
         with:
           repo: 'opentofu/opentofu'
-          count: '3'
+          count: '1'
 
   prepare-matrix:
     outputs:
