@@ -52,7 +52,7 @@ json=$(jq -c --null-input \
   --argjson terraform "${both}" \
   --argjson clickhouse_versions "${CLICKHOUSE_VERSIONS}" \
   --argjson protocols '["native", "http"]' \
-  --argjson clusters '["null", "cluster1"]' \
+  --argjson clusters '["single", "replicated", "cluster1"]' \
   '{terraform: $terraform, clickhouse_version: $clickhouse_versions, protocol: $protocols, cluster: $clusters}')
 
 echo "matrix=${json}" >> "$GITHUB_OUTPUT"

@@ -24,6 +24,7 @@ var (
 	_ resource.Resource                = &Resource{}
 	_ resource.ResourceWithConfigure   = &Resource{}
 	_ resource.ResourceWithImportState = &Resource{}
+	_ resource.ResourceWithModifyPlan  = &Resource{}
 )
 
 func NewResource() resource.Resource {
@@ -61,6 +62,34 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 		},
 		MarkdownDescription: roleResourceDescription,
+	}
+}
+
+func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Checking if service is using replicated storage",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
+	}
+
+	if isReplicatedStorage {
+		var config Role
+		diags := req.Config.Get(ctx, &config)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		// Role cannot specify 'cluster_name' or apply will fail.
+		if !config.ClusterName.IsNull() {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				"Your ClickHouse cluster is using Replicated storage for roles, please remove the 'cluster_name' attribute from your Role resource definition.",
+			)
+		}
 	}
 }
 

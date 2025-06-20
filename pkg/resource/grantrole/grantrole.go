@@ -22,8 +22,9 @@ import (
 var grantResourceDescription string
 
 var (
-	_ resource.Resource              = &Resource{}
-	_ resource.ResourceWithConfigure = &Resource{}
+	_ resource.Resource               = &Resource{}
+	_ resource.ResourceWithConfigure  = &Resource{}
+	_ resource.ResourceWithModifyPlan = &Resource{}
 )
 
 func NewResource() resource.Resource {
@@ -93,6 +94,34 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 		},
 		MarkdownDescription: grantResourceDescription,
+	}
+}
+
+func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Checking if service is using replicated storage",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
+	}
+
+	if isReplicatedStorage {
+		var config GrantRole
+		diags := req.Config.Get(ctx, &config)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		// GrantRole cannot specify 'cluster_name' or apply will fail.
+		if !config.ClusterName.IsNull() {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				"Your ClickHouse cluster is using Replicated storage for role grants, please remove the 'cluster_name' attribute from your GrantRole resource definition.",
+			)
+		}
 	}
 }
 

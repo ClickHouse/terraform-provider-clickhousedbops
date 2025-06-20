@@ -12,18 +12,33 @@ func Test_SimpleWhere_Clause(t *testing.T) {
 	}{
 		{
 			name:  "String",
-			where: SimpleWhere("name", "mark"),
+			where: WhereEquals("name", "mark"),
 			want:  "`name` = 'mark'",
 		},
 		{
 			name:  "Numeric",
-			where: SimpleWhere("age", 3),
+			where: WhereEquals("age", 3),
 			want:  "`age` = 3",
 		},
 		{
 			name:  "String with backtick in name",
-			where: SimpleWhere("te`st", "value"),
+			where: WhereEquals("te`st", "value"),
 			want:  "`te\\`st` = 'value'",
+		},
+		{
+			name:  "String Differs",
+			where: WhereDiffers("name", "mark"),
+			want:  "`name` <> 'mark'",
+		},
+		{
+			name:  "Numeric Differs",
+			where: WhereDiffers("age", 3),
+			want:  "`age` <> 3",
+		},
+		{
+			name:  "String with backtick in name Differs",
+			where: WhereDiffers("te`st", "value"),
+			want:  "`te\\`st` <> 'value'",
 		},
 		{
 			name:  "Null",

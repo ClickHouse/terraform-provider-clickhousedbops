@@ -54,29 +54,29 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, accessType string, databas
 	where := make([]querybuilder.Where, 0)
 
 	{
-		where = append(where, querybuilder.SimpleWhere("access_type", accessType))
+		where = append(where, querybuilder.WhereEquals("access_type", accessType))
 		if database != nil {
-			where = append(where, querybuilder.SimpleWhere("database", *database))
+			where = append(where, querybuilder.WhereEquals("database", *database))
 		} else {
 			where = append(where, querybuilder.IsNull("database"))
 		}
 
 		if table != nil {
-			where = append(where, querybuilder.SimpleWhere("table", *table))
+			where = append(where, querybuilder.WhereEquals("table", *table))
 		} else {
 			where = append(where, querybuilder.IsNull("table"))
 		}
 
 		if column != nil {
-			where = append(where, querybuilder.SimpleWhere("column", *column))
+			where = append(where, querybuilder.WhereEquals("column", *column))
 		} else {
 			where = append(where, querybuilder.IsNull("column"))
 		}
 
 		if granteeUserName != nil {
-			where = append(where, querybuilder.SimpleWhere("user_name", *granteeUserName))
+			where = append(where, querybuilder.WhereEquals("user_name", *granteeUserName))
 		} else if granteeRoleName != nil {
-			where = append(where, querybuilder.SimpleWhere("role_name", *granteeRoleName))
+			where = append(where, querybuilder.WhereEquals("role_name", *granteeRoleName))
 		} else {
 			return nil, errors.New("either GranteeUserName or GranteeRoleName must be set")
 		}
@@ -188,9 +188,9 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 	var to querybuilder.Where
 	{
 		if granteeUsername != nil {
-			to = querybuilder.SimpleWhere("user_name", *granteeUsername)
+			to = querybuilder.WhereEquals("user_name", *granteeUsername)
 		} else if granteeRoleName != nil {
-			to = querybuilder.SimpleWhere("role_name", *granteeRoleName)
+			to = querybuilder.WhereEquals("role_name", *granteeRoleName)
 		} else {
 			return nil, errors.New("either granteeUsername or GranteeRoleName must be set")
 		}

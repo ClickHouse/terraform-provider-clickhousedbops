@@ -6,6 +6,13 @@ services:
       - TZ=Europe/Rome
       - ZOO_MY_ID=1
 
+  zookeeper-rep:
+    image: zookeeper:3.4.9
+    container_name: rep-zookeeper
+    environment:
+      - TZ=Europe/Rome
+      - ZOO_MY_ID=1
+
   ch01:
     image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
     user: '101:101'
@@ -17,16 +24,11 @@ services:
       - CLICKHOUSE_SKIP_USER_SETUP=1
     ports:
       - "9000:9000"
+      - "8123:8123"
     volumes:
       - type: 'bind'
         source: './config-cluster.xml'
-        target: '/etc/clickhouse-server/config.d/config.xml'
-      - type: 'bind'
-        source: './use-keeper.xml'
-        target: '/etc/clickhouse-server/config.d/use-keeper.xml'
-      - type: 'bind'
-        source: './users.xml'
-        target: '/etc/clickhouse-server/users.xml'
+        target: '/etc/clickhouse-server/config.xml'
 
   ch02:
     image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
@@ -40,13 +42,35 @@ services:
     volumes:
       - type: 'bind'
         source: './config-cluster.xml'
-        target: '/etc/clickhouse-server/config.d/config.xml'
+        target: '/etc/clickhouse-server/config.xml'
+
+  rep01:
+    image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
+    user: '101:101'
+    container_name: rep01
+    hostname: rep01
+    depends_on:
+      - zookeeper-rep
+    environment:
+      - CLICKHOUSE_SKIP_USER_SETUP=1
+    volumes:
       - type: 'bind'
-        source: './use-keeper.xml'
-        target: '/etc/clickhouse-server/config.d/use-keeper.xml'
+        source: './config-cluster-replicated.xml'
+        target: '/etc/clickhouse-server/config.xml'
+
+  rep02:
+    image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
+    user: '101:101'
+    container_name: rep02
+    hostname: rep02
+    depends_on:
+      - zookeeper-rep
+    environment:
+      - CLICKHOUSE_SKIP_USER_SETUP=1
+    volumes:
       - type: 'bind'
-        source: './users.xml'
-        target: '/etc/clickhouse-server/users.xml'
+        source: './config-cluster-replicated.xml'
+        target: '/etc/clickhouse-server/config.xml'
 
   clickhouse:
     image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
@@ -58,10 +82,7 @@ services:
     volumes:
       - type: 'bind'
         source: './config-single.xml'
-        target: '/etc/clickhouse-server/config.d/config.xml'
-      - type: 'bind'
-        source: './users.xml'
-        target: '/etc/clickhouse-server/users.xml'
+        target: '/etc/clickhouse-server/config.xml'
 
   shell:
     image: ${TFIMG:-hashicorp/terraform}:${TFVER:-1.11}

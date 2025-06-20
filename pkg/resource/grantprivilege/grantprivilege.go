@@ -190,6 +190,25 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
+	isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Checking if service is using replicated storage",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
+	}
+
+	if isReplicatedStorage {
+		// GrantPrivilege cannot specify 'cluster_name' or apply will fail.
+		if !config.ClusterName.IsNull() {
+			resp.Diagnostics.AddError(
+				"Invalid configuration",
+				"Your ClickHouse cluster is using Replicated storage for grants, please remove the 'cluster_name' attribute from your GrantPrivilege resource definition.",
+			)
+		}
+	}
+
 	// Check if using an alias.
 	if alias := upstrGrts.Aliases[plan.Privilege.ValueString()]; alias != "" {
 		// Using an alias, block.
