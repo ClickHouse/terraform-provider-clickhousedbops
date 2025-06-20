@@ -45,9 +45,9 @@ func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, grantee
 	var granteeWhere querybuilder.Where
 	{
 		if granteeUserName != nil {
-			granteeWhere = querybuilder.SimpleWhere("user_name", *granteeUserName)
+			granteeWhere = querybuilder.WhereEquals("user_name", *granteeUserName)
 		} else if granteeRoleName != nil {
-			granteeWhere = querybuilder.SimpleWhere("role_name", *granteeRoleName)
+			granteeWhere = querybuilder.WhereEquals("role_name", *granteeRoleName)
 		} else {
 			return nil, errors.New("either GranteeUserName or GranteeRoleName must be set")
 		}
@@ -62,7 +62,7 @@ func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, grantee
 		},
 		"system.role_grants").
 		WithCluster(clusterName).
-		Where(querybuilder.SimpleWhere("granted_role_name", grantedRoleName), granteeWhere).
+		Where(querybuilder.WhereEquals("granted_role_name", grantedRoleName), granteeWhere).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")

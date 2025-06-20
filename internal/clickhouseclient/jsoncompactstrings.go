@@ -49,6 +49,15 @@ func (j jsonCompatStrings) Rows() []Row {
 				} else {
 					data.Set(colNames[i], uint8(val))
 				}
+			case "UInt64":
+				val, err := strconv.ParseUint(field, 10, 64)
+				if err != nil {
+					// Failed parsing as number, return value as-is.
+					data.Set(colNames[i], field)
+					break
+				} else {
+					data.Set(colNames[i], val)
+				}
 			default:
 				data.Set(colNames[i], field)
 			}

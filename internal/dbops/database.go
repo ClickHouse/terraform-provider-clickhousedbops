@@ -37,7 +37,7 @@ func (i *impl) GetDatabase(ctx context.Context, uuid string, clusterName *string
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("name"), querybuilder.NewField("comment")},
 		"system.databases",
-	).WithCluster(clusterName).Where(querybuilder.SimpleWhere("uuid", uuid)).Build()
+	).WithCluster(clusterName).Where(querybuilder.WhereEquals("uuid", uuid)).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -100,7 +100,7 @@ func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName 
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("uuid")},
 		"system.databases",
-	).WithCluster(clusterName).Where(querybuilder.SimpleWhere("name", name)).Build()
+	).WithCluster(clusterName).Where(querybuilder.WhereEquals("name", name)).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}

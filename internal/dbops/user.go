@@ -37,7 +37,7 @@ func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*Us
 	sql, err := querybuilder.
 		NewSelect([]querybuilder.Field{querybuilder.NewField("name")}, "system.users").
 		WithCluster(clusterName).
-		Where(querybuilder.SimpleWhere("id", id)).
+		Where(querybuilder.WhereEquals("id", id)).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
@@ -96,7 +96,7 @@ func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *str
 	sql, err := querybuilder.
 		NewSelect([]querybuilder.Field{querybuilder.NewField("id")}, "system.users").
 		WithCluster(clusterName).
-		Where(querybuilder.SimpleWhere("name", name)).
+		Where(querybuilder.WhereEquals("name", name)).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")

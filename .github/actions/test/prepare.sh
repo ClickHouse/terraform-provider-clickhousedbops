@@ -1,5 +1,6 @@
 #!/bin/bash
 
+EXAMPLE=""
 CLICKHOUSE_VERSION=""
 TERRAFORM_IMAGE=""
 TERRAFORM_VERSION=""
@@ -8,6 +9,9 @@ CLUSTER_NAME=""
 
 for arg in "$@"; do
   case "$arg" in
+    --example=*)
+      EXAMPLE="${arg#*=}"
+      ;;
     --clickhouse-version=*)
       CLICKHOUSE_VERSION="${arg#*=}"
       ;;
@@ -29,6 +33,11 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [ "$EXAMPLE" == "" ]
+then
+  echo "--example=<example name> is required"
+fi
 
 if [ "$CLICKHOUSE_VERSION" == "" ]
 then
@@ -75,8 +84,16 @@ case "$TF_VAR_protocol" in
 esac
 
 case "${CLUSTER_NAME}" in
-  null)
+  single)
   export TF_VAR_host=clickhouse
+  ;;
+  replicated)
+  export TF_VAR_host=rep01
+  if [ "${EXAMPLE}" == "database" ]
+  then
+    # Even in replicated setups, the database resource need the cluster_name to be set.
+    export TF_VAR_cluster_name="cluster1"
+  fi
   ;;
   *)
   export TF_VAR_host=ch01

@@ -58,6 +58,19 @@ func (r *Row) GetBool(fieldName string) (bool, error) {
 	return false, errors.New(fmt.Sprintf("unable to get field %s as bool: (%s)", fieldName, reflect.TypeOf(val).String()))
 }
 
+func (r *Row) GetUInt64(fieldName string) (uint64, error) {
+	val, ok := r.data[fieldName]
+	if !ok {
+		return 0, errors.New(fmt.Sprintf("field %s was not found in row", fieldName))
+	}
+
+	if reflect.TypeOf(val).Name() != "uint64" {
+		return 0, errors.New(fmt.Sprintf("field %s is not a uint64 (%s)", fieldName, reflect.TypeOf(val).Name()))
+	}
+
+	return val.(uint64), nil
+}
+
 func (r *Row) Set(fieldName string, val interface{}) {
 	if r.data == nil {
 		r.data = make(map[string]interface{})

@@ -116,6 +116,8 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 				ret.Set(rows.Columns()[i], *v)
 			case *uint8:
 				ret.Set(rows.Columns()[i], *v)
+			case *uint64:
+				ret.Set(rows.Columns()[i], *v)
 			default:
 				return errors.New(fmt.Sprintf("unsupported column type: %s", reflect.TypeOf(v)))
 			}
