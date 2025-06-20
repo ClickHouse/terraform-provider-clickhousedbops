@@ -117,9 +117,9 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 
 		// GrantRole cannot specify 'cluster_name' or apply will fail.
 		if !config.ClusterName.IsNull() {
-			resp.Diagnostics.AddError(
+			resp.Diagnostics.AddWarning(
 				"Invalid configuration",
-				"Your ClickHouse cluster is using Replicated storage for role grants, please remove the 'cluster_name' attribute from your GrantRole resource definition.",
+				"Your ClickHouse cluster is using Replicated storage for role grants, please remove the 'cluster_name' attribute from your GrantRole resource definition if you encounter any errors.",
 			)
 		}
 	}

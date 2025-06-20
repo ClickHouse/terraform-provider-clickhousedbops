@@ -85,9 +85,9 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 
 		// Role cannot specify 'cluster_name' or apply will fail.
 		if !config.ClusterName.IsNull() {
-			resp.Diagnostics.AddError(
+			resp.Diagnostics.AddWarning(
 				"Invalid configuration",
-				"Your ClickHouse cluster is using Replicated storage for roles, please remove the 'cluster_name' attribute from your Role resource definition.",
+				"Your ClickHouse cluster is using Replicated storage for roles, please remove the 'cluster_name' attribute from your Role resource definition if you encounter any errors.",
 			)
 		}
 	}

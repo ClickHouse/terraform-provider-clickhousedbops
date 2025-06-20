@@ -202,9 +202,9 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	if isReplicatedStorage {
 		// GrantPrivilege cannot specify 'cluster_name' or apply will fail.
 		if !config.ClusterName.IsNull() {
-			resp.Diagnostics.AddError(
+			resp.Diagnostics.AddWarning(
 				"Invalid configuration",
-				"Your ClickHouse cluster is using Replicated storage for grants, please remove the 'cluster_name' attribute from your GrantPrivilege resource definition.",
+				"Your ClickHouse cluster is using Replicated storage for grants, please remove the 'cluster_name' attribute from your GrantPrivilege resource definition if you encounter any errors.",
 			)
 		}
 	}
