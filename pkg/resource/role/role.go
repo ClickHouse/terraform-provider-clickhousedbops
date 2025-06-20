@@ -43,7 +43,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Optional:    true,
-				Description: "Name of the cluster to create the role into. If omitted, the role will be created on the replica hit by the query. Should always be set when hitting a cluster with more than one replica.",
+				Description: "Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.\nThis field must be left null when using a ClickHouse Cloud cluster.\nWhen using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.\n",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
