@@ -98,6 +98,11 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 }
 
 func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.Plan.Raw.IsNull() {
+		// If the entire plan is null, the resource is planned for destruction.
+		return
+	}
+
 	isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError(
