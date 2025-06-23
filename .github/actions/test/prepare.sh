@@ -37,31 +37,37 @@ done
 if [ "$EXAMPLE" == "" ]
 then
   echo "--example=<example name> is required"
+  exit 1
 fi
 
 if [ "$CLICKHOUSE_VERSION" == "" ]
 then
   echo "--clickhouse-version=<version> is required"
+  exit 1
 fi
 
 if [ "$TERRAFORM_VERSION" == "" ]
 then
   echo "--terraform-version=<version> is required"
+  exit 1
 fi
 
 if [ "$TERRAFORM_IMAGE" == "" ]
 then
   echo "--terraform-image=<image> is required"
+  exit 1
 fi
 
 if [ "$PROTOCOL" == "" ]
 then
   echo "--protocol=<http|native> is required"
+  exit 1
 fi
 
 if [ "$CLUSTER_TYPE" == "" ]
 then
   echo "--cluster-type=<type> is required"
+  exit 1
 fi
 
 #############################################################################################
