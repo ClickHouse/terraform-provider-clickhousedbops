@@ -125,4 +125,3 @@ for svc in clickhouse shell ; do
 done
 
 docker compose exec clickhouse clickhouse client --password "test" "select version()"
-docker compose exec ${TF_VAR_host} clickhouse client --password "test" "select version()"
