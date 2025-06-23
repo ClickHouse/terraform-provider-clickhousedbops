@@ -1,7 +1,6 @@
 services:
   zookeeper:
     image: zookeeper:3.4.9
-    container_name: ch-zookeeper
     environment:
       - TZ=Europe/Rome
       - ZOO_MY_ID=1
