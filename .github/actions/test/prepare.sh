@@ -78,7 +78,7 @@ export TFVER="$TERRAFORM_VERSION"
 export TFIMG="$TERRAFORM_IMAGE"
 export TF_VAR_protocol="$PROTOCOL"
 export TF_VAR_host="tests-clickhouse-1"
-export USERSTORAGE="config-${CLUSTER_TYPE}.xml"
+export CONFIGFILE="config-${CLUSTER_TYPE}.xml"
 
 case "$TF_VAR_protocol" in
   native)
