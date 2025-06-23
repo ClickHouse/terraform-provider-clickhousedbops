@@ -93,8 +93,10 @@ esac
 
 case "${CLUSTER_TYPE}" in
   single)
+  export REPLICAS=1
   ;;
   replicated)
+  export REPLICAS=2
   if [ "${EXAMPLE}" == "database" ]
   then
     # Even in replicated setups, the database resource need the CLUSTER_TYPE to be set.
@@ -102,6 +104,7 @@ case "${CLUSTER_TYPE}" in
   fi
   ;;
   localfile)
+  export REPLICAS=2
   export TF_VAR_CLUSTER_NAME="cluster1"
   ;;
   *)
