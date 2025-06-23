@@ -31,13 +31,13 @@
         <cluster1>
             <shard>
                 <replica>
-                    <host>rep01</host>
+                    <host>tests-clickhouse-1</host>
                     <port>9000</port>
                     <user>default</user>
                     <password>test</password>
                 </replica>
                 <replica>
-                    <host>rep02</host>
+                    <host>tests-clickhouse-2</host>
                     <port>9000</port>
                     <user>default</user>
                     <password>test</password>

@@ -6,82 +6,20 @@ services:
       - TZ=Europe/Rome
       - ZOO_MY_ID=1
 
-  zookeeper-rep:
-    image: zookeeper:3.4.9
-    container_name: rep-zookeeper
-    environment:
-      - TZ=Europe/Rome
-      - ZOO_MY_ID=1
-
-  ch01:
-    image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
-    user: '101:101'
-    container_name: ch01
-    hostname: ch01
-    depends_on:
-      - zookeeper
-    environment:
-      - CLICKHOUSE_SKIP_USER_SETUP=1
-    ports:
-      - "9000:9000"
-      - "8123:8123"
-    volumes:
-      - type: 'bind'
-        source: './config-cluster.xml'
-        target: '/etc/clickhouse-server/config.xml'
-
-  ch02:
-    image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
-    user: '101:101'
-    container_name: ch02
-    hostname: ch02
-    depends_on:
-      - zookeeper
-    environment:
-      - CLICKHOUSE_SKIP_USER_SETUP=1
-    volumes:
-      - type: 'bind'
-        source: './config-cluster.xml'
-        target: '/etc/clickhouse-server/config.xml'
-
-  rep01:
-    image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
-    user: '101:101'
-    container_name: rep01
-    hostname: rep01
-    depends_on:
-      - zookeeper-rep
-    environment:
-      - CLICKHOUSE_SKIP_USER_SETUP=1
-    volumes:
-      - type: 'bind'
-        source: './config-cluster-replicated.xml'
-        target: '/etc/clickhouse-server/config.xml'
-
-  rep02:
-    image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
-    user: '101:101'
-    container_name: rep02
-    hostname: rep02
-    depends_on:
-      - zookeeper-rep
-    environment:
-      - CLICKHOUSE_SKIP_USER_SETUP=1
-    volumes:
-      - type: 'bind'
-        source: './config-cluster-replicated.xml'
-        target: '/etc/clickhouse-server/config.xml'
-
   clickhouse:
     image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
     user: '101:101'
-    container_name: clickhouse
-    hostname: clickhouse
+    deploy:
+      mode: replicated
+      replicas: ${REPLICAS:-2}
+      endpoint_mode: dnsrr
+    depends_on:
+      - zookeeper
     environment:
       - CLICKHOUSE_SKIP_USER_SETUP=1
     volumes:
       - type: 'bind'
-        source: './config-single.xml'
+        source: './${USERSTORAGE:-config-cluster-localfile.xml}'
         target: '/etc/clickhouse-server/config.xml'
 
   shell:

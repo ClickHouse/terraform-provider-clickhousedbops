@@ -19,7 +19,7 @@ inputs:
   protocol:
     required: true
     description: "The protocol to use to connect to clickhouse"
-  cluster_name:
+  cluster_type:
     required: true
     description: "Name of the clickhouse cluster or 'null'"
 
@@ -39,7 +39,7 @@ runs:
     - shell: bash
       run: |
         chmod +x .github/actions/test/prepare.sh
-        .github/actions/test/prepare.sh --example="${{ inputs.example }}" --clickhouse-version="${{inputs.clickhouse_version}}" --terraform-version="${{inputs.terraform_version}}" --terraform-image="${{inputs.terraform_image}}" --protocol="${{inputs.protocol}}" --cluster-name="${{inputs.cluster_name}}"
+        .github/actions/test/prepare.sh --example="${{ inputs.example }}" --clickhouse-version="${{inputs.clickhouse_version}}" --terraform-version="${{inputs.terraform_version}}" --terraform-image="${{inputs.terraform_image}}" --protocol="${{inputs.protocol}}" --cluster-type="${{inputs.cluster_type}}"
 
     - name: Run e2e test
       shell: bash

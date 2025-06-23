@@ -5,7 +5,7 @@ CLICKHOUSE_VERSION=""
 TERRAFORM_IMAGE=""
 TERRAFORM_VERSION=""
 PROTOCOL=""
-CLUSTER_NAME=""
+CLUSTER_TYPE=""
 
 for arg in "$@"; do
   case "$arg" in
@@ -24,8 +24,8 @@ for arg in "$@"; do
     --protocol=*)
       PROTOCOL="${arg#*=}"
       ;;
-    --cluster-name=*)
-      CLUSTER_NAME="${arg#*=}"
+    --cluster-type=*)
+      CLUSTER_TYPE="${arg#*=}"
       ;;
     *)
       echo "Unknown parameter: $arg"
@@ -59,9 +59,9 @@ then
   echo "--protocol=<http|native> is required"
 fi
 
-if [ "$CLUSTER_NAME" == "" ]
+if [ "$CLUSTER_TYPE" == "" ]
 then
-  echo "--cluster-name=<name> is required"
+  echo "--cluster-type=<type> is required"
 fi
 
 #############################################################################################
@@ -71,6 +71,8 @@ export CLICKHOUSE_VERSION="$CLICKHOUSE_VERSION"
 export TFVER="$TERRAFORM_VERSION"
 export TFIMG="$TERRAFORM_IMAGE"
 export TF_VAR_protocol="$PROTOCOL"
+export TF_VAR_host="tests-clickhouse-1"
+export USERSTORAGE="config-${CLUSTER_TYPE}.xml"
 
 case "$TF_VAR_protocol" in
   native)
@@ -83,21 +85,22 @@ case "$TF_VAR_protocol" in
     ;;
 esac
 
-case "${CLUSTER_NAME}" in
+case "${CLUSTER_TYPE}" in
   single)
-  export TF_VAR_host=clickhouse
   ;;
   replicated)
-  export TF_VAR_host=rep01
   if [ "${EXAMPLE}" == "database" ]
   then
-    # Even in replicated setups, the database resource need the cluster_name to be set.
-    export TF_VAR_cluster_name="cluster1"
+    # Even in replicated setups, the database resource need the CLUSTER_TYPE to be set.
+    export TF_VAR_CLUSTER_NAME="cluster1"
   fi
   ;;
+  localfile)
+  export TF_VAR_CLUSTER_NAME="cluster1"
+  ;;
   *)
-  export TF_VAR_host=ch01
-  export TF_VAR_cluster_name="${CLUSTER_NAME}"
+  echo "Invalid cluster type ${CLUSTER_TYPE}"
+  exit 1
 esac
 
 # This is needed until docker compose 1.36 to avoid concurrent map write error.
@@ -116,4 +119,4 @@ for svc in clickhouse shell ; do
 done
 
 docker compose exec clickhouse clickhouse client --password "test" "select version()"
-docker compose exec ch01 clickhouse client --password "test" "select version()"
+docker compose exec ${TF_VAR_host} clickhouse client --password "test" "select version()"
