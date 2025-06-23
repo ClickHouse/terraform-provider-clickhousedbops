@@ -18,7 +18,7 @@ services:
       - CLICKHOUSE_SKIP_USER_SETUP=1
     volumes:
       - type: 'bind'
-        source: './${USERSTORAGE:-config-cluster-localfile.xml}'
+        source: './${CONFIGFILE:-config-cluster-localfile.xml}'
         target: '/etc/clickhouse-server/config.xml'
 
   shell:
