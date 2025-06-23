@@ -100,12 +100,12 @@ case "${CLUSTER_TYPE}" in
   if [ "${EXAMPLE}" == "database" ]
   then
     # Even in replicated setups, the database resource need the CLUSTER_TYPE to be set.
-    export TF_VAR_CLUSTER_NAME="cluster1"
+    export TF_VAR_cluster_name="cluster1"
   fi
   ;;
   localfile)
   export REPLICAS=2
-  export TF_VAR_CLUSTER_NAME="cluster1"
+  export TF_VAR_cluster_name="cluster1"
   ;;
   *)
   echo "Invalid cluster type ${CLUSTER_TYPE}"
