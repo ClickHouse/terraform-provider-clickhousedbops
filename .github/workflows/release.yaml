@@ -173,7 +173,7 @@ jobs:
           terraform_version: ${{ matrix.terraform.version }}
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
-          cluster_name: ${{ matrix.cluster }}
+          cluster_type: ${{ matrix.cluster_type }}
 
   role:
     runs-on: ubuntu-latest
@@ -194,7 +194,7 @@ jobs:
           terraform_version: ${{ matrix.terraform.version }}
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
-          cluster_name: ${{ matrix.cluster }}
+          cluster_type: ${{ matrix.cluster_type }}
 
   user:
     runs-on: ubuntu-latest
@@ -215,7 +215,7 @@ jobs:
           terraform_version: ${{ matrix.terraform.version }}
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
-          cluster_name: ${{ matrix.cluster }}
+          cluster_type: ${{ matrix.cluster_type }}
 
   grantrole:
     runs-on: ubuntu-latest
@@ -236,7 +236,7 @@ jobs:
           terraform_version: ${{ matrix.terraform.version }}
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
-          cluster_name: ${{ matrix.cluster }}
+          cluster_type: ${{ matrix.cluster_type }}
 
   grantprivilege:
     runs-on: ubuntu-latest
@@ -257,7 +257,7 @@ jobs:
           terraform_version: ${{ matrix.terraform.version }}
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
-          cluster_name: ${{ matrix.cluster }}
+          cluster_type: ${{ matrix.cluster_type }}
 
   report:
     runs-on: ubuntu-latest
