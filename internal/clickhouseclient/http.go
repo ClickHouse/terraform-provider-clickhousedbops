@@ -3,6 +3,7 @@ package clickhouseclient
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +25,7 @@ type HTTPClientConfig struct {
 	Host      string
 	Port      uint16
 	BasicAuth *BasicAuth
+	TLSConfig *tls.Config
 }
 
 func NewHTTPClient(config HTTPClientConfig) (ClickhouseClient, error) {
@@ -64,7 +66,11 @@ func NewHTTPClient(config HTTPClientConfig) (ClickhouseClient, error) {
 
 	return &httpClient{
 		baseUrl: *baseUrl,
-		client:  &http.Client{},
+		client: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: config.TLSConfig,
+			},
+		},
 	}, nil
 }
 

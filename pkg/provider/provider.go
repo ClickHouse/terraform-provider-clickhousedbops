@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"strings"
 
@@ -92,6 +93,16 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 				},
 				Required:    true,
 				Description: "Authentication configuration",
+			},
+			"tls_config": schema.SingleNestedAttribute{
+				Attributes: map[string]schema.Attribute{
+					"insecure_skip_verify": schema.BoolAttribute{
+						Optional:    true,
+						Description: "Skip TLS cert verification when using the https protocol. This is insecure!",
+					},
+				},
+				Optional:    true,
+				Description: "TLS configuration options",
 			},
 		},
 	}
@@ -193,14 +204,22 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				}
 			}
 
+			var tlsConfig *tls.Config
+			protocol := "http"
+			if data.Protocol.ValueString() == protocolHTTPS {
+				protocol = "https"
+				tlsConfig = &tls.Config{}
+				if data.TLSConfig != nil && !data.TLSConfig.InsecureSkipVerify.IsNull() {
+					tlsConfig.InsecureSkipVerify = data.TLSConfig.InsecureSkipVerify.ValueBool()
+				}
+			}
+
 			config := clickhouseclient.HTTPClientConfig{
+				Protocol:  protocol,
 				Host:      data.Host.ValueString(),
 				Port:      port,
 				BasicAuth: auth,
-			}
-
-			if data.Protocol.ValueString() == protocolHTTPS {
-				config.Protocol = "https"
+				TLSConfig: tlsConfig,
 			}
 
 			clickhouseClient, err = clickhouseclient.NewHTTPClient(config)
