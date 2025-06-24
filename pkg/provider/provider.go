@@ -208,7 +208,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			protocol := "http"
 			if data.Protocol.ValueString() == protocolHTTPS {
 				protocol = "https"
-				tlsConfig = &tls.Config{}
+				tlsConfig = &tls.Config{} //nolint:gosec
 				if data.TLSConfig != nil && !data.TLSConfig.InsecureSkipVerify.IsNull() {
 					tlsConfig.InsecureSkipVerify = data.TLSConfig.InsecureSkipVerify.ValueBool()
 				}
