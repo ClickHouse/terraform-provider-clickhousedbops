@@ -47,6 +47,10 @@ provider "clickhousedbops" {
 - `port` (Number) The port to use to connect to the clickhouse instance
 - `protocol` (String) The protocol to use to connect to clickhouse instance. Valid options are: native, nativesecure, http, https
 
+### Optional
+
+- `tls_config` (Attributes) TLS configuration options (see [below for nested schema](#nestedatt--tls_config))
+
 <a id="nestedatt--auth_config"></a>
 ### Nested Schema for `auth_config`
 
@@ -58,3 +62,11 @@ Required:
 Optional:
 
 - `password` (String) The password to use to authenticate to ClickHouse
+
+
+<a id="nestedatt--tls_config"></a>
+### Nested Schema for `tls_config`
+
+Optional:
+
+- `insecure_skip_verify` (Boolean) Skip TLS cert verification when using the https protocol. This is insecure!
