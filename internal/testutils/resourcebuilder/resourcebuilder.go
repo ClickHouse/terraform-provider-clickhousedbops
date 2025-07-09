@@ -5,6 +5,22 @@ import (
 	"strings"
 )
 
+// ResourceBuilder is an helper to build terraform definitions like:
+//
+//	resource "resource_type" "name" {
+//	  attribute = "value"
+//	  attribute1 = 3
+//	}
+//
+// and return them as strings.
+// Used in acceptance tests to build test resource definitions.
+type Resourcebuilder struct {
+	resourceType string
+	resourceName string
+
+	attributes map[string]attribute
+}
+
 type attribute struct {
 	value   string
 	literal bool
@@ -16,13 +32,6 @@ func (a *attribute) String() string {
 	}
 
 	return fmt.Sprintf("%q", a.value)
-}
-
-type Resourcebuilder struct {
-	resourceType string
-	resourceName string
-
-	attributes map[string]attribute
 }
 
 func New(resourceType string, resourceName string) *Resourcebuilder {
