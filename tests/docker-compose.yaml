@@ -27,7 +27,7 @@ services:
         source: './${CONFIGFILE:-config-localfile.xml}'
         target: '/etc/clickhouse-server/config.xml'
 
-  # Used to expose the first replica of the clickhouse service defined above in localhost.
+  # Used by acceptance tests to reach the clickhouse service via HTTP on localhost.
   proxy_http:
     image: alpine/socat
     ports:
@@ -37,6 +37,7 @@ services:
       clickhouse:
         condition: service_healthy
 
+  # Used by acceptance tests to reach the clickhouse service with native protocol on localhost.
   proxy_native:
     image: alpine/socat
     ports:
@@ -46,11 +47,13 @@ services:
       clickhouse:
         condition: service_healthy
 
+  # Used by e2e tests to run terraform using a specific version of the CLI
   shell:
     image: ${TFIMG:-hashicorp/terraform}:${TFVER:-1.11}
     entrypoint: [ "sleep" ]
     command: ["infinity"]
     working_dir: /tests
+    stop_signal: SIGKILL
     environment:
       - TF_LOG=debug
       - TF_VAR_host=${TF_VAR_host}
