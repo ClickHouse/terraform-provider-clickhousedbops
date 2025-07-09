@@ -1,4 +1,4 @@
-package role_test
+package user_test
 
 import (
 	"context"
@@ -13,11 +13,11 @@ import (
 )
 
 const (
-	resourceType = "clickhousedbops_role"
+	resourceType = "clickhousedbops_user"
 	resourceName = "foo"
 )
 
-func TestRole_acceptance(t *testing.T) {
+func TestUser_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
 	checkNotExistsFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error) {
@@ -25,8 +25,8 @@ func TestRole_acceptance(t *testing.T) {
 		if id == "" {
 			return false, fmt.Errorf("id attribute was not set")
 		}
-		role, err := dbopsClient.GetRole(ctx, id, nil)
-		return role != nil, err
+		user, err := dbopsClient.GetUser(ctx, id, clusterName)
+		return user != nil, err
 	}
 
 	checkAttributesFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
@@ -35,18 +35,18 @@ func TestRole_acceptance(t *testing.T) {
 			return fmt.Errorf("id was nil")
 		}
 
-		role, err := dbopsClient.GetRole(ctx, id.(string), nil)
+		user, err := dbopsClient.GetUser(ctx, id.(string), clusterName)
 		if err != nil {
 			return err
 		}
 
-		if role == nil {
-			return fmt.Errorf("role with id %q was not found", id)
+		if user == nil {
+			return fmt.Errorf("user with id %q was not found", id)
 		}
 
-		// Check state fields are aligned with the role we retrieved from CH.
-		if attrs["name"].(string) != role.Name {
-			return fmt.Errorf("expected name to be %q, was %q", role.Name, attrs["name"].(string))
+		// Check state fields are aligned with the user we retrieved from CH.
+		if attrs["name"].(string) != user.Name {
+			return fmt.Errorf("expected name to be %q, was %q", user.Name, attrs["name"].(string))
 		}
 
 		if clusterName != nil && attrs["cluster_name"] == nil ||
@@ -60,11 +60,14 @@ func TestRole_acceptance(t *testing.T) {
 
 	tests := []runner.TestCase{
 		{
-			Name:     "Create Role using Native protocol on a single replica",
-			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
-			Protocol: "native",
+			Name:        "Create User using Native protocol on a single replica",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:    "native",
+			ClusterName: nil,
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
+				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -72,66 +75,76 @@ func TestRole_acceptance(t *testing.T) {
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:     "Create Role using HTTP protocol on a single replica",
+			Name:     "Create User using HTTP protocol on a single replica",
 			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
+				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("clickhousedbops_role.%s", resourceName),
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:     "Create Role using Native protocol on a cluster using replicated storage",
+			Name:     "Create User using Native protocol on a cluster using replicated storage",
 			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
+				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("clickhousedbops_role.%s", resourceName),
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:     "Create Role using HTTP protocol on a cluster using replicated storage",
+			Name:     "Create User using HTTP protocol on a cluster using replicated storage",
 			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
+				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("clickhousedbops_role.%s", resourceName),
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:        "Create Role using Native protocol on a cluster using localfile storage",
+			Name:        "Create User using Native protocol on a cluster using localfile storage",
 			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
-			ClusterName: &clusterName,
 			Protocol:    "native",
+			ClusterName: &clusterName,
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
 				WithStringAttribute("cluster_name", clusterName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
+				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("clickhousedbops_role.%s", resourceName),
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:        "Create Role using HTTP protocol on a cluster using localfile storage",
+			Name:        "Create User using HTTP protocol on a cluster using localfile storage",
 			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
-			ClusterName: &clusterName,
 			Protocol:    "http",
+			ClusterName: &clusterName,
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
 				WithStringAttribute("cluster_name", clusterName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
+				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("clickhousedbops_role.%s", resourceName),
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},

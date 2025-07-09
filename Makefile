@@ -31,10 +31,10 @@ install: build
 
 test: 
 	go test -i $(TEST) || exit 1
-	echo $(TEST) | xargs -t -n4 go test $(TESTARGS) -timeout=30s -parallel=4 -skip ".*_acceptance"
+	echo $(TEST) | xargs -t -n4 go test $(TESTARGS) -timeout=30s -parallel=4
 
 tftest:
-	TF_ACC=1 go test -v -run Test.*_acceptance ./pkg/resource/...
+	TF_ACC=1 go test -p 1 -parallel=1 -v -run Test.*_acceptance ./pkg/resource/...
 
 enable_git_hooks: ## Add githooks for code validation before commit, as symlink so they get updated automatically
 	mkdir -p .git/hooks
