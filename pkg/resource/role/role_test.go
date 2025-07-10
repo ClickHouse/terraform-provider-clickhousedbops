@@ -78,7 +78,7 @@ func TestRole_acceptance(t *testing.T) {
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
 				Build(),
 			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("clickhousedbops_role.%s", resourceName),
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
@@ -90,7 +90,7 @@ func TestRole_acceptance(t *testing.T) {
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
 				Build(),
 			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("clickhousedbops_role.%s", resourceName),
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
@@ -102,7 +102,7 @@ func TestRole_acceptance(t *testing.T) {
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
 				Build(),
 			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("clickhousedbops_role.%s", resourceName),
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
@@ -116,7 +116,7 @@ func TestRole_acceptance(t *testing.T) {
 				WithStringAttribute("cluster_name", clusterName).
 				Build(),
 			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("clickhousedbops_role.%s", resourceName),
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
@@ -130,7 +130,7 @@ func TestRole_acceptance(t *testing.T) {
 				WithStringAttribute("cluster_name", clusterName).
 				Build(),
 			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("clickhousedbops_role.%s", resourceName),
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
