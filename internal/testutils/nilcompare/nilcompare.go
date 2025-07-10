@@ -4,7 +4,7 @@ import (
 	"reflect"
 )
 
-// NilCompare function (included for completeness)
+// NilCompare compares a and b's values and considers pointers and nil values as well.
 func NilCompare(a interface{}, b interface{}) bool {
 	// Use reflection to handle the different cases
 	aVal := reflect.ValueOf(a)
@@ -18,10 +18,12 @@ func NilCompare(a interface{}, b interface{}) bool {
 		b = nil
 	}
 
+	// Both nil or nil pointers
 	if a == nil && b == nil {
 		return true
 	}
 
+	// One is nil, one is not.
 	if a == nil || b == nil {
 		return false
 	}
@@ -41,19 +43,11 @@ func NilCompare(a interface{}, b interface{}) bool {
 
 	// Check if one is pointer, one is scalar
 	if aVal.Kind() == reflect.Ptr && bVal.Kind() != reflect.Ptr {
-		// a is pointer, b is scalar
-		if aVal.IsNil() {
-			return false
-		}
 		// Compare dereferenced pointer value with scalar
 		return reflect.DeepEqual(aVal.Elem().Interface(), b)
 	}
 
 	if aVal.Kind() != reflect.Ptr && bVal.Kind() == reflect.Ptr {
-		// a is scalar, b is pointer
-		if bVal.IsNil() {
-			return false // scalar value != nil pointer
-		}
 		// Compare scalar with dereferenced pointer value
 		return reflect.DeepEqual(a, bVal.Elem().Interface())
 	}
