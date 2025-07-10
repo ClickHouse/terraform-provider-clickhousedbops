@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/resourcebuilder"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/runner"
 )
@@ -49,9 +50,7 @@ func TestUser_acceptance(t *testing.T) {
 			return fmt.Errorf("expected name to be %q, was %q", user.Name, attrs["name"].(string))
 		}
 
-		if clusterName != nil && attrs["cluster_name"] == nil ||
-			clusterName == nil && attrs["cluster_name"] != nil ||
-			(clusterName != nil && attrs["cluster_name"] != nil && *clusterName != attrs["cluster_name"].(string)) {
+		if !nilcompare.NilCompare(clusterName, attrs["cluster_name"]) {
 			return fmt.Errorf("wrong value for cluster_name attribute")
 		}
 
