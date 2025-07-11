@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 TERRAFORM_VERSIONS=""
 TOFU_VERSIONS=""
 CLICKHOUSE_VERSIONS=""

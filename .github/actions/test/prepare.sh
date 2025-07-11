@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 EXAMPLE=""
 CLICKHOUSE_VERSION=""
 TERRAFORM_IMAGE=""

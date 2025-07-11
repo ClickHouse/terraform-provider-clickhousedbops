@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -o pipefail
+set -euo pipefail
+
 versions=()
 
 # Get list of most recent clickhouse OS version.
