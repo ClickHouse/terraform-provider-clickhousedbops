@@ -19,6 +19,8 @@ type Resourcebuilder struct {
 	resourceName string
 
 	attributes map[string]attribute
+
+	dependencies []string
 }
 
 type attribute struct {
@@ -40,6 +42,8 @@ func New(resourceType string, resourceName string) *Resourcebuilder {
 		resourceName: resourceName,
 
 		attributes: make(map[string]attribute),
+
+		dependencies: make([]string, 0),
 	}
 }
 
@@ -61,13 +65,24 @@ func (r *Resourcebuilder) WithLiteralAttribute(attrName string, attrVal interfac
 	return r
 }
 
+func (r *Resourcebuilder) AddDependency(resource string) *Resourcebuilder {
+	r.dependencies = append(r.dependencies, resource)
+	return r
+}
+
 func (r *Resourcebuilder) Build() string {
 	attributes := make([]string, 0)
 	for k, v := range r.attributes {
 		attributes = append(attributes, fmt.Sprintf("  %s = %s", k, v.String()))
 	}
 
-	return fmt.Sprintf(`resource "%s" "%s" {
+	resource := fmt.Sprintf(`resource "%s" "%s" {
 %s
 }`, r.resourceType, r.resourceName, strings.Join(attributes, "\n"))
+
+	ret := make([]string, 0)
+	ret = append(ret, r.dependencies...)
+	ret = append(ret, resource)
+
+	return strings.Join(ret, "\n")
 }
