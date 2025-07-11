@@ -24,7 +24,7 @@ func NilCompare(a interface{}, b interface{}) bool {
 	}
 
 	// One is nil, one is not.
-	if a == nil || b == nil {
+	if (a == nil) != (b == nil) {
 		return false
 	}
 
