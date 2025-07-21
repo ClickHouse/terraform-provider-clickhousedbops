@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	resourceTypeDatabase = "DATABASE"
-	resourceTypeRole     = "ROLE"
-	resourceTypeUser     = "USER"
+	resourceTypeDatabase        = "DATABASE"
+	resourceTypeRole            = "ROLE"
+	resourceTypeUser            = "USER"
+	resourceTypeSettingsProfile = "SETTINGS PROFILE"
 
 	actionCreate = "CREATE"
 	actionDrop   = "DROP"
@@ -41,6 +42,10 @@ func NewDropDatabase(resourceName string) CreateDropQueryBuilder {
 
 func NewDropUser(resourceName string) CreateDropQueryBuilder {
 	return newDrop(resourceTypeUser, resourceName)
+}
+
+func NewDropSettingsProfile(resourceName string) CreateDropQueryBuilder {
+	return newDrop(resourceTypeSettingsProfile, resourceName)
 }
 
 func (q *createDropQueryBuilder) WithCluster(clusterName *string) CreateDropQueryBuilder {

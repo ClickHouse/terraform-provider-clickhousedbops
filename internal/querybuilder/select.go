@@ -7,18 +7,28 @@ import (
 	"github.com/pingcap/errors"
 )
 
+type OrderDirection string
+
+const (
+	ASC  OrderDirection = "ASC"
+	DESC OrderDirection = "DESC"
+)
+
 // SelectQueryBuilder is an interface to build SELECT SQL queries (already interpolated).
 type SelectQueryBuilder interface {
 	QueryBuilder
 	Where(...Where) SelectQueryBuilder
 	WithCluster(clusterName *string) SelectQueryBuilder
+	OrderBy(column Field, order OrderDirection) SelectQueryBuilder
 }
 
 type selectQueryBuilder struct {
-	tableName   string
-	fields      []Field
-	where       Where
-	clusterName *string
+	tableName      string
+	fields         []Field
+	where          Where
+	clusterName    *string
+	orderBy        Field
+	orderDirection *OrderDirection
 }
 
 func NewSelect(fields []Field, from string) SelectQueryBuilder {
@@ -35,6 +45,12 @@ func (q *selectQueryBuilder) Where(where ...Where) SelectQueryBuilder {
 
 func (q *selectQueryBuilder) WithCluster(clusterName *string) SelectQueryBuilder {
 	q.clusterName = clusterName
+	return q
+}
+
+func (q *selectQueryBuilder) OrderBy(column Field, order OrderDirection) SelectQueryBuilder {
+	q.orderBy = column
+	q.orderDirection = &order
 	return q
 }
 
@@ -76,6 +92,11 @@ func (q *selectQueryBuilder) Build() (string, error) {
 	// Handle WHERE
 	if q.where != nil {
 		tokens = append(tokens, "WHERE", q.where.Clause())
+	}
+
+	// ORDER BY
+	if q.orderBy != nil && q.orderDirection != nil {
+		tokens = append(tokens, "ORDER BY", q.orderBy.SQLDef(), string(*q.orderDirection))
 	}
 
 	return strings.Join(tokens, " ") + ";", nil

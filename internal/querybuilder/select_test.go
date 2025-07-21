@@ -5,14 +5,19 @@ import (
 )
 
 func Test_selectQueryBuilder_Build(t *testing.T) {
+	orderBy := NewField("col1")
+	orderDirection := ASC
+
 	tests := []struct {
-		name    string
-		fields  []Field
-		where   []Where
-		from    string
-		cluster string
-		want    string
-		wantErr bool
+		name     string
+		fields   []Field
+		where    []Where
+		from     string
+		cluster  string
+		orderCol *Field
+		orderDir *OrderDirection
+		want     string
+		wantErr  bool
 	}{
 		{
 			name:    "Select one with",
@@ -59,6 +64,16 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			want:    "SELECT `name` FROM `users` WHERE (mock_where_clause AND mock_where_clause_2);",
 			wantErr: false,
 		},
+		{
+			name:     "Select with order by",
+			fields:   []Field{NewField("name")},
+			where:    []Where{whereMock{"mock_where_clause"}},
+			orderCol: &orderBy,
+			orderDir: &orderDirection,
+			from:     "users",
+			want:     "SELECT `name` FROM `users` WHERE (mock_where_clause) ORDER BY `col1` ASC;",
+			wantErr:  false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -68,6 +83,9 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			}
 			if tt.cluster != "" {
 				q = q.WithCluster(&tt.cluster)
+			}
+			if tt.orderCol != nil && tt.orderDir != nil {
+				q = q.OrderBy(*tt.orderCol, *tt.orderDir)
 			}
 			got, err := q.Build()
 			if (err != nil) != tt.wantErr {
