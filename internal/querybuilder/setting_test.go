@@ -89,6 +89,7 @@ func Test_setting_SQLDef(t *testing.T) {
 		})
 	}
 }
+
 func strPtr(val string) *string {
 	return &val
 }

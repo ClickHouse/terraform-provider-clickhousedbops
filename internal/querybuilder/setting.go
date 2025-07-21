@@ -1,9 +1,16 @@
 package querybuilder
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
+)
+
+const (
+	writabilityConst      = "CONST"
+	writabilityWritable   = "WRITABLE"
+	writabilityChangeable = "CHANGEABLE_IN_READONLY"
 )
 
 type settingData struct {
@@ -25,6 +32,10 @@ func (s *settingData) SQLDef() (string, error) {
 
 	if s.Value == nil && s.Min == nil && s.Max == nil {
 		return "", errors.New("Either Value, Min or Max should be set")
+	}
+
+	if s.Writability != nil && *s.Writability != writabilityConst && *s.Writability != writabilityWritable && *s.Writability != writabilityChangeable {
+		return "", errors.New(fmt.Sprintf("Invalid value for Writability. Can be %q, %q or %q", writabilityConst, writabilityWritable, writabilityChangeable))
 	}
 
 	singleSetting := make([]string, 0)
