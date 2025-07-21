@@ -31,12 +31,7 @@ func (i *impl) CreateSettingsProfile(ctx context.Context, profile SettingsProfil
 		WithInheritProfile(profile.InheritProfile)
 
 	for _, setting := range profile.Settings {
-		var writability *string
-		if setting.Writability != nil {
-			val := string(*setting.Writability)
-			writability = &val
-		}
-		builder.AddSetting(setting.Name, setting.Value, setting.Min, setting.Max, writability)
+		builder.AddSetting(setting.Name, setting.Value, setting.Min, setting.Max, setting.Writability)
 	}
 
 	sql, err := builder.Build()

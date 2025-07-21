@@ -5,7 +5,6 @@ import (
 )
 
 func Test_createSettingsProfileQueryBuilder_Build(t *testing.T) {
-	type fields struct{}
 	tests := []struct {
 		name        string
 		profileName string
