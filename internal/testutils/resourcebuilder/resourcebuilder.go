@@ -19,7 +19,7 @@ import (
 //
 // and return them as strings.
 // Used in acceptance tests to build test resource definitions.
-type Resourcebuilder struct {
+type ResourceBuilder struct {
 	resourceType string
 	resourceName string
 
@@ -28,13 +28,13 @@ type Resourcebuilder struct {
 	file *hclwrite.File
 }
 
-func New(resourceType string, resourceName string) *Resourcebuilder {
+func New(resourceType string, resourceName string) *ResourceBuilder {
 	file := hclwrite.NewEmptyFile()
 
 	rootBody := file.Body()
 	rootBody.AppendNewBlock("resource", []string{resourceType, resourceName})
 
-	return &Resourcebuilder{
+	return &ResourceBuilder{
 		resourceType: resourceType,
 		resourceName: resourceName,
 
@@ -42,25 +42,25 @@ func New(resourceType string, resourceName string) *Resourcebuilder {
 	}
 }
 
-func (r *Resourcebuilder) WithStringAttribute(attrName string, attrVal string) *Resourcebuilder {
+func (r *ResourceBuilder) WithStringAttribute(attrName string, attrVal string) *ResourceBuilder {
 	r.getRootResourceBody().SetAttributeValue(attrName, cty.StringVal(attrVal))
 
 	return r
 }
 
-func (r *Resourcebuilder) WithIntAttribute(attrName string, attrVal int64) *Resourcebuilder {
+func (r *ResourceBuilder) WithIntAttribute(attrName string, attrVal int64) *ResourceBuilder {
 	r.getRootResourceBody().SetAttributeValue(attrName, cty.NumberIntVal(attrVal))
 
 	return r
 }
 
-func (r *Resourcebuilder) WithBoolAttribute(attrName string, attrVal bool) *Resourcebuilder {
+func (r *ResourceBuilder) WithBoolAttribute(attrName string, attrVal bool) *ResourceBuilder {
 	r.getRootResourceBody().SetAttributeValue(attrName, cty.BoolVal(attrVal))
 
 	return r
 }
 
-func (r *Resourcebuilder) WithResourceFieldReference(attrName string, resourceType string, resourceName string, fieldName string) *Resourcebuilder {
+func (r *ResourceBuilder) WithResourceFieldReference(attrName string, resourceType string, resourceName string, fieldName string) *ResourceBuilder {
 	// Reference to another resource
 	r.getRootResourceBody().SetAttributeTraversal(attrName, hcl.Traversal{
 		hcl.TraverseRoot{Name: resourceType},
@@ -71,7 +71,7 @@ func (r *Resourcebuilder) WithResourceFieldReference(attrName string, resourceTy
 	return r
 }
 
-func (r *Resourcebuilder) WithFunction(attrName string, function string, arg string) *Resourcebuilder {
+func (r *ResourceBuilder) WithFunction(attrName string, function string, arg string) *ResourceBuilder {
 	// function call
 	r.getRootResourceBody().SetAttributeRaw(attrName, hclwrite.Tokens{
 		{Type: hclsyntax.TokenIdent, Bytes: []byte(function)},
@@ -83,12 +83,12 @@ func (r *Resourcebuilder) WithFunction(attrName string, function string, arg str
 	return r
 }
 
-func (r *Resourcebuilder) AddDependency(resource string) *Resourcebuilder {
+func (r *ResourceBuilder) AddDependency(resource string) *ResourceBuilder {
 	r.dependencies = append(r.dependencies, resource)
 	return r
 }
 
-func (r *Resourcebuilder) Build() string {
+func (r *ResourceBuilder) Build() string {
 	tokens := make([]string, 0)
 	tokens = append(tokens, r.dependencies...)
 	tokens = append(tokens, string(r.file.Bytes()))
@@ -96,6 +96,6 @@ func (r *Resourcebuilder) Build() string {
 	return strings.Join(tokens, "\n")
 }
 
-func (r *Resourcebuilder) getRootResourceBody() *hclwrite.Body {
+func (r *ResourceBuilder) getRootResourceBody() *hclwrite.Body {
 	return r.file.Body().FirstMatchingBlock("resource", []string{r.resourceType, r.resourceName}).Body()
 }
