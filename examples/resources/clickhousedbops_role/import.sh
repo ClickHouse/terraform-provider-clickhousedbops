@@ -2,7 +2,7 @@
 # Find the ID of the role by checking system.roles table.
 terraform import clickhousedbops_role.example xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
-# It's also possible to import roles using the name:
+# It's also possible to import roles by name:
 
 terraform import clickhousedbops_role.example rolename
 
