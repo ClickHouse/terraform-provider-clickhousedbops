@@ -20,7 +20,7 @@ func Test_jsonCompatStrings_Rows(t *testing.T) {
 				}{
 					{
 						Name: "name",
-						Type: "string",
+						Type: "String",
 					},
 				},
 				Data: [][]string{
