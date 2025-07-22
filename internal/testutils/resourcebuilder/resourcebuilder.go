@@ -3,6 +3,11 @@ package resourcebuilder
 import (
 	"fmt"
 	"strings"
+
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // ResourceBuilder is an helper to build terraform definitions like:
@@ -18,49 +23,62 @@ type Resourcebuilder struct {
 	resourceType string
 	resourceName string
 
-	attributes map[string]attribute
-
 	dependencies []string
-}
 
-type attribute struct {
-	value   string
-	literal bool
-}
-
-func (a *attribute) String() string {
-	if a.literal {
-		return a.value
-	}
-
-	return fmt.Sprintf("%q", a.value)
+	file *hclwrite.File
 }
 
 func New(resourceType string, resourceName string) *Resourcebuilder {
+	file := hclwrite.NewEmptyFile()
+
+	rootBody := file.Body()
+	rootBody.AppendNewBlock("resource", []string{resourceType, resourceName})
+
 	return &Resourcebuilder{
 		resourceType: resourceType,
 		resourceName: resourceName,
 
-		attributes: make(map[string]attribute),
-
-		dependencies: make([]string, 0),
+		file: file,
 	}
 }
 
 func (r *Resourcebuilder) WithStringAttribute(attrName string, attrVal string) *Resourcebuilder {
-	r.attributes[attrName] = attribute{
-		value:   attrVal,
-		literal: false,
-	}
+	r.getRootResourceBody().SetAttributeValue(attrName, cty.StringVal(attrVal))
 
 	return r
 }
 
-func (r *Resourcebuilder) WithLiteralAttribute(attrName string, attrVal interface{}) *Resourcebuilder {
-	r.attributes[attrName] = attribute{
-		value:   fmt.Sprintf("%v", attrVal),
-		literal: true,
-	}
+func (r *Resourcebuilder) WithIntAttribute(attrName string, attrVal int64) *Resourcebuilder {
+	r.getRootResourceBody().SetAttributeValue(attrName, cty.NumberIntVal(attrVal))
+
+	return r
+}
+
+func (r *Resourcebuilder) WithBoolAttribute(attrName string, attrVal bool) *Resourcebuilder {
+	r.getRootResourceBody().SetAttributeValue(attrName, cty.BoolVal(attrVal))
+
+	return r
+}
+
+func (r *Resourcebuilder) WithResourceFieldReference(attrName string, resourceType string, resourceName string, fieldName string) *Resourcebuilder {
+	// Reference to another resource
+	r.getRootResourceBody().SetAttributeTraversal(attrName, hcl.Traversal{
+		hcl.TraverseRoot{Name: resourceType},
+		hcl.TraverseAttr{Name: resourceName},
+		hcl.TraverseAttr{Name: fieldName},
+	})
+
+	return r
+}
+
+func (r *Resourcebuilder) WithFunction(attrName string, function string, arg string) *Resourcebuilder {
+	// function call
+	r.getRootResourceBody().SetAttributeRaw(attrName, hclwrite.Tokens{
+		{Type: hclsyntax.TokenIdent, Bytes: []byte(function)},
+		{Type: hclsyntax.TokenOParen, Bytes: []byte("(")},
+		{Type: hclsyntax.TokenQuotedLit, Bytes: []byte(fmt.Sprintf("%q", arg))},
+		{Type: hclsyntax.TokenCParen, Bytes: []byte(")")},
+	})
 
 	return r
 }
@@ -71,18 +89,13 @@ func (r *Resourcebuilder) AddDependency(resource string) *Resourcebuilder {
 }
 
 func (r *Resourcebuilder) Build() string {
-	attributes := make([]string, 0)
-	for k, v := range r.attributes {
-		attributes = append(attributes, fmt.Sprintf("  %s = %s", k, v.String()))
-	}
+	tokens := make([]string, 0)
+	tokens = append(tokens, r.dependencies...)
+	tokens = append(tokens, string(r.file.Bytes()))
 
-	resource := fmt.Sprintf(`resource "%s" "%s" {
-%s
-}`, r.resourceType, r.resourceName, strings.Join(attributes, "\n"))
+	return strings.Join(tokens, "\n")
+}
 
-	ret := make([]string, 0)
-	ret = append(ret, r.dependencies...)
-	ret = append(ret, resource)
-
-	return strings.Join(ret, "\n")
+func (r *Resourcebuilder) getRootResourceBody() *hclwrite.Body {
+	return r.file.Body().FirstMatchingBlock("resource", []string{r.resourceType, r.resourceName}).Body()
 }

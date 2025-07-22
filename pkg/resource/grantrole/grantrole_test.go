@@ -24,8 +24,14 @@ func TestRole_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
 	roleResource := resourcebuilder.New("clickhousedbops_role", roleName).WithStringAttribute("name", roleName)
-	granteeRoleResource := resourcebuilder.New("clickhousedbops_role", granteeRoleName).WithStringAttribute("name", granteeRoleName)
-	granteeUserResource := resourcebuilder.New("clickhousedbops_user", granteeUserName).WithStringAttribute("name", granteeUserName).WithLiteralAttribute("password_sha256_hash_wo", `sha256("test")`).WithLiteralAttribute("password_sha256_hash_wo_version", 1)
+	granteeRoleResource := resourcebuilder.
+		New("clickhousedbops_role", granteeRoleName).
+		WithStringAttribute("name", granteeRoleName)
+	granteeUserResource := resourcebuilder.
+		New("clickhousedbops_user", granteeUserName).
+		WithStringAttribute("name", granteeUserName).
+		WithFunction("password_sha256_hash_wo", "sha256", "test").
+		WithIntAttribute("password_sha256_hash_wo_version", 1)
 
 	checkNotExistsFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error) {
 		roleName := attrs["role_name"]
@@ -112,8 +118,8 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_role_name", fmt.Sprintf("clickhousedbops_role.%s.name", granteeRoleName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeRoleResource.Build()).
 				Build(),
@@ -127,8 +133,8 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -142,9 +148,9 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
-				WithLiteralAttribute("admin_option", "true").
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
+				WithBoolAttribute("admin_option", true).
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -159,8 +165,8 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_role_name", fmt.Sprintf("clickhousedbops_role.%s.name", granteeRoleName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeRoleResource.Build()).
 				Build(),
@@ -174,8 +180,8 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -189,9 +195,9 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
-				WithLiteralAttribute("admin_option", "true").
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
+				WithBoolAttribute("admin_option", true).
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -206,8 +212,8 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_role_name", fmt.Sprintf("clickhousedbops_role.%s.name", granteeRoleName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeRoleResource.Build()).
 				Build(),
@@ -221,8 +227,8 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -236,9 +242,9 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
-				WithLiteralAttribute("admin_option", "true").
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
+				WithBoolAttribute("admin_option", true).
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -253,8 +259,8 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_role_name", fmt.Sprintf("clickhousedbops_role.%s.name", granteeRoleName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeRoleResource.Build()).
 				Build(),
@@ -268,8 +274,8 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -283,9 +289,9 @@ func TestRole_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
-				WithLiteralAttribute("admin_option", "true").
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
+				WithBoolAttribute("admin_option", true).
 				AddDependency(roleResource.Build()).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -302,8 +308,8 @@ func TestRole_acceptance(t *testing.T) {
 			Protocol:    "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("cluster_name", clusterName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_role_name", fmt.Sprintf("clickhousedbops_role.%s.name", granteeRoleName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(roleResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(granteeRoleResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),
@@ -319,8 +325,8 @@ func TestRole_acceptance(t *testing.T) {
 			Protocol:    "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("cluster_name", clusterName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(roleResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(granteeUserResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),
@@ -336,9 +342,9 @@ func TestRole_acceptance(t *testing.T) {
 			Protocol:    "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("cluster_name", clusterName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
-				WithLiteralAttribute("admin_option", "true").
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
+				WithBoolAttribute("admin_option", true).
 				AddDependency(roleResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(granteeUserResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),
@@ -355,8 +361,8 @@ func TestRole_acceptance(t *testing.T) {
 			Protocol:    "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("cluster_name", clusterName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_role_name", fmt.Sprintf("clickhousedbops_role.%s.name", granteeRoleName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(roleResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(granteeRoleResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),
@@ -372,8 +378,8 @@ func TestRole_acceptance(t *testing.T) {
 			Protocol:    "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("cluster_name", clusterName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(roleResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(granteeUserResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),
@@ -389,9 +395,9 @@ func TestRole_acceptance(t *testing.T) {
 			Protocol:    "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("cluster_name", clusterName).
-				WithLiteralAttribute("role_name", fmt.Sprintf("clickhousedbops_role.%s.name", roleName)).
-				WithLiteralAttribute("grantee_user_name", fmt.Sprintf("clickhousedbops_user.%s.name", granteeUserName)).
-				WithLiteralAttribute("admin_option", "true").
+				WithResourceFieldReference("role_name", "clickhousedbops_role", roleName, "name").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
+				WithBoolAttribute("admin_option", true).
 				AddDependency(roleResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(granteeUserResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),

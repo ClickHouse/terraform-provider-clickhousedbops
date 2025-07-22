@@ -65,8 +65,8 @@ func TestUser_acceptance(t *testing.T) {
 			ClusterName: nil,
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
-				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
+				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
+				WithIntAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -79,8 +79,8 @@ func TestUser_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
-				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
+				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
+				WithIntAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -93,8 +93,8 @@ func TestUser_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
-				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
+				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
+				WithIntAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -107,8 +107,8 @@ func TestUser_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
-				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
+				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
+				WithIntAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -123,8 +123,8 @@ func TestUser_acceptance(t *testing.T) {
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("cluster_name", clusterName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
-				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
+				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
+				WithIntAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -139,8 +139,8 @@ func TestUser_acceptance(t *testing.T) {
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("cluster_name", clusterName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithLiteralAttribute("password_sha256_hash_wo", `sha256("changeme")`).
-				WithLiteralAttribute("password_sha256_hash_wo_version", 1).
+				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
+				WithIntAttribute("password_sha256_hash_wo_version", 1).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
