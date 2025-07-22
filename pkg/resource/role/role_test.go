@@ -26,7 +26,7 @@ func TestRole_acceptance(t *testing.T) {
 		if id == "" {
 			return false, fmt.Errorf("id attribute was not set")
 		}
-		role, err := dbopsClient.GetRole(ctx, id, nil)
+		role, err := dbopsClient.GetRole(ctx, id, clusterName)
 		return role != nil, err
 	}
 
@@ -36,7 +36,7 @@ func TestRole_acceptance(t *testing.T) {
 			return fmt.Errorf("id was nil")
 		}
 
-		role, err := dbopsClient.GetRole(ctx, id.(string), nil)
+		role, err := dbopsClient.GetRole(ctx, id.(string), clusterName)
 		if err != nil {
 			return err
 		}

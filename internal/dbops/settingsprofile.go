@@ -56,7 +56,7 @@ func (i *impl) GetSettingsProfile(ctx context.Context, name string, clusterName 
 				querybuilder.NewField("value"),
 				querybuilder.NewField("min"),
 				querybuilder.NewField("max"),
-				querybuilder.NewField("writability"),
+				querybuilder.NewField("writability").ToString(),
 				querybuilder.NewField("inherit_profile"),
 			},
 			"system.settings_profile_elements",

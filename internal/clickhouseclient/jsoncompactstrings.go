@@ -1,6 +1,7 @@
 package clickhouseclient
 
 import (
+	"fmt"
 	"strconv"
 )
 
@@ -59,7 +60,7 @@ func (j jsonCompatStrings) Rows() []Row {
 					data.Set(colNames[i], val)
 				}
 			default:
-				data.Set(colNames[i], field)
+				panic(fmt.Sprintf("unknown data type %q", colTypes[i]))
 			}
 		}
 
