@@ -88,7 +88,7 @@ func (i *impl) DeleteRole(ctx context.Context, id string, clusterName *string) e
 
 func (i *impl) FindRoleByName(ctx context.Context, name string, clusterName *string) (*Role, error) {
 	sql, err := querybuilder.NewSelect(
-		[]querybuilder.Field{querybuilder.NewField("id")},
+		[]querybuilder.Field{querybuilder.NewField("id").ToString()},
 		"system.roles",
 	).Where(querybuilder.WhereEquals("name", name)).WithCluster(clusterName).Build()
 	if err != nil {

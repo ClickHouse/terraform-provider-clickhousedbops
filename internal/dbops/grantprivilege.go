@@ -84,7 +84,7 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, accessType string, databas
 
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{
-			querybuilder.NewField("access_type"),
+			querybuilder.NewField("access_type").ToString(),
 			querybuilder.NewField("database"),
 			querybuilder.NewField("table"),
 			querybuilder.NewField("column"),

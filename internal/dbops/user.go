@@ -94,7 +94,7 @@ func (i *impl) DeleteUser(ctx context.Context, id string, clusterName *string) e
 
 func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *string) (*User, error) {
 	sql, err := querybuilder.
-		NewSelect([]querybuilder.Field{querybuilder.NewField("id")}, "system.users").
+		NewSelect([]querybuilder.Field{querybuilder.NewField("id").ToString()}, "system.users").
 		WithCluster(clusterName).
 		Where(querybuilder.WhereEquals("name", name)).
 		Build()

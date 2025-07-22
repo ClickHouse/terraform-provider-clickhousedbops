@@ -98,7 +98,7 @@ func (i *impl) DeleteDatabase(ctx context.Context, uuid string, clusterName *str
 
 func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName *string) (*Database, error) {
 	sql, err := querybuilder.NewSelect(
-		[]querybuilder.Field{querybuilder.NewField("uuid")},
+		[]querybuilder.Field{querybuilder.NewField("uuid").ToString()},
 		"system.databases",
 	).WithCluster(clusterName).Where(querybuilder.WhereEquals("name", name)).Build()
 	if err != nil {
