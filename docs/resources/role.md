@@ -45,7 +45,7 @@ Import is supported using the following syntax:
 # Find the ID of the role by checking system.roles table.
 terraform import clickhousedbops_role.example xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
-# It's also possible to import roles using the username:
+# It's also possible to import roles using the name:
 
 terraform import clickhousedbops_role.example rolename
 
