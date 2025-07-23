@@ -11,6 +11,7 @@ import (
 type CreateUserQueryBuilder interface {
 	QueryBuilder
 	Identified(with Identification, by string) CreateUserQueryBuilder
+	WithSettingsProfile(profileName *string) CreateUserQueryBuilder
 	WithCluster(clusterName *string) CreateUserQueryBuilder
 }
 
@@ -21,9 +22,10 @@ const (
 )
 
 type createUserQueryBuilder struct {
-	resourceName string
-	identified   string
-	clusterName  *string
+	resourceName    string
+	identified      string
+	settingsProfile *string
+	clusterName     *string
 }
 
 func NewCreateUser(resourceName string) CreateUserQueryBuilder {
@@ -34,6 +36,11 @@ func NewCreateUser(resourceName string) CreateUserQueryBuilder {
 
 func (q *createUserQueryBuilder) Identified(with Identification, by string) CreateUserQueryBuilder {
 	q.identified = fmt.Sprintf("IDENTIFIED WITH %s BY %s", with, quote(by))
+	return q
+}
+
+func (q *createUserQueryBuilder) WithSettingsProfile(profileName *string) CreateUserQueryBuilder {
+	q.settingsProfile = profileName
 	return q
 }
 
@@ -57,6 +64,9 @@ func (q *createUserQueryBuilder) Build() (string, error) {
 	}
 	if q.identified != "" {
 		tokens = append(tokens, q.identified)
+	}
+	if q.settingsProfile != nil {
+		tokens = append(tokens, "SETTINGS", "PROFILE", quote(*q.settingsProfile))
 	}
 
 	return strings.Join(tokens, " ") + ";", nil

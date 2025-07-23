@@ -10,9 +10,10 @@ import (
 )
 
 type User struct {
-	ID                 string `json:"id"`
-	Name               string `json:"name"`
-	PasswordSha256Hash string `json:"-"`
+	ID                 string  `json:"id"`
+	Name               string  `json:"name"`
+	PasswordSha256Hash string  `json:"-"`
+	SettingsProfile    *string `json:"-"`
 }
 
 func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
@@ -20,6 +21,7 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 		NewCreateUser(user.Name).
 		Identified(querybuilder.IdentificationSHA256Hash, user.PasswordSha256Hash).
 		WithCluster(clusterName).
+		WithSettingsProfile(user.SettingsProfile).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
@@ -63,6 +65,31 @@ func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*Us
 	if user == nil {
 		// User not found
 		return nil, nil
+	}
+
+	// Check if user has settings profile associated.
+	{
+		sql, err = querybuilder.
+			NewSelect([]querybuilder.Field{querybuilder.NewField("inherit_profile")}, "system.settings_profile_elements").
+			WithCluster(clusterName).
+			Where(querybuilder.WhereEquals("user_name", user.Name)).
+			Build()
+		if err != nil {
+			return nil, errors.WithMessage(err, "error building query")
+		}
+
+		err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+			profile, err := data.GetNullableString("inherit_profile")
+			if err != nil {
+				return errors.WithMessage(err, "error scanning query result, missing 'inherit_profile' field")
+			}
+
+			user.SettingsProfile = profile
+			return nil
+		})
+		if err != nil {
+			return nil, errors.WithMessage(err, "error running query")
+		}
 	}
 
 	return user, nil
