@@ -83,6 +83,12 @@ func (r *ResourceBuilder) WithFunction(attrName string, function string, arg str
 	return r
 }
 
+func (r *ResourceBuilder) WithListAttribute(attrName string, data []cty.Value) *ResourceBuilder {
+	r.getRootResourceBody().SetAttributeValue(attrName, cty.ListVal(data))
+
+	return r
+}
+
 func (r *ResourceBuilder) AddDependency(resource string) *ResourceBuilder {
 	r.dependencies = append(r.dependencies, resource)
 	return r

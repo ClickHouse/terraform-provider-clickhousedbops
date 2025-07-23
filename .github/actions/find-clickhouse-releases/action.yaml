@@ -10,8 +10,13 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - shell: bash
-      id: find-ch-releases
-      run: |
-        chmod +x .github/actions/find-clickhouse-releases/action.sh
-        .github/actions/find-clickhouse-releases/action.sh
+    - id: find-ch-releases
+      uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08
+      with:
+        timeout_minutes: 2
+        max_attempts: 5
+        retry_wait_seconds: 10
+        shell: bash
+        command: |
+          chmod +x .github/actions/find-clickhouse-releases/action.sh
+          .github/actions/find-clickhouse-releases/action.sh
