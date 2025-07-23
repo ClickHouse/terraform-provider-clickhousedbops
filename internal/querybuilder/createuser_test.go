@@ -6,12 +6,13 @@ import (
 
 func Test_createuser(t *testing.T) {
 	tests := []struct {
-		name           string
-		resourceName   string
-		identifiedWith Identification
-		identifiedBy   string
-		want           string
-		wantErr        bool
+		name            string
+		resourceName    string
+		identifiedWith  Identification
+		identifiedBy    string
+		settingsProfile string
+		want            string
+		wantErr         bool
 	}{
 		{
 			name:         "Create user with simple name and no password",
