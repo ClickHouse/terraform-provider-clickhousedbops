@@ -203,24 +203,10 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	state := SettingsProfile{
-		ClusterName:    plan.ClusterName,
-		Name:           types.StringValue(createdSettingsProfile.Name),
-		InheritProfile: types.StringPointerValue(createdSettingsProfile.InheritProfile),
+		ClusterName: plan.ClusterName,
 	}
 
-	{
-		var settings []attr.Value
-		for _, setting := range createdSettingsProfile.Settings {
-			settings = append(settings, Setting{
-				Name:        types.StringValue(setting.Name),
-				Value:       types.StringPointerValue(setting.Value),
-				Min:         types.StringPointerValue(setting.Min),
-				Max:         types.StringPointerValue(setting.Max),
-				Writability: types.StringPointerValue(setting.Writability),
-			}.ObjectValue())
-		}
-		state.Settings, _ = types.ListValue(Setting{}.ObjectType(), settings)
-	}
+	modelFromApiResponse(&state, *createdSettingsProfile)
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -247,7 +233,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	}
 
 	if settingsProfile != nil {
-		state.Name = types.StringValue(settingsProfile.Name)
+		modelFromApiResponse(&state, *settingsProfile)
 
 		diags = resp.State.Set(ctx, &state)
 		resp.Diagnostics.Append(diags...)
@@ -293,5 +279,24 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 
 	if clusterName != nil {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
+	}
+}
+
+func modelFromApiResponse(state *SettingsProfile, settingsProfile dbops.SettingsProfile) {
+	state.Name = types.StringValue(settingsProfile.Name)
+	state.InheritProfile = types.StringPointerValue(settingsProfile.InheritProfile)
+
+	{
+		var settings []attr.Value
+		for _, setting := range settingsProfile.Settings {
+			settings = append(settings, Setting{
+				Name:        types.StringValue(setting.Name),
+				Value:       types.StringPointerValue(setting.Value),
+				Min:         types.StringPointerValue(setting.Min),
+				Max:         types.StringPointerValue(setting.Max),
+				Writability: types.StringPointerValue(setting.Writability),
+			}.ObjectValue())
+		}
+		state.Settings, _ = types.ListValue(Setting{}.ObjectType(), settings)
 	}
 }
