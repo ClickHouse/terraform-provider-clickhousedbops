@@ -8,7 +8,6 @@ func Test_createuser(t *testing.T) {
 	tests := []struct {
 		name            string
 		action          string
-		resourceType    string
 		resourceName    string
 		identifiedWith  Identification
 		identifiedBy    string
@@ -18,21 +17,18 @@ func Test_createuser(t *testing.T) {
 	}{
 		{
 			name:         "Create user with simple name and no password",
-			resourceType: resourceTypeUser,
 			resourceName: "john",
 			want:         "CREATE USER `john`;",
 			wantErr:      false,
 		},
 		{
 			name:         "Create user with funky name and no password",
-			resourceType: resourceTypeUser,
 			resourceName: "jo`hn",
 			want:         "CREATE USER `jo\\`hn`;",
 			wantErr:      false,
 		},
 		{
 			name:           "Create user with simple name and password",
-			resourceType:   resourceTypeUser,
 			resourceName:   "john",
 			identifiedWith: IdentificationSHA256Hash,
 			identifiedBy:   "blah",
@@ -41,14 +37,12 @@ func Test_createuser(t *testing.T) {
 		},
 		{
 			name:         "Create user fails when no user name is set",
-			resourceType: resourceTypeUser,
 			resourceName: "",
 			want:         "",
 			wantErr:      true,
 		},
 		{
 			name:            "Create user with settings profile",
-			resourceType:    resourceTypeUser,
 			resourceName:    "foo",
 			settingsProfile: "test",
 			want:            "CREATE USER `foo` SETTINGS PROFILE 'test';",
