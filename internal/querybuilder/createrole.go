@@ -6,7 +6,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// CreateRoleQueryBuilder is an interface to build CREATE USER SQL queries (already interpolated).
+// CreateRoleQueryBuilder is an interface to build CREATE ROLE SQL queries (already interpolated).
 type CreateRoleQueryBuilder interface {
 	QueryBuilder
 	WithSettingsProfile(profileName *string) CreateRoleQueryBuilder
@@ -37,7 +37,7 @@ func (q *createRoleQueryBuilder) WithCluster(clusterName *string) CreateRoleQuer
 
 func (q *createRoleQueryBuilder) Build() (string, error) {
 	if q.resourceName == "" {
-		return "", errors.New("resourceName cannot be empty for CREATE USER queries")
+		return "", errors.New("resourceName cannot be empty for CREATE ROLE queries")
 	}
 
 	tokens := []string{
