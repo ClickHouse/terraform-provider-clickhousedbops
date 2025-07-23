@@ -39,6 +39,13 @@ func Test_createuser(t *testing.T) {
 			want:         "",
 			wantErr:      true,
 		},
+		{
+			name:            "Create user with settings profile",
+			resourceName:    "foo",
+			settingsProfile: "test",
+			want:            "CREATE USER `foo` SETTINGS PROFILE 'test';",
+			wantErr:         false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -49,6 +56,10 @@ func Test_createuser(t *testing.T) {
 
 			if tt.identifiedWith != "" && tt.identifiedBy != "" {
 				q = q.Identified(tt.identifiedWith, tt.identifiedBy)
+			}
+
+			if tt.settingsProfile != "" {
+				q = q.WithSettingsProfile(&tt.settingsProfile)
 			}
 
 			got, err := q.Build()
