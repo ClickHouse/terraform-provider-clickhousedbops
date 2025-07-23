@@ -20,7 +20,6 @@ func Test_createdatabase(t *testing.T) {
 	}{
 		{
 			name:         "Create database with complex name",
-			action:       actionCreate,
 			resourceType: resourceTypeDatabase,
 			resourceName: "data`base",
 			want:         "CREATE DATABASE `data\\`base`;",
@@ -28,7 +27,6 @@ func Test_createdatabase(t *testing.T) {
 		},
 		{
 			name:         "Create database with comment",
-			action:       actionCreate,
 			resourceType: resourceTypeDatabase,
 			resourceName: "database",
 			comment:      &comment,
@@ -37,7 +35,6 @@ func Test_createdatabase(t *testing.T) {
 		},
 		{
 			name:         "Create database with cluster",
-			action:       actionCreate,
 			resourceType: resourceTypeDatabase,
 			resourceName: "database",
 			clusterName:  &clusterName,

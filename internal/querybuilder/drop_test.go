@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func Test_create_drop(t *testing.T) {
+func Test_drop(t *testing.T) {
 	cluster := "cluster1"
 
 	tests := []struct {
@@ -20,7 +20,6 @@ func Test_create_drop(t *testing.T) {
 	}{
 		{
 			name:         "Drop database",
-			action:       actionDrop,
 			resourceType: resourceTypeDatabase,
 			resourceName: "db1",
 			want:         "DROP DATABASE `db1`;",
@@ -28,7 +27,6 @@ func Test_create_drop(t *testing.T) {
 		},
 		{
 			name:         "Drop database on cluster",
-			action:       actionDrop,
 			resourceType: resourceTypeDatabase,
 			resourceName: "db1",
 			clusterName:  &cluster,
@@ -37,31 +35,13 @@ func Test_create_drop(t *testing.T) {
 		},
 		{
 			name:         "Drop database with complex name",
-			action:       actionDrop,
 			resourceType: resourceTypeDatabase,
 			resourceName: "data`base",
 			want:         "DROP DATABASE `data\\`base`;",
 			wantErr:      false,
 		},
 		{
-			name:         "Create role with simple name",
-			action:       actionCreate,
-			resourceType: resourceTypeRole,
-			resourceName: "role1",
-			want:         "CREATE ROLE `role1`;",
-			wantErr:      false,
-		},
-		{
-			name:         "Create role with complex name",
-			action:       actionCreate,
-			resourceType: resourceTypeRole,
-			resourceName: "ro`le1",
-			want:         "CREATE ROLE `ro\\`le1`;",
-			wantErr:      false,
-		},
-		{
 			name:         "Fail to create role with empty name",
-			action:       actionCreate,
 			resourceType: resourceTypeRole,
 			resourceName: "",
 			want:         "",
@@ -69,7 +49,6 @@ func Test_create_drop(t *testing.T) {
 		},
 		{
 			name:         "Drop role with simple name",
-			action:       actionDrop,
 			resourceType: resourceTypeRole,
 			resourceName: "role1",
 			want:         "DROP ROLE `role1`;",
@@ -77,7 +56,6 @@ func Test_create_drop(t *testing.T) {
 		},
 		{
 			name:         "Drop role with complex name",
-			action:       actionDrop,
 			resourceType: resourceTypeRole,
 			resourceName: "ro`le1",
 			want:         "DROP ROLE `ro\\`le1`;",
@@ -85,7 +63,6 @@ func Test_create_drop(t *testing.T) {
 		},
 		{
 			name:         "Fail to drop role with empty name",
-			action:       actionDrop,
 			resourceType: resourceTypeRole,
 			resourceName: "",
 			want:         "",
@@ -93,7 +70,6 @@ func Test_create_drop(t *testing.T) {
 		},
 		{
 			name:         "Drop user with simple name",
-			action:       actionDrop,
 			resourceType: resourceTypeUser,
 			resourceName: "john",
 			want:         "DROP USER `john`;",
@@ -101,7 +77,6 @@ func Test_create_drop(t *testing.T) {
 		},
 		{
 			name:         "Drop user with complex name",
-			action:       actionDrop,
 			resourceType: resourceTypeUser,
 			resourceName: "jo`hn",
 			want:         "DROP USER `jo\\`hn`;",
@@ -109,7 +84,6 @@ func Test_create_drop(t *testing.T) {
 		},
 		{
 			name:         "Fail to drop user with empty name",
-			action:       actionDrop,
 			resourceType: resourceTypeUser,
 			resourceName: "",
 			want:         "",
@@ -118,8 +92,7 @@ func Test_create_drop(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q := createDropQueryBuilder{
-				action:           tt.action,
+			q := dropQueryBuilder{
 				resourceTypeName: tt.resourceType,
 				resourceName:     tt.resourceName,
 				clusterName:      tt.clusterName,

@@ -60,6 +60,13 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"settings_profile": schema.StringAttribute{
+				Optional:    true,
+				Description: "Name of the settings profile to assign to the role",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 		},
 		MarkdownDescription: roleResourceDescription,
 	}
@@ -116,7 +123,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	createdRole, err := r.client.CreateRole(ctx, dbops.Role{Name: plan.Name.ValueString()}, plan.ClusterName.ValueStringPointer())
+	createdRole, err := r.client.CreateRole(ctx, dbops.Role{Name: plan.Name.ValueString(), SettingsProfile: plan.SettingsProfile.ValueStringPointer()}, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse Role",
@@ -126,9 +133,10 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	state := Role{
-		ClusterName: plan.ClusterName,
-		ID:          types.StringValue(createdRole.ID),
-		Name:        types.StringValue(createdRole.Name),
+		ClusterName:     plan.ClusterName,
+		ID:              types.StringValue(createdRole.ID),
+		Name:            types.StringValue(createdRole.Name),
+		SettingsProfile: types.StringPointerValue(createdRole.SettingsProfile),
 	}
 
 	diags = resp.State.Set(ctx, state)
@@ -157,6 +165,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 
 	if role != nil {
 		state.Name = types.StringValue(role.Name)
+		state.SettingsProfile = types.StringPointerValue(role.SettingsProfile)
 
 		diags = resp.State.Set(ctx, &state)
 		resp.Diagnostics.Append(diags...)
