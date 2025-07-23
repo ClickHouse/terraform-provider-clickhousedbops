@@ -191,10 +191,31 @@ jobs:
           protocol: ${{ matrix.protocol }}
           cluster_type: ${{ matrix.cluster_type }}
 
+  settingsprofile:
+    runs-on: ubuntu-latest
+    needs: ['build', 'prepare-matrix']
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: ${{ github.job }} test
+        uses: ./.github/actions/test
+        with:
+          example: ${{ github.job }}
+          clickhouse_version: ${{ matrix.clickhouse_version }}
+          terraform_image: ${{ matrix.terraform.image }}
+          terraform_version: ${{ matrix.terraform.version }}
+          terraform_binary: ${{ matrix.terraform.binary }}
+          protocol: ${{ matrix.protocol }}
+          cluster_type: ${{ matrix.cluster_type }}
+
   notify:
     name: "E2E tests"
     runs-on: ubuntu-latest
-    needs: ['database', 'role', 'user', 'grantrole', 'grantprivilege']
+    needs: ['build', 'list-clickhouse-versions', 'list-terraform-versions', 'list-tofu-versions', 'prepare-matrix', 'database', 'role', 'user', 'grantrole', 'grantprivilege', 'settingsprofile']
     if: always()
     steps:
       - name: Successful run

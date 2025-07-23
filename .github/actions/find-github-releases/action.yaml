@@ -22,8 +22,13 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - shell: bash
-      id: find-tf-releases
-      run: |
-        chmod +x .github/actions/find-github-releases/action.sh
-        .github/actions/find-github-releases/action.sh --repo="${{inputs.repo}}" --min="${{inputs.min}}" --want="${{inputs.count}}"
+    - id: find-tf-releases
+      uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08
+      with:
+        timeout_minutes: 2
+        max_attempts: 5
+        retry_wait_seconds: 10
+        shell: bash
+        command: |
+          chmod +x .github/actions/find-github-releases/action.sh
+          .github/actions/find-github-releases/action.sh --repo="${{inputs.repo}}" --min="${{inputs.min}}" --want="${{inputs.count}}"
