@@ -12,15 +12,11 @@ resource "clickhousedbops_settingsprofile" "profile1" {
       writability = "CHANGEABLE_IN_READONLY"
     },
     {
-      name = "max_threads"
-      value = "1000"
-      min = "100"
-      max = "2000"
-      writability = "CONST"
+      name = "network_compression_method"
+      value = "LZ4"
     },
   ]
 }
-
 
 resource "clickhousedbops_role" "tester" {
   cluster_name = var.cluster_name
@@ -29,11 +25,11 @@ resource "clickhousedbops_role" "tester" {
   settings_profile = clickhousedbops_settingsprofile.profile1.name
 }
 
-resource "clickhousedbops_user" "john" {
-  cluster_name = var.cluster_name
-  name = "john"
-  password_sha256_hash_wo = sha256("test")
-  password_sha256_hash_wo_version = 1
-
-  settings_profile = clickhousedbops_settingsprofile.profile1.name
-}
+# resource "clickhousedbops_user" "john" {
+#   cluster_name = var.cluster_name
+#   name = "john"
+#   password_sha256_hash_wo = sha256("test")
+#   password_sha256_hash_wo_version = 1
+#
+#   settings_profile = clickhousedbops_settingsprofile.profile1.name
+# }

@@ -142,3 +142,27 @@ func (i *impl) FindRoleByName(ctx context.Context, name string, clusterName *str
 
 	return i.GetRole(ctx, uuid, clusterName)
 }
+
+func (i *impl) UpdateRole(ctx context.Context, role Role, clusterName *string) (*Role, error) {
+	// Retrieve current role
+	existing, err := i.GetRole(ctx, role.ID, clusterName)
+	if err != nil {
+		return nil, errors.WithMessage(err, "Unable to get existing role")
+	}
+
+	sql, err := querybuilder.
+		NewAlterRole(existing.Name).
+		WithCluster(clusterName).
+		ChangeSettingProfile(existing.SettingsProfile, role.SettingsProfile).
+		Build()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building query")
+	}
+
+	err = i.clickhouseClient.Exec(ctx, sql)
+	if err != nil {
+		return nil, errors.WithMessage(err, "error running query")
+	}
+
+	return i.GetRole(ctx, role.ID, clusterName)
+}

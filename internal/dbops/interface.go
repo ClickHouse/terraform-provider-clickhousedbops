@@ -14,6 +14,7 @@ type Client interface {
 	GetRole(ctx context.Context, id string, clusterName *string) (*Role, error)
 	DeleteRole(ctx context.Context, id string, clusterName *string) error
 	FindRoleByName(ctx context.Context, name string, clusterName *string) (*Role, error)
+	UpdateRole(ctx context.Context, role Role, clusterName *string) (*Role, error)
 
 	CreateUser(ctx context.Context, user User, clusterName *string) (*User, error)
 	GetUser(ctx context.Context, id string, clusterName *string) (*User, error)
