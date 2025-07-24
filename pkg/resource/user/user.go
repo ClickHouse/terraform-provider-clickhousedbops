@@ -218,27 +218,23 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
-	// Only field we allow to change is the settings profile.
-	{
-		// Settings profile is changed.
-		user, err := r.client.UpdateUser(ctx, dbops.User{
-			ID:              state.ID.ValueString(),
-			Name:            plan.Name.ValueString(),
-			SettingsProfile: plan.SettingsProfile.ValueStringPointer(),
-		}, plan.ClusterName.ValueStringPointer())
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Updating ClickHouse User",
-				fmt.Sprintf("%+v\n", err),
-			)
-			return
-		}
-
-		state.Name = types.StringValue(user.Name)
-		state.SettingsProfile = types.StringPointerValue(user.SettingsProfile)
-		diags = resp.State.Set(ctx, &state)
-		resp.Diagnostics.Append(diags...)
+	user, err := r.client.UpdateUser(ctx, dbops.User{
+		ID:              state.ID.ValueString(),
+		Name:            plan.Name.ValueString(),
+		SettingsProfile: plan.SettingsProfile.ValueStringPointer(),
+	}, plan.ClusterName.ValueStringPointer())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Updating ClickHouse User",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
 	}
+
+	state.Name = types.StringValue(user.Name)
+	state.SettingsProfile = types.StringPointerValue(user.SettingsProfile)
+	diags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(diags...)
 }
 
 func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
