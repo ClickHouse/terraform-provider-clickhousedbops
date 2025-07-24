@@ -9,7 +9,8 @@ import (
 // AlterRoleQueryBuilder is an interface to build ALTER ROLE SQL queries (already interpolated).
 type AlterRoleQueryBuilder interface {
 	QueryBuilder
-	ChangeSettingProfile(oldProfileName *string, newProfileName *string) AlterRoleQueryBuilder
+	WithOldSettingProfile(profileName *string) AlterRoleQueryBuilder
+	WithNewSettingProfile(profileName *string) AlterRoleQueryBuilder
 	WithCluster(clusterName *string) AlterRoleQueryBuilder
 }
 
@@ -26,9 +27,13 @@ func NewAlterRole(resourceName string) AlterRoleQueryBuilder {
 	}
 }
 
-func (q *alterRoleQueryBuilder) ChangeSettingProfile(oldProfileName *string, newProfileName *string) AlterRoleQueryBuilder {
-	q.oldSettingsProfile = oldProfileName
-	q.newSettingsProfile = newProfileName
+func (q *alterRoleQueryBuilder) WithOldSettingProfile(profileName *string) AlterRoleQueryBuilder {
+	q.oldSettingsProfile = profileName
+	return q
+}
+
+func (q *alterRoleQueryBuilder) WithNewSettingProfile(profileName *string) AlterRoleQueryBuilder {
+	q.newSettingsProfile = profileName
 	return q
 }
 
