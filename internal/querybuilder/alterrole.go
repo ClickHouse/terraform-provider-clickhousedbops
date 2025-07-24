@@ -9,8 +9,9 @@ import (
 // AlterRoleQueryBuilder is an interface to build ALTER ROLE SQL queries (already interpolated).
 type AlterRoleQueryBuilder interface {
 	QueryBuilder
-	WithOldSettingProfile(profileName *string) AlterRoleQueryBuilder
-	WithNewSettingProfile(profileName *string) AlterRoleQueryBuilder
+	RenameTo(newName *string) AlterRoleQueryBuilder
+	DropSettingsProfileProfile(profileName *string) AlterRoleQueryBuilder
+	AddSettingsSettingProfile(profileName *string) AlterRoleQueryBuilder
 	WithCluster(clusterName *string) AlterRoleQueryBuilder
 }
 
@@ -18,6 +19,7 @@ type alterRoleQueryBuilder struct {
 	resourceName       string
 	oldSettingsProfile *string
 	newSettingsProfile *string
+	newName            *string
 	clusterName        *string
 }
 
@@ -27,12 +29,18 @@ func NewAlterRole(resourceName string) AlterRoleQueryBuilder {
 	}
 }
 
-func (q *alterRoleQueryBuilder) WithOldSettingProfile(profileName *string) AlterRoleQueryBuilder {
+func (q *alterRoleQueryBuilder) RenameTo(newName *string) AlterRoleQueryBuilder {
+	q.newName = newName
+
+	return q
+}
+
+func (q *alterRoleQueryBuilder) DropSettingsProfileProfile(profileName *string) AlterRoleQueryBuilder {
 	q.oldSettingsProfile = profileName
 	return q
 }
 
-func (q *alterRoleQueryBuilder) WithNewSettingProfile(profileName *string) AlterRoleQueryBuilder {
+func (q *alterRoleQueryBuilder) AddSettingsSettingProfile(profileName *string) AlterRoleQueryBuilder {
 	q.newSettingsProfile = profileName
 	return q
 }
@@ -47,24 +55,35 @@ func (q *alterRoleQueryBuilder) Build() (string, error) {
 		return "", errors.New("resourceName cannot be empty for ALTER ROLE queries")
 	}
 
-	if (q.oldSettingsProfile == nil && q.newSettingsProfile == nil) ||
-		(q.oldSettingsProfile != nil && q.newSettingsProfile != nil && *q.oldSettingsProfile == *q.newSettingsProfile) {
-		return "", errors.New("no change to be made")
-	}
+	anyChanges := false
 
 	tokens := []string{
 		"ALTER",
 		"ROLE",
 		backtick(q.resourceName),
 	}
+	if q.newName != nil && *q.newName != q.resourceName {
+		anyChanges = true
+		tokens = append(tokens, "RENAME", "TO", backtick(*q.newName))
+	}
 	if q.clusterName != nil {
 		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
 	}
-	if q.oldSettingsProfile != nil {
-		tokens = append(tokens, "DROP", "PROFILES", quote(*q.oldSettingsProfile))
+	if (q.oldSettingsProfile != nil && q.newSettingsProfile != nil && *q.oldSettingsProfile != *q.newSettingsProfile) ||
+		(q.oldSettingsProfile == nil && q.newSettingsProfile != nil) ||
+		(q.oldSettingsProfile != nil && q.newSettingsProfile == nil) {
+		// Settings profile was changed
+		anyChanges = true
+		if q.oldSettingsProfile != nil {
+			tokens = append(tokens, "DROP", "PROFILES", quote(*q.oldSettingsProfile))
+		}
+		if q.newSettingsProfile != nil {
+			tokens = append(tokens, "ADD", "PROFILE", quote(*q.newSettingsProfile))
+		}
 	}
-	if q.newSettingsProfile != nil {
-		tokens = append(tokens, "ADD", "PROFILE", quote(*q.newSettingsProfile))
+
+	if !anyChanges {
+		return "", errors.New("no change to be made")
 	}
 
 	return strings.Join(tokens, " ") + ";", nil

@@ -56,9 +56,6 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"name": schema.StringAttribute{
 				Required:    true,
 				Description: "Name of the role",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"settings_profile": schema.StringAttribute{
 				Optional:    true,
@@ -185,32 +182,24 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
-	// Only field we allow to change is the settings profile.
-	{
-		planValue := plan.SettingsProfile.ValueStringPointer()
-		stateValue := state.SettingsProfile.ValueStringPointer()
-
-		if planValue == nil && stateValue != nil ||
-			planValue != nil && stateValue == nil ||
-			(planValue != nil && stateValue != nil && *planValue != *stateValue) {
-			// Settings profile is changed.
-			role, err := r.client.UpdateRole(ctx, dbops.Role{
-				ID:              state.ID.ValueString(),
-				SettingsProfile: plan.SettingsProfile.ValueStringPointer(),
-			}, plan.ClusterName.ValueStringPointer())
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error Updating ClickHouse Role",
-					fmt.Sprintf("%+v\n", err),
-				)
-				return
-			}
-
-			state.SettingsProfile = types.StringPointerValue(role.SettingsProfile)
-			diags = resp.State.Set(ctx, &state)
-			resp.Diagnostics.Append(diags...)
-		}
+	// Settings profile is changed.
+	role, err := r.client.UpdateRole(ctx, dbops.Role{
+		ID:              state.ID.ValueString(),
+		Name:            plan.Name.ValueString(),
+		SettingsProfile: plan.SettingsProfile.ValueStringPointer(),
+	}, plan.ClusterName.ValueStringPointer())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Updating ClickHouse Role",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
 	}
+
+	state.Name = types.StringValue(role.Name)
+	state.SettingsProfile = types.StringPointerValue(role.SettingsProfile)
+	diags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(diags...)
 }
 
 func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
