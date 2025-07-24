@@ -20,6 +20,7 @@ type Client interface {
 	GetUser(ctx context.Context, id string, clusterName *string) (*User, error)
 	DeleteUser(ctx context.Context, id string, clusterName *string) error
 	FindUserByName(ctx context.Context, name string, clusterName *string) (*User, error)
+	UpdateUser(ctx context.Context, user User, clusterName *string) (*User, error)
 
 	GrantRole(ctx context.Context, grantRole GrantRole, clusterName *string) (*GrantRole, error)
 	GetGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string, clusterName *string) (*GrantRole, error)

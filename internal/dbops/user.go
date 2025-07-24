@@ -145,3 +145,28 @@ func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *str
 
 	return i.GetUser(ctx, uuid, clusterName)
 }
+
+func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
+	// Retrieve current user
+	existing, err := i.GetUser(ctx, user.ID, clusterName)
+	if err != nil {
+		return nil, errors.WithMessage(err, "Unable to get existing user")
+	}
+
+	sql, err := querybuilder.
+		NewAlterUser(existing.Name).
+		WithCluster(clusterName).
+		WithOldSettingProfile(existing.SettingsProfile).
+		WithNewSettingProfile(user.SettingsProfile).
+		Build()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building query")
+	}
+
+	err = i.clickhouseClient.Exec(ctx, sql)
+	if err != nil {
+		return nil, errors.WithMessage(err, "error running query")
+	}
+
+	return i.GetUser(ctx, user.ID, clusterName)
+}
