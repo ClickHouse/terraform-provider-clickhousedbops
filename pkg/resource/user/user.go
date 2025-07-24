@@ -59,9 +59,6 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"name": schema.StringAttribute{
 				Required:    true,
 				Description: "Name of the user",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"password_sha256_hash_wo": schema.StringAttribute{
 				Required:    true,
@@ -223,29 +220,24 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 
 	// Only field we allow to change is the settings profile.
 	{
-		planValue := plan.SettingsProfile.ValueStringPointer()
-		stateValue := state.SettingsProfile.ValueStringPointer()
-
-		if planValue == nil && stateValue != nil ||
-			planValue != nil && stateValue == nil ||
-			(planValue != nil && stateValue != nil && *planValue != *stateValue) {
-			// Settings profile is changed.
-			user, err := r.client.UpdateUser(ctx, dbops.User{
-				ID:              state.ID.ValueString(),
-				SettingsProfile: plan.SettingsProfile.ValueStringPointer(),
-			}, plan.ClusterName.ValueStringPointer())
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error Updating ClickHouse User",
-					fmt.Sprintf("%+v\n", err),
-				)
-				return
-			}
-
-			state.SettingsProfile = types.StringPointerValue(user.SettingsProfile)
-			diags = resp.State.Set(ctx, &state)
-			resp.Diagnostics.Append(diags...)
+		// Settings profile is changed.
+		user, err := r.client.UpdateUser(ctx, dbops.User{
+			ID:              state.ID.ValueString(),
+			Name:            plan.Name.ValueString(),
+			SettingsProfile: plan.SettingsProfile.ValueStringPointer(),
+		}, plan.ClusterName.ValueStringPointer())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Updating ClickHouse User",
+				fmt.Sprintf("%+v\n", err),
+			)
+			return
 		}
+
+		state.Name = types.StringValue(user.Name)
+		state.SettingsProfile = types.StringPointerValue(user.SettingsProfile)
+		diags = resp.State.Set(ctx, &state)
+		resp.Diagnostics.Append(diags...)
 	}
 }
 
