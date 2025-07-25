@@ -10,10 +10,20 @@ import (
 )
 
 type User struct {
-	ID                 string  `json:"id"`
-	Name               string  `json:"name"`
-	PasswordSha256Hash string  `json:"-"`
-	SettingsProfile    *string `json:"-"`
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	PasswordSha256Hash string   `json:"-"`
+	SettingsProfiles   []string `json:"-"`
+}
+
+func (u *User) HasSettingProfile(profileName string) bool {
+	for _, p := range u.SettingsProfiles {
+		if p == profileName {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
@@ -21,7 +31,6 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 		NewCreateUser(user.Name).
 		Identified(querybuilder.IdentificationSHA256Hash, user.PasswordSha256Hash).
 		WithCluster(clusterName).
-		WithSettingsProfile(user.SettingsProfile).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
@@ -78,18 +87,23 @@ func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*Us
 			return nil, errors.WithMessage(err, "error building query")
 		}
 
+		profiles := make([]string, 0)
 		err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
 			profile, err := data.GetNullableString("inherit_profile")
 			if err != nil {
 				return errors.WithMessage(err, "error scanning query result, missing 'inherit_profile' field")
 			}
 
-			user.SettingsProfile = profile
+			if profile != nil {
+				profiles = append(profiles, *profile)
+			}
 			return nil
 		})
 		if err != nil {
 			return nil, errors.WithMessage(err, "error running query")
 		}
+
+		user.SettingsProfiles = profiles
 	}
 
 	return user, nil
@@ -157,8 +171,6 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 		NewAlterUser(existing.Name).
 		WithCluster(clusterName).
 		RenameTo(&user.Name).
-		DropSettingsProfile(existing.SettingsProfile).
-		AddSettingsProfile(user.SettingsProfile).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")

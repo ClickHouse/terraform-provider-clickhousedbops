@@ -34,6 +34,8 @@ type Client interface {
 	CreateSettingsProfile(ctx context.Context, profile SettingsProfile, clusterName *string) (*SettingsProfile, error)
 	GetSettingsProfile(ctx context.Context, name string, clusterName *string) (*SettingsProfile, error)
 	DeleteSettingsProfile(ctx context.Context, name string, clusterName *string) error
+	AssociateSettingsProfile(ctx context.Context, name string, roleId *string, userId *string, clusterName *string) error
+	DisassociateSettingsProfile(ctx context.Context, name string, roleId *string, userId *string, clusterName *string) error
 
 	IsReplicatedStorage(ctx context.Context) (bool, error)
 }

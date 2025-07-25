@@ -27,13 +27,6 @@ func Test_createrole(t *testing.T) {
 			wantErr:      false,
 		},
 		{
-			name:            "Create role with settings profile",
-			resourceName:    "foo",
-			settingsProfile: "test",
-			want:            "CREATE ROLE `foo` SETTINGS PROFILE 'test';",
-			wantErr:         false,
-		},
-		{
 			name:         "Create role on cluster",
 			resourceName: "foo",
 			clusterName:  "cluster1",
@@ -46,10 +39,6 @@ func Test_createrole(t *testing.T) {
 			var q CreateRoleQueryBuilder
 			q = &createRoleQueryBuilder{
 				resourceName: tt.resourceName,
-			}
-
-			if tt.settingsProfile != "" {
-				q = q.WithSettingsProfile(&tt.settingsProfile)
 			}
 
 			if tt.clusterName != "" {

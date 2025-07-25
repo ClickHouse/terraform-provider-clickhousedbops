@@ -11,7 +11,7 @@ type AlterRoleQueryBuilder interface {
 	QueryBuilder
 	RenameTo(newName *string) AlterRoleQueryBuilder
 	DropSettingsProfile(profileName *string) AlterRoleQueryBuilder
-	AddSettingsSetting(profileName *string) AlterRoleQueryBuilder
+	AddSettingsProfile(profileName *string) AlterRoleQueryBuilder
 	WithCluster(clusterName *string) AlterRoleQueryBuilder
 }
 
@@ -40,7 +40,7 @@ func (q *alterRoleQueryBuilder) DropSettingsProfile(profileName *string) AlterRo
 	return q
 }
 
-func (q *alterRoleQueryBuilder) AddSettingsSetting(profileName *string) AlterRoleQueryBuilder {
+func (q *alterRoleQueryBuilder) AddSettingsProfile(profileName *string) AlterRoleQueryBuilder {
 	q.newSettingsProfile = profileName
 	return q
 }

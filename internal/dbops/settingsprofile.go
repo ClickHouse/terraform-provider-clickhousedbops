@@ -165,3 +165,115 @@ func (i *impl) DeleteSettingsProfile(ctx context.Context, name string, clusterNa
 
 	return nil
 }
+
+func (i *impl) AssociateSettingsProfile(ctx context.Context, name string, roleId *string, userId *string, clusterName *string) error {
+	if roleId != nil {
+		role, err := i.GetRole(ctx, *roleId, clusterName)
+		if err != nil {
+			return errors.WithMessage(err, "Cannot find role")
+		}
+
+		if role == nil {
+			return errors.New("role not found")
+		}
+
+		sql, err := querybuilder.
+			NewAlterRole(role.Name).
+			WithCluster(clusterName).
+			AddSettingsProfile(&name).
+			Build()
+		if err != nil {
+			return errors.WithMessage(err, "Error building query")
+		}
+
+		err = i.clickhouseClient.Exec(ctx, sql)
+		if err != nil {
+			return errors.WithMessage(err, "error running query")
+		}
+
+		return nil
+	} else if userId != nil {
+		user, err := i.GetUser(ctx, *userId, clusterName)
+		if err != nil {
+			return errors.WithMessage(err, "Cannot find user")
+		}
+
+		if user == nil {
+			return errors.New("user not found")
+		}
+
+		sql, err := querybuilder.
+			NewAlterUser(user.Name).
+			WithCluster(clusterName).
+			AddSettingsProfile(&name).
+			Build()
+		if err != nil {
+			return errors.WithMessage(err, "Error building query")
+		}
+
+		err = i.clickhouseClient.Exec(ctx, sql)
+		if err != nil {
+			return errors.WithMessage(err, "error running query")
+		}
+
+		return nil
+	}
+
+	return errors.New("Neither roleId nor userId were specified")
+}
+
+func (i *impl) DisassociateSettingsProfile(ctx context.Context, name string, roleId *string, userId *string, clusterName *string) error {
+	if roleId != nil {
+		role, err := i.GetRole(ctx, *roleId, clusterName)
+		if err != nil {
+			return errors.WithMessage(err, "Cannot find role")
+		}
+
+		if role == nil {
+			return errors.New("role not found")
+		}
+
+		sql, err := querybuilder.
+			NewAlterRole(role.Name).
+			WithCluster(clusterName).
+			DropSettingsProfile(&name).
+			Build()
+		if err != nil {
+			return errors.WithMessage(err, "Error building query")
+		}
+
+		err = i.clickhouseClient.Exec(ctx, sql)
+		if err != nil {
+			return errors.WithMessage(err, "error running query")
+		}
+
+		return nil
+	} else if userId != nil {
+		user, err := i.GetUser(ctx, *userId, clusterName)
+		if err != nil {
+			return errors.WithMessage(err, "Cannot find user")
+		}
+
+		if user == nil {
+			return errors.New("user not found")
+		}
+
+		sql, err := querybuilder.
+			NewAlterUser(user.Name).
+			WithCluster(clusterName).
+			DropSettingsProfile(&name).
+			Build()
+		if err != nil {
+			return errors.WithMessage(err, "Error building query")
+		}
+
+		err = i.clickhouseClient.Exec(ctx, sql)
+		if err != nil {
+			return errors.WithMessage(err, "error running query")
+		}
+
+		return nil
+	}
+
+	return errors.New("Neither roleId nor userId were specified")
+}

@@ -78,10 +78,6 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					int32planmodifier.RequiresReplace(),
 				},
 			},
-			"settings_profile": schema.StringAttribute{
-				Optional:    true,
-				Description: "Name of the settings profile to assign to the user",
-			},
 		},
 		MarkdownDescription: userResourceDescription,
 	}
@@ -149,7 +145,6 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	user := dbops.User{
 		Name:               plan.Name.ValueString(),
 		PasswordSha256Hash: config.PasswordSha256Hash.ValueString(),
-		SettingsProfile:    config.SettingsProfile.ValueStringPointer(),
 	}
 
 	createdUser, err := r.client.CreateUser(ctx, user, plan.ClusterName.ValueStringPointer())
@@ -166,7 +161,6 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		ID:                        types.StringValue(createdUser.ID),
 		Name:                      types.StringValue(createdUser.Name),
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
-		SettingsProfile:           types.StringPointerValue(createdUser.SettingsProfile),
 	}
 
 	diags = resp.State.Set(ctx, state)
@@ -195,7 +189,6 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 
 	if user != nil {
 		state.Name = types.StringValue(user.Name)
-		state.SettingsProfile = types.StringPointerValue(user.SettingsProfile)
 
 		diags = resp.State.Set(ctx, &state)
 		resp.Diagnostics.Append(diags...)
@@ -219,9 +212,8 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	}
 
 	user, err := r.client.UpdateUser(ctx, dbops.User{
-		ID:              state.ID.ValueString(),
-		Name:            plan.Name.ValueString(),
-		SettingsProfile: plan.SettingsProfile.ValueStringPointer(),
+		ID:   state.ID.ValueString(),
+		Name: plan.Name.ValueString(),
 	}, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -232,7 +224,6 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	}
 
 	state.Name = types.StringValue(user.Name)
-	state.SettingsProfile = types.StringPointerValue(user.SettingsProfile)
 	diags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 }
