@@ -10,8 +10,8 @@ import (
 type AlterUserQueryBuilder interface {
 	QueryBuilder
 	RenameTo(newName *string) AlterUserQueryBuilder
-	DropSettingsProfileProfile(profileName *string) AlterUserQueryBuilder
-	AddSettingsSettingProfile(profileName *string) AlterUserQueryBuilder
+	DropSettingsProfile(profileName *string) AlterUserQueryBuilder
+	AddSettingsProfile(profileName *string) AlterUserQueryBuilder
 	WithCluster(clusterName *string) AlterUserQueryBuilder
 }
 
@@ -35,12 +35,12 @@ func (q *alterUserQueryBuilder) RenameTo(newName *string) AlterUserQueryBuilder 
 	return q
 }
 
-func (q *alterUserQueryBuilder) DropSettingsProfileProfile(profileName *string) AlterUserQueryBuilder {
+func (q *alterUserQueryBuilder) DropSettingsProfile(profileName *string) AlterUserQueryBuilder {
 	q.oldSettingsProfile = profileName
 	return q
 }
 
-func (q *alterUserQueryBuilder) AddSettingsSettingProfile(profileName *string) AlterUserQueryBuilder {
+func (q *alterUserQueryBuilder) AddSettingsProfile(profileName *string) AlterUserQueryBuilder {
 	q.newSettingsProfile = profileName
 	return q
 }

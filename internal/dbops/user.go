@@ -157,8 +157,8 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 		NewAlterUser(existing.Name).
 		WithCluster(clusterName).
 		RenameTo(&user.Name).
-		DropSettingsProfileProfile(existing.SettingsProfile).
-		AddSettingsSettingProfile(user.SettingsProfile).
+		DropSettingsProfile(existing.SettingsProfile).
+		AddSettingsProfile(user.SettingsProfile).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
