@@ -8,7 +8,6 @@ linters:
     - typecheck
     - gosec
     - unconvert
-    - dupl
     - goconst
     - goimports
     - copyloopvar
