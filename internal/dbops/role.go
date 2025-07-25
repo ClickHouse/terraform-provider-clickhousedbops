@@ -154,8 +154,8 @@ func (i *impl) UpdateRole(ctx context.Context, role Role, clusterName *string) (
 		NewAlterRole(existing.Name).
 		WithCluster(clusterName).
 		RenameTo(&role.Name).
-		DropSettingsProfileProfile(existing.SettingsProfile).
-		AddSettingsSettingProfile(role.SettingsProfile).
+		DropSettingsProfile(existing.SettingsProfile).
+		AddSettingsSetting(role.SettingsProfile).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")

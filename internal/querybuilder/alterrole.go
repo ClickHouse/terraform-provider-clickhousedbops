@@ -10,8 +10,8 @@ import (
 type AlterRoleQueryBuilder interface {
 	QueryBuilder
 	RenameTo(newName *string) AlterRoleQueryBuilder
-	DropSettingsProfileProfile(profileName *string) AlterRoleQueryBuilder
-	AddSettingsSettingProfile(profileName *string) AlterRoleQueryBuilder
+	DropSettingsProfile(profileName *string) AlterRoleQueryBuilder
+	AddSettingsSetting(profileName *string) AlterRoleQueryBuilder
 	WithCluster(clusterName *string) AlterRoleQueryBuilder
 }
 
@@ -35,12 +35,12 @@ func (q *alterRoleQueryBuilder) RenameTo(newName *string) AlterRoleQueryBuilder 
 	return q
 }
 
-func (q *alterRoleQueryBuilder) DropSettingsProfileProfile(profileName *string) AlterRoleQueryBuilder {
+func (q *alterRoleQueryBuilder) DropSettingsProfile(profileName *string) AlterRoleQueryBuilder {
 	q.oldSettingsProfile = profileName
 	return q
 }
 
-func (q *alterRoleQueryBuilder) AddSettingsSettingProfile(profileName *string) AlterRoleQueryBuilder {
+func (q *alterRoleQueryBuilder) AddSettingsSetting(profileName *string) AlterRoleQueryBuilder {
 	q.newSettingsProfile = profileName
 	return q
 }
