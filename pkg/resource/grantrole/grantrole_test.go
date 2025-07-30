@@ -20,7 +20,7 @@ const (
 	granteeUserName = "user1"
 )
 
-func TestRole_acceptance(t *testing.T) {
+func TestGrantRole_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
 	roleResource := resourcebuilder.New("clickhousedbops_role", roleName).WithStringAttribute("name", roleName)

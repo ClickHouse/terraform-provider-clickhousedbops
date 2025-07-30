@@ -46,6 +46,9 @@ func TestRole_acceptance(t *testing.T) {
 		}
 
 		// Check state fields are aligned with the role we retrieved from CH.
+		if attrs["id"].(string) != role.ID {
+			return fmt.Errorf("expected id to be %q, was %q", role.ID, attrs["id"].(string))
+		}
 		if attrs["name"].(string) != role.Name {
 			return fmt.Errorf("expected name to be %q, was %q", role.Name, attrs["name"].(string))
 		}

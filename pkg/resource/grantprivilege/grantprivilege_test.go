@@ -19,7 +19,7 @@ const (
 	granteeUserName = "user1"
 )
 
-func TestRole_acceptance(t *testing.T) {
+func TestGrantprivilege_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
 	granteeRoleResource := resourcebuilder.

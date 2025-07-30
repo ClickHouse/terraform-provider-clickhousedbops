@@ -18,15 +18,15 @@ const (
 	resourceName = "foo"
 )
 
-func TestRole_acceptance(t *testing.T) {
+func TestSettingsprofile_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
 	checkNotExistsFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error) {
-		name := attrs["name"]
-		if name == "" {
-			return false, fmt.Errorf("name attribute was not set")
+		id := attrs["id"]
+		if id == "" {
+			return false, fmt.Errorf("id attribute was not set")
 		}
-		profile, err := dbopsClient.GetSettingsProfile(ctx, name, clusterName)
+		profile, err := dbopsClient.GetSettingsProfile(ctx, id, clusterName)
 		return profile != nil, err
 	}
 
