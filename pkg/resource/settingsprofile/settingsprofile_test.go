@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
-	"github.com/zclconf/go-cty/cty"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
@@ -32,12 +31,17 @@ func TestRole_acceptance(t *testing.T) {
 	}
 
 	checkAttributesFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
+		id := attrs["id"]
+		if id == nil {
+			return fmt.Errorf("id was nil")
+		}
+
 		name := attrs["name"]
 		if name == nil {
 			return fmt.Errorf("name was nil")
 		}
 
-		profile, err := dbopsClient.GetSettingsProfile(ctx, name.(string), clusterName)
+		profile, err := dbopsClient.GetSettingsProfile(ctx, id.(string), clusterName)
 		if err != nil {
 			return err
 		}
@@ -60,12 +64,6 @@ func TestRole_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithListAttribute("settings", []cty.Value{
-					cty.ObjectVal(map[string]cty.Value{
-						"name":  cty.StringVal("max_threads"),
-						"value": cty.StringVal("100"),
-					}),
-				}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -78,12 +76,6 @@ func TestRole_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithListAttribute("settings", []cty.Value{
-					cty.ObjectVal(map[string]cty.Value{
-						"name": cty.StringVal("max_threads"),
-						"min":  cty.StringVal("100"),
-					}),
-				}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -96,12 +88,6 @@ func TestRole_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithListAttribute("settings", []cty.Value{
-					cty.ObjectVal(map[string]cty.Value{
-						"name": cty.StringVal("max_threads"),
-						"max":  cty.StringVal("100"),
-					}),
-				}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -114,14 +100,6 @@ func TestRole_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithListAttribute("settings", []cty.Value{
-					cty.ObjectVal(map[string]cty.Value{
-						"name":  cty.StringVal("max_threads"),
-						"value": cty.StringVal("500"),
-						"min":   cty.StringVal("100"),
-						"max":   cty.StringVal("1000"),
-					}),
-				}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -136,15 +114,6 @@ func TestRole_acceptance(t *testing.T) {
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
 				WithStringAttribute("cluster_name", clusterName).
-				WithListAttribute("settings", []cty.Value{
-					cty.ObjectVal(map[string]cty.Value{
-						"name":        cty.StringVal("max_threads"),
-						"value":       cty.StringVal("500"),
-						"min":         cty.StringVal("100"),
-						"max":         cty.StringVal("1000"),
-						"writability": cty.StringVal("CONST"),
-					}),
-				}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -159,15 +128,6 @@ func TestRole_acceptance(t *testing.T) {
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
 				WithStringAttribute("cluster_name", clusterName).
-				WithListAttribute("settings", []cty.Value{
-					cty.ObjectVal(map[string]cty.Value{
-						"name":        cty.StringVal("max_threads"),
-						"value":       cty.StringVal("500"),
-						"min":         cty.StringVal("100"),
-						"max":         cty.StringVal("1000"),
-						"writability": cty.StringVal("WRITABLE"),
-					}),
-				}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
