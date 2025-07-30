@@ -50,7 +50,7 @@ func (i *impl) GetSetting(ctx context.Context, settingsProfileID string, name st
 		querybuilder.NewField("value"),
 		querybuilder.NewField("min"),
 		querybuilder.NewField("max"),
-		querybuilder.NewField("writability"),
+		querybuilder.NewField("writability").ToString(),
 	}, "system.settings_profile_elements").
 		WithCluster(clusterName).
 		Where(querybuilder.AndWhere(
