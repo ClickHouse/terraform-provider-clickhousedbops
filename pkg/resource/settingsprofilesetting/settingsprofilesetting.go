@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -20,10 +21,9 @@ import (
 var settingsProfileSettingResourceDescription string
 
 var (
-	_ resource.Resource                = &Resource{}
-	_ resource.ResourceWithConfigure   = &Resource{}
-	_ resource.ResourceWithImportState = &Resource{}
-	_ resource.ResourceWithModifyPlan  = &Resource{}
+	_ resource.Resource               = &Resource{}
+	_ resource.ResourceWithConfigure  = &Resource{}
+	_ resource.ResourceWithModifyPlan = &Resource{}
 )
 
 func NewResource() resource.Resource {
@@ -69,6 +69,12 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+				Validators: []validator.String{
+					stringvalidator.AtLeastOneOf(
+						path.MatchRoot("min"),
+						path.MatchRoot("max"),
+					),
+				},
 			},
 			"min": schema.StringAttribute{
 				Description: "Min Value for the setting",
@@ -76,12 +82,24 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+				Validators: []validator.String{
+					stringvalidator.AtLeastOneOf(
+						path.MatchRoot("value"),
+						path.MatchRoot("max"),
+					),
+				},
 			},
 			"max": schema.StringAttribute{
 				Description: "Max Value for the setting",
 				Optional:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.AtLeastOneOf(
+						path.MatchRoot("value"),
+						path.MatchRoot("min"),
+					),
 				},
 			},
 			"writability": schema.StringAttribute{
@@ -232,24 +250,6 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		)
 		return
 	}
-}
-
-func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	//// req.ID can either be in the form <cluster name>:<setting profile name> or just <setting profile name>
-	//
-	//// Check if cluster name is specified
-	//ref := req.ID
-	//var clusterName *string
-	//if strings.Contains(req.ID, ":") {
-	//	clusterName = &strings.Split(req.ID, ":")[0]
-	//	ref = strings.Split(req.ID, ":")[1]
-	//}
-	//
-	//resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), ref)...)
-	//
-	//if clusterName != nil {
-	//	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
-	//}
 }
 
 func modelFromApiResponse(state *SettingsProfileSetting, settingsProfile dbops.Setting) {
