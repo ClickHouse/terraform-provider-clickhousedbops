@@ -6,7 +6,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// AlterSettingsProfileQueryBuilder is an interface to build ALTER ROLE SQL queries (already interpolated).
+// AlterSettingsProfileQueryBuilder is an interface to build ALTER SETTINGS PROFILE SQL queries (already interpolated).
 type AlterSettingsProfileQueryBuilder interface {
 	QueryBuilder
 	RenameTo(newName *string) AlterSettingsProfileQueryBuilder
