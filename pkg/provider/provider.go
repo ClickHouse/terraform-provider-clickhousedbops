@@ -21,6 +21,7 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/grantrole"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/role"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/settingsprofile"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/settingsprofileassociation"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/settingsprofilesetting"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/user"
 )
@@ -252,6 +253,7 @@ func (p *Provider) Resources(ctx context.Context) []func() tfresource.Resource {
 		grantprivilege.NewResource,
 		settingsprofile.NewResource,
 		settingsprofilesetting.NewResource,
+		settingsprofileassociation.NewResource,
 	}
 }
 
