@@ -3,7 +3,7 @@ module github.com/ClickHouse/terraform-provider-clickhousedbops
 go 1.23.0
 
 require (
-	github.com/ClickHouse/clickhouse-go/v2 v2.38.0
+	github.com/ClickHouse/clickhouse-go/v2 v2.40.1
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/hashicorp/terraform-json v0.25.0
