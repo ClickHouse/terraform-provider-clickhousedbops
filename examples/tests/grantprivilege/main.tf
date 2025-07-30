@@ -18,13 +18,6 @@ resource "clickhousedbops_grant_privilege" "grant_show_to_role" {
   grant_option      = false
 }
 
-resource "clickhousedbops_grant_privilege" "grant_global_privilege" {
-  cluster_name = var.cluster_name
-  privilege_name    = "REMOTE"
-  grantee_role_name = clickhousedbops_role.reader.name
-  grant_option      = false
-}
-
 resource "clickhousedbops_grant_privilege" "grant_dictget_to_role" {
   cluster_name = var.cluster_name
   privilege_name    = "dictGet"
