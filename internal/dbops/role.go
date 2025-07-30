@@ -10,13 +10,23 @@ import (
 )
 
 type Role struct {
-	ID              string  `json:"id" ch:"id"`
-	Name            string  `json:"name" ch:"name"`
-	SettingsProfile *string `json:"-"`
+	ID               string   `json:"id" ch:"id"`
+	Name             string   `json:"name" ch:"name"`
+	SettingsProfiles []string `json:"-"`
+}
+
+func (r *Role) HasSettingProfile(profileName string) bool {
+	for _, p := range r.SettingsProfiles {
+		if p == profileName {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (i *impl) CreateRole(ctx context.Context, role Role, clusterName *string) (*Role, error) {
-	sql, err := querybuilder.NewCreateRole(role.Name).WithCluster(clusterName).WithSettingsProfile(role.SettingsProfile).Build()
+	sql, err := querybuilder.NewCreateRole(role.Name).WithCluster(clusterName).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -71,18 +81,23 @@ func (i *impl) GetRole(ctx context.Context, id string, clusterName *string) (*Ro
 			return nil, errors.WithMessage(err, "error building query")
 		}
 
+		profiles := make([]string, 0)
 		err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
 			profile, err := data.GetNullableString("inherit_profile")
 			if err != nil {
 				return errors.WithMessage(err, "error scanning query result, missing 'inherit_profile' field")
 			}
 
-			role.SettingsProfile = profile
+			if profile != nil {
+				profiles = append(profiles, *profile)
+			}
 			return nil
 		})
 		if err != nil {
 			return nil, errors.WithMessage(err, "error running query")
 		}
+
+		role.SettingsProfiles = profiles
 	}
 
 	return role, nil
@@ -154,8 +169,6 @@ func (i *impl) UpdateRole(ctx context.Context, role Role, clusterName *string) (
 		NewAlterRole(existing.Name).
 		WithCluster(clusterName).
 		RenameTo(&role.Name).
-		DropSettingsProfile(existing.SettingsProfile).
-		AddSettingsSetting(role.SettingsProfile).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")

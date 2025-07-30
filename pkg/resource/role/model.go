@@ -5,8 +5,7 @@ import (
 )
 
 type Role struct {
-	ClusterName     types.String `tfsdk:"cluster_name"`
-	ID              types.String `tfsdk:"id"`
-	Name            types.String `tfsdk:"name"`
-	SettingsProfile types.String `tfsdk:"settings_profile"`
+	ClusterName types.String `tfsdk:"cluster_name"`
+	ID          types.String `tfsdk:"id"`
+	Name        types.String `tfsdk:"name"`
 }
