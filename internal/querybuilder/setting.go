@@ -39,7 +39,7 @@ func (s *settingData) SQLDef() (string, error) {
 	}
 
 	singleSetting := make([]string, 0)
-	singleSetting = append(singleSetting, s.Name)
+	singleSetting = append(singleSetting, backtick(s.Name))
 	if s.Value != nil {
 		singleSetting = append(singleSetting, "=", quote(*s.Value))
 	}

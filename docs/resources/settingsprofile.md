@@ -16,24 +16,6 @@ You can use the `clickhousedbops_settingsprofile` resource to create a `Setting 
 resource "clickhousedbops_settingsprofile" "profile1" {
   cluster_name = "cluster"
   name = "profile1"
-  inherit_profile = "default"
-
-  settings = [
-    {
-      name = "max_memory_usage"
-      value = "1000"
-      min = "100"
-      max = "2000"
-      writability = "CHANGEABLE_IN_READONLY"
-    },
-    {
-      name = "max_threads"
-      value = "1000"
-      min = "100"
-      max = "2000"
-      writability = "CONST"
-    },
-  ]
 }
 ```
 
@@ -43,38 +25,32 @@ resource "clickhousedbops_settingsprofile" "profile1" {
 ### Required
 
 - `name` (String) Name of the settings profile
-- `settings` (Attributes List) List of settings to apply to the settings profile. (see [below for nested schema](#nestedatt--settings))
 
 ### Optional
 
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
-- `inherit_profile` (String) Name of the profile to inherit from
 
-<a id="nestedatt--settings"></a>
-### Nested Schema for `settings`
+### Read-Only
 
-Required:
-
-- `name` (String) Name of the setting
-
-Optional:
-
-- `max` (String) Max Value for the setting
-- `min` (String) Min Value for the setting
-- `value` (String) Value for the setting
-- `writability` (String) Writability attribute for the setting
+- `id` (String) ID of the settings profile
 
 ## Import
 
 Import is supported using the following syntax:
 
 ```shell
-# Settings profiles can be imported by specifying the name.
+# Settings profiles can be imported by specifying the UUID.
+# Find the ID of the settings profile by checking system.settings_profiles table.
+terraform import clickhousedbops_settingsprofile.example xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# It's also possible to import settings profiles by name:
+
 terraform import clickhousedbops_settingsprofile.example name
 
 # IMPORTANT: if you have a multi node cluster, you need to specify the cluster name!
 
+terraform import clickhousedbops_settingsprofile.example cluster:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 terraform import clickhousedbops_settingsprofile.example cluster:name
 ```

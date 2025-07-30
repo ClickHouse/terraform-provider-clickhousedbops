@@ -32,8 +32,10 @@ type Client interface {
 	GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string, clusterName *string) ([]GrantPrivilege, error)
 
 	CreateSettingsProfile(ctx context.Context, profile SettingsProfile, clusterName *string) (*SettingsProfile, error)
-	GetSettingsProfile(ctx context.Context, name string, clusterName *string) (*SettingsProfile, error)
-	DeleteSettingsProfile(ctx context.Context, name string, clusterName *string) error
+	GetSettingsProfile(ctx context.Context, id string, clusterName *string) (*SettingsProfile, error)
+	DeleteSettingsProfile(ctx context.Context, id string, clusterName *string) error
+	UpdateSettingsProfile(ctx context.Context, settingsProfile SettingsProfile, clusterName *string) (*SettingsProfile, error)
+	FindSettingsProfileByName(ctx context.Context, name string, clusterName *string) (*SettingsProfile, error)
 
 	IsReplicatedStorage(ctx context.Context) (bool, error)
 }

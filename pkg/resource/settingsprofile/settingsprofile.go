@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -51,69 +49,16 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"id": schema.StringAttribute{
+				Computed:    true,
+				Description: "ID of the settings profile",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"name": schema.StringAttribute{
 				Required:    true,
 				Description: "Name of the settings profile",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
-			"inherit_profile": schema.StringAttribute{
-				Description: "Name of the profile to inherit from",
-				Optional:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
-			},
-			"settings": schema.ListNestedAttribute{
-				Description: "List of settings to apply to the settings profile.",
-				Required:    true,
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"name": schema.StringAttribute{
-							Description: "Name of the setting",
-							Required:    true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplace(),
-							},
-						},
-						"value": schema.StringAttribute{
-							Description: "Value for the setting",
-							Optional:    true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplace(),
-							},
-						},
-						"min": schema.StringAttribute{
-							Description: "Min Value for the setting",
-							Optional:    true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplace(),
-							},
-						},
-						"max": schema.StringAttribute{
-							Description: "Max Value for the setting",
-							Optional:    true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplace(),
-							},
-						},
-						"writability": schema.StringAttribute{
-							Description: "Writability attribute for the setting",
-							Optional:    true,
-							PlanModifiers: []planmodifier.String{
-								stringplanmodifier.RequiresReplace(),
-							},
-							Validators: []validator.String{
-								stringvalidator.OneOf(
-									"CONST",
-									"WRITABLE",
-									"CHANGEABLE_IN_READONLY",
-								),
-							},
-						},
-					},
-				},
 			},
 		},
 		MarkdownDescription: settingsProfileResourceDescription,
@@ -172,25 +117,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	profile := dbops.SettingsProfile{
-		Name:           plan.Name.ValueString(),
-		InheritProfile: plan.InheritProfile.ValueStringPointer(),
-	}
-
-	// Settings
-	{
-		settingsModels := make([]Setting, 0, len(plan.Settings.Elements()))
-		plan.Settings.ElementsAs(ctx, &settingsModels, false)
-		settings := make([]dbops.Setting, 0)
-		for _, setting := range settingsModels {
-			settings = append(settings, dbops.Setting{
-				Name:        setting.Name.ValueString(),
-				Value:       setting.Value.ValueStringPointer(),
-				Min:         setting.Min.ValueStringPointer(),
-				Max:         setting.Max.ValueStringPointer(),
-				Writability: setting.Writability.ValueStringPointer(),
-			})
-		}
-		profile.Settings = settings
+		Name: plan.Name.ValueString(),
 	}
 
 	createdSettingsProfile, err := r.client.CreateSettingsProfile(ctx, profile, plan.ClusterName.ValueStringPointer())
@@ -223,7 +150,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	settingsProfile, err := r.client.GetSettingsProfile(ctx, state.Name.ValueString(), state.ClusterName.ValueStringPointer())
+	settingsProfile, err := r.client.GetSettingsProfile(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse SettingsProfile",
@@ -243,7 +170,40 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 }
 
 func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	panic("Update of role resource is not supported")
+	var plan, state SettingsProfile
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	diags = req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	profile := dbops.SettingsProfile{
+		ID:   state.ID.ValueString(),
+		Name: plan.Name.ValueString(),
+	}
+
+	editedProfile, err := r.client.UpdateSettingsProfile(ctx, profile, plan.ClusterName.ValueStringPointer())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Updating ClickHouse SettingsProfile",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
+	}
+	if editedProfile != nil {
+		modelFromApiResponse(&state, *editedProfile)
+
+		diags = resp.State.Set(ctx, &state)
+		resp.Diagnostics.Append(diags...)
+	} else {
+		resp.State.RemoveResource(ctx)
+	}
 }
 
 func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -254,7 +214,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.DeleteSettingsProfile(ctx, state.Name.ValueString(), state.ClusterName.ValueStringPointer())
+	err := r.client.DeleteSettingsProfile(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting ClickHouse SettingsProfile",
@@ -265,7 +225,8 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// req.ID can either be in the form <cluster name>:<setting profile name> or just <setting profile name>
+	// req.ID can either be in the form <cluster name>:<setting profile ref> or just <setting profile ref>
+	// setting profile ref can either be the settings profile's name or the UUID
 
 	// Check if cluster name is specified
 	ref := req.ID
@@ -275,7 +236,24 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 		ref = strings.Split(req.ID, ":")[1]
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), ref)...)
+	// Check if ref is a UUID
+	_, err := uuid.Parse(ref)
+	if err != nil {
+		// Failed parsing UUID, try importing using the database name
+		settingsProfile, err := r.client.FindSettingsProfileByName(ctx, ref, clusterName)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Cannot find settings profile",
+				fmt.Sprintf("%+v\n", err),
+			)
+			return
+		}
+
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), settingsProfile.ID)...)
+	} else {
+		// User passed a UUID
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), ref)...)
+	}
 
 	if clusterName != nil {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
@@ -283,20 +261,6 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 }
 
 func modelFromApiResponse(state *SettingsProfile, settingsProfile dbops.SettingsProfile) {
+	state.ID = types.StringValue(settingsProfile.ID)
 	state.Name = types.StringValue(settingsProfile.Name)
-	state.InheritProfile = types.StringPointerValue(settingsProfile.InheritProfile)
-
-	{
-		var settings []attr.Value
-		for _, setting := range settingsProfile.Settings {
-			settings = append(settings, Setting{
-				Name:        types.StringValue(setting.Name),
-				Value:       types.StringPointerValue(setting.Value),
-				Min:         types.StringPointerValue(setting.Min),
-				Max:         types.StringPointerValue(setting.Max),
-				Writability: types.StringPointerValue(setting.Writability),
-			}.ObjectValue())
-		}
-		state.Settings, _ = types.ListValue(Setting{}.ObjectType(), settings)
-	}
 }

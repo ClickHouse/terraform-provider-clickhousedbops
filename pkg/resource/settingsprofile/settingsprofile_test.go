@@ -46,50 +46,8 @@ func TestRole_acceptance(t *testing.T) {
 			return fmt.Errorf("settings profile named %q was not found", name)
 		}
 
-		// Check state fields are aligned with the role we retrieved from CH.
-		if !nilcompare.NilCompare(attrs["inherit_profile"], profile.InheritProfile) {
-			return fmt.Errorf("wrong value for inherit_profile attribute")
-		}
-
 		if !nilcompare.NilCompare(clusterName, attrs["cluster_name"]) {
 			return fmt.Errorf("wrong value for cluster_name attribute")
-		}
-
-		if len(profile.Settings) != len(attrs["settings"].([]interface{})) {
-			return fmt.Errorf("invalid number of settings")
-		}
-
-		for _, setting := range profile.Settings {
-			// Look for the same setting in the attributes
-			stateSettings := attrs["settings"].([]interface{})
-			found := false
-
-			for _, stateSetting := range stateSettings {
-				state := stateSetting.(map[string]interface{})
-				if setting.Name == state["name"].(string) {
-					found = true
-					if !nilcompare.NilCompare(setting.Value, state["value"]) {
-						return fmt.Errorf("invalid Value for setting %q", setting.Name)
-					}
-
-					if !nilcompare.NilCompare(setting.Min, state["min"]) {
-						return fmt.Errorf("invalid Min for setting %q", setting.Name)
-					}
-
-					if !nilcompare.NilCompare(setting.Max, state["max"]) {
-						return fmt.Errorf("invalid Max for setting %q", setting.Name)
-					}
-
-					if !nilcompare.NilCompare(setting.Writability, state["writability"]) {
-						return fmt.Errorf("invalid Writability for setting %q", setting.Name)
-					}
-					break
-				}
-			}
-
-			if !found {
-				return fmt.Errorf("setting %q was not found in the state", setting.Name)
-			}
 		}
 
 		return nil

@@ -33,7 +33,7 @@ func Test_setting_SQLDef(t *testing.T) {
 				Name:  "test",
 				Value: strPtr("123"),
 			},
-			want:    "test = '123'",
+			want:    "`test` = '123'",
 			wantErr: false,
 		},
 		{
@@ -42,7 +42,7 @@ func Test_setting_SQLDef(t *testing.T) {
 				Name: "test",
 				Min:  strPtr("456"),
 			},
-			want:    "test MIN '456'",
+			want:    "`test` MIN '456'",
 			wantErr: false,
 		},
 		{
@@ -51,7 +51,7 @@ func Test_setting_SQLDef(t *testing.T) {
 				Name: "test",
 				Max:  strPtr("789"),
 			},
-			want:    "test MAX '789'",
+			want:    "`test` MAX '789'",
 			wantErr: false,
 		},
 		{
@@ -61,7 +61,7 @@ func Test_setting_SQLDef(t *testing.T) {
 				Min:  strPtr("10"),
 				Max:  strPtr("100"),
 			},
-			want:    "test MIN '10' MAX '100'",
+			want:    "`test` MIN '10' MAX '100'",
 			wantErr: false,
 		},
 		{
@@ -72,7 +72,7 @@ func Test_setting_SQLDef(t *testing.T) {
 				Min:   strPtr("10"),
 				Max:   strPtr("100"),
 			},
-			want:    "test = '50' MIN '10' MAX '100'",
+			want:    "`test` = '50' MIN '10' MAX '100'",
 			wantErr: false,
 		},
 	}

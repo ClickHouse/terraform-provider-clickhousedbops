@@ -31,14 +31,6 @@ func Test_createSettingsProfileQueryBuilder_Build(t *testing.T) {
 			wantErr:     false,
 		},
 		{
-			name:        "No settings",
-			profileName: "prf1",
-			clusterName: nil,
-			settings:    nil,
-			want:        "",
-			wantErr:     true,
-		},
-		{
 			name:        "on cluster",
 			profileName: "prf1",
 			clusterName: strPtr("cluster1"),

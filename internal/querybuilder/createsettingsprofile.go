@@ -63,22 +63,20 @@ func (q *createSettingsProfileQueryBuilder) Build() (string, error) {
 		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
 	}
 
-	if len(q.settings) == 0 {
-		return "", errors.New("cannot create settings profile with no settings")
-	}
+	if len(q.settings) > 0 {
+		tokens = append(tokens, "SETTINGS")
 
-	tokens = append(tokens, "SETTINGS")
-
-	renderedSettings := make([]string, 0)
-	for _, s := range q.settings {
-		def, err := s.SQLDef()
-		if err != nil {
-			return "", errors.WithMessage(err, "Error building query")
+		renderedSettings := make([]string, 0)
+		for _, s := range q.settings {
+			def, err := s.SQLDef()
+			if err != nil {
+				return "", errors.WithMessage(err, "Error building query")
+			}
+			renderedSettings = append(renderedSettings, def)
 		}
-		renderedSettings = append(renderedSettings, def)
-	}
 
-	tokens = append(tokens, strings.Join(renderedSettings, ", "))
+		tokens = append(tokens, strings.Join(renderedSettings, ", "))
+	}
 
 	if q.inheritProfile != nil {
 		tokens = append(tokens, "INHERIT", quote(*q.inheritProfile))
