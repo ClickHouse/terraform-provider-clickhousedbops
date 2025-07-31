@@ -23,5 +23,36 @@ jobs:
       - name: Run go tests
         run: make test
 
+  tftestprepare:
+    runs-on: ubuntu-latest
+    outputs:
+      resources: ${{ steps.list.outputs.resources }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: List resources
+        id: list
+        shell: bash
+        run: |
+          resources="$(ls -1 pkg/resource|jq -R -s -c 'split("\n")[:-1]')"
+          echo "resources=${resources}" >> "$GITHUB_OUTPUT"
+
+  tftest:
+    needs: ["tftestprepare"]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        resource: ${{ fromJSON(needs.tftestprepare.outputs.resources) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
       - name: Run terraform acceptance tests
-        run: make tftest
+        run: make tftest RESOURCE=${{ matrix.resource }}
