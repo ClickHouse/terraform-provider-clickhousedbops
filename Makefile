@@ -34,7 +34,10 @@ test:
 	echo $(TEST) | xargs -t -n4 go test $(TESTARGS) -timeout=30s -parallel=4
 
 tftest:
-	TF_ACC=1 go test -p 1 -parallel=1 -v -run Test.*_acceptance ./pkg/resource/...
+ifeq ($(strip $(RESOURCE)),)
+	$(error RESOURCE variable is required and cannot be empty. Usage: make tftest RESOURCE=user)
+endif
+	TF_ACC=1 go test -p 1 -parallel=1 -v -run Test.*_acceptance ./pkg/resource/$(RESOURCE)
 
 enable_git_hooks: ## Add githooks for code validation before commit, as symlink so they get updated automatically
 	mkdir -p .git/hooks
