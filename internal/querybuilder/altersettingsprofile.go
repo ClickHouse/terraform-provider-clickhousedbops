@@ -12,6 +12,7 @@ type AlterSettingsProfileQueryBuilder interface {
 	RenameTo(newName *string) AlterSettingsProfileQueryBuilder
 	AddSetting(name string, value *string, min *string, max *string, writability *string) AlterSettingsProfileQueryBuilder
 	RemoveSetting(name string) AlterSettingsProfileQueryBuilder
+	InheritFrom(profileNames []string) AlterSettingsProfileQueryBuilder
 	WithCluster(clusterName *string) AlterSettingsProfileQueryBuilder
 }
 
@@ -21,6 +22,8 @@ type alterSettingsProfileQueryBuilder struct {
 	settings       []settingData
 	removeSettings []string
 	clusterName    *string
+	dropProfiles   bool
+	inheritFrom    []string
 }
 
 func NewAlterSettingsProfile(resourceName string) AlterSettingsProfileQueryBuilder {
@@ -59,6 +62,12 @@ func (q *alterSettingsProfileQueryBuilder) WithCluster(clusterName *string) Alte
 	return q
 }
 
+func (q *alterSettingsProfileQueryBuilder) InheritFrom(profileNames []string) AlterSettingsProfileQueryBuilder {
+	q.dropProfiles = true
+	q.inheritFrom = profileNames
+	return q
+}
+
 func (q *alterSettingsProfileQueryBuilder) Build() (string, error) {
 	if q.resourceName == "" {
 		return "", errors.New("resourceName cannot be empty for ALTER ROLE queries")
@@ -77,6 +86,10 @@ func (q *alterSettingsProfileQueryBuilder) Build() (string, error) {
 
 	if q.clusterName != nil {
 		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
+	}
+
+	if q.dropProfiles {
+		tokens = append(tokens, "DROP ALL PROFILES")
 	}
 
 	if len(q.removeSettings) > 0 {
@@ -98,14 +111,9 @@ func (q *alterSettingsProfileQueryBuilder) Build() (string, error) {
 		tokens = append(tokens, strings.Join(each, ", "))
 	}
 
-	//if q.newInheritProfile == nil || q.oldInheritProfile == nil || *q.newInheritProfile != *q.oldInheritProfile {
-	//	if q.newInheritProfile != nil {
-	//		tokens = append(tokens, "ADD", "PROFILE", quote(*q.newInheritProfile))
-	//	}
-	//	if q.oldInheritProfile != nil {
-	//		tokens = append(tokens, "DROP", "PROFILE", quote(*q.oldInheritProfile))
-	//	}
-	//}
+	if len(q.inheritFrom) > 0 {
+		tokens = append(tokens, "INHERIT", strings.Join(backtickAll(q.inheritFrom), ", "))
+	}
 
 	return strings.Join(tokens, " ") + ";", nil
 }

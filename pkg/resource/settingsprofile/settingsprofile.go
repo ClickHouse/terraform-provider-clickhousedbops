@@ -7,11 +7,14 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -59,6 +62,14 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"name": schema.StringAttribute{
 				Required:    true,
 				Description: "Name of the settings profile",
+			},
+			"inherit_from": schema.ListAttribute{
+				Optional:    true,
+				ElementType: types.StringType,
+				Description: "List of setting profile names to inherit from",
+				Validators: []validator.List{
+					listvalidator.SizeAtLeast(1),
+				},
 			},
 		},
 		MarkdownDescription: settingsProfileResourceDescription,
@@ -116,8 +127,16 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	inherit := make([]string, 0)
+
+	resp.Diagnostics.Append(plan.InheritFrom.ElementsAs(ctx, &inherit, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	profile := dbops.SettingsProfile{
-		Name: plan.Name.ValueString(),
+		Name:        plan.Name.ValueString(),
+		InheritFrom: inherit,
 	}
 
 	createdSettingsProfile, err := r.client.CreateSettingsProfile(ctx, profile, plan.ClusterName.ValueStringPointer())
@@ -183,9 +202,16 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
+	inherit := make([]string, 0)
+	resp.Diagnostics.Append(plan.InheritFrom.ElementsAs(ctx, &inherit, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	profile := dbops.SettingsProfile{
-		ID:   state.ID.ValueString(),
-		Name: plan.Name.ValueString(),
+		ID:          state.ID.ValueString(),
+		Name:        plan.Name.ValueString(),
+		InheritFrom: inherit,
 	}
 
 	editedProfile, err := r.client.UpdateSettingsProfile(ctx, profile, plan.ClusterName.ValueStringPointer())
@@ -263,4 +289,15 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 func modelFromApiResponse(state *SettingsProfile, settingsProfile dbops.SettingsProfile) {
 	state.ID = types.StringValue(settingsProfile.ID)
 	state.Name = types.StringValue(settingsProfile.Name)
+
+	if len(settingsProfile.InheritFrom) > 0 {
+		values := make([]attr.Value, 0)
+		for _, i := range settingsProfile.InheritFrom {
+			values = append(values, types.StringValue(i))
+		}
+
+		state.InheritFrom, _ = types.ListValue(types.StringType, values)
+	} else {
+		state.InheritFrom = types.ListNull(types.StringType)
+	}
 }

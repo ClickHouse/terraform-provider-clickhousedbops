@@ -3,9 +3,11 @@ package settingsprofile_test
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/zclconf/go-cty/cty"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
@@ -54,6 +56,24 @@ func TestSettingsprofile_acceptance(t *testing.T) {
 			return fmt.Errorf("wrong value for cluster_name attribute")
 		}
 
+		// Check inherit_from
+
+		if attrs["inherit_from"] == nil && len(profile.InheritFrom) > 0 ||
+			attrs["inherit_from"] != nil && len(profile.InheritFrom) == 0 {
+			return fmt.Errorf("wrong value for inherit_from attribute")
+		}
+
+		if attrs["inherit_from"] != nil {
+			attrsInheritFrom := make([]string, 0)
+			for _, i := range attrs["inherit_from"].([]interface{}) {
+				attrsInheritFrom = append(attrsInheritFrom, i.(string))
+			}
+
+			if !reflect.DeepEqual(profile.InheritFrom, attrsInheritFrom) {
+				return fmt.Errorf("wrong value for inherit_from attribute")
+			}
+		}
+
 		return nil
 	}
 
@@ -64,6 +84,7 @@ func TestSettingsprofile_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithListAttribute("inherit_from", []cty.Value{cty.StringVal("default")}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -100,6 +121,7 @@ func TestSettingsprofile_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithListAttribute("inherit_from", []cty.Value{cty.StringVal("default")}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -127,6 +149,7 @@ func TestSettingsprofile_acceptance(t *testing.T) {
 			Protocol:    "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithListAttribute("inherit_from", []cty.Value{cty.StringVal("default")}).
 				WithStringAttribute("cluster_name", clusterName).
 				Build(),
 			ResourceName:        resourceName,

@@ -10,6 +10,14 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/querybuilder"
 )
 
+type Setting struct {
+	Name        string
+	Value       *string
+	Min         *string
+	Max         *string
+	Writability *string
+}
+
 func (i *impl) CreateSetting(ctx context.Context, settingsProfileID string, setting Setting, clusterName *string) (*Setting, error) {
 	settingsProfile, err := i.GetSettingsProfile(ctx, settingsProfileID, clusterName)
 	if err != nil {
@@ -43,7 +51,8 @@ func (i *impl) GetSetting(ctx context.Context, settingsProfileID string, name st
 	}
 
 	if settingsProfile == nil {
-		return nil, errors.New(fmt.Sprintf("settings profile with id %q was not found", settingsProfileID))
+		// No setting profile, hence no setting available.
+		return nil, nil
 	}
 
 	sql, err := querybuilder.NewSelect([]querybuilder.Field{

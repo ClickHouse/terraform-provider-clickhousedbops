@@ -10,23 +10,17 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/querybuilder"
 )
 
-type Setting struct {
-	Name        string
-	Value       *string
-	Min         *string
-	Max         *string
-	Writability *string
-}
-
 type SettingsProfile struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	InheritFrom []string `json:"-"`
 }
 
 func (i *impl) CreateSettingsProfile(ctx context.Context, profile SettingsProfile, clusterName *string) (*SettingsProfile, error) {
 	sql, err := querybuilder.
 		NewCreateSettingsProfile(profile.Name).
 		WithCluster(clusterName).
+		InheritFrom(profile.InheritFrom).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
@@ -81,6 +75,33 @@ func (i *impl) GetSettingsProfile(ctx context.Context, id string, clusterName *s
 		return nil, nil
 	}
 
+	// Check roles this profile is inheriting from.
+	{
+		sql, err := querybuilder.
+			NewSelect([]querybuilder.Field{querybuilder.NewField("inherit_profile")}, "system.settings_profile_elements").
+			Where(querybuilder.WhereEquals("profile_name", profile.Name)).
+			OrderBy(querybuilder.NewField("index"), querybuilder.ASC).
+			Build()
+		if err != nil {
+			return nil, errors.WithMessage(err, "error building query")
+		}
+		err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+			inheritedProfileName, err := data.GetNullableString("inherit_profile")
+			if err != nil {
+				return errors.WithMessage(err, "error scanning query result, missing 'profile_name' field")
+			}
+
+			if inheritedProfileName != nil {
+				profile.InheritFrom = append(profile.InheritFrom, *inheritedProfileName)
+			}
+
+			return nil
+		})
+		if err != nil {
+			return nil, errors.WithMessage(err, "error running query")
+		}
+	}
+
 	return profile, nil
 }
 
@@ -122,6 +143,7 @@ func (i *impl) UpdateSettingsProfile(ctx context.Context, settingsProfile Settin
 	sql, err := querybuilder.
 		NewAlterSettingsProfile(existing.Name).
 		WithCluster(clusterName).
+		InheritFrom(settingsProfile.InheritFrom).
 		RenameTo(&settingsProfile.Name).
 		Build()
 	if err != nil {
