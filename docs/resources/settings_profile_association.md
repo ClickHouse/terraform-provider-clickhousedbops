@@ -3,12 +3,12 @@
 page_title: "clickhousedbops_settings_profile_association Resource - clickhousedbops"
 subcategory: ""
 description: |-
-  You can use the clickhousedbops_role resource to create a role in a ClickHouse instance.
+  You can use the clickhousedbops_settings_profile_association resource to associate a settings_profile to a role or user in a ClickHouse instance.
 ---
 
 # clickhousedbops_settings_profile_association (Resource)
 
-You can use the `clickhousedbops_role` resource to create a `role` in a `ClickHouse` instance.
+You can use the `clickhousedbops_settings_profile_association` resource to associate a `settings_profile` to a `role` or `user` in a `ClickHouse` instance.
 
 
 
