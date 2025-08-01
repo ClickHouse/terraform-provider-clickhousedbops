@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	resourceType = "clickhousedbops_setting_sprofile"
+	resourceType = "clickhousedbops_settings_profile"
 	resourceName = "foo"
 )
 
