@@ -1,4 +1,4 @@
-package settingsprofilesetting_test
+package setting_test
 
 import (
 	"context"
@@ -14,14 +14,14 @@ import (
 )
 
 const (
-	resourceType = "clickhousedbops_settingsprofilesetting"
+	resourceType = "clickhousedbops_setting"
 	resourceName = "foo"
 )
 
 func TestSettingsProfileSettings_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
-	settingProfileBuilder := resourcebuilder.New("clickhousedbops_settingsprofile", "profile1").
+	settingProfileBuilder := resourcebuilder.New("clickhousedbops_settings_profile", "profile1").
 		WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
 
 	checkNotExistsFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error) {
@@ -102,7 +102,7 @@ func TestSettingsProfileSettings_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				AddDependency(settingProfileBuilder.Build()).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithStringAttribute("name", "max_threads").
 				WithStringAttribute("value", "100").
 				Build(),
@@ -117,7 +117,7 @@ func TestSettingsProfileSettings_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				AddDependency(settingProfileBuilder.Build()).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithStringAttribute("name", "max_threads").
 				WithStringAttribute("min", "100").
 				Build(),
@@ -132,7 +132,7 @@ func TestSettingsProfileSettings_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				AddDependency(settingProfileBuilder.Build()).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithStringAttribute("name", "max_threads").
 				WithStringAttribute("max", "100").
 				Build(),
@@ -147,7 +147,7 @@ func TestSettingsProfileSettings_acceptance(t *testing.T) {
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				AddDependency(settingProfileBuilder.Build()).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithStringAttribute("name", "max_threads").
 				WithStringAttribute("value", "500").
 				WithStringAttribute("min", "100").
@@ -165,7 +165,7 @@ func TestSettingsProfileSettings_acceptance(t *testing.T) {
 			Protocol:    "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				AddDependency(settingProfileBuilder.WithStringAttribute("cluster_name", clusterName).Build()).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithStringAttribute("name", "max_threads").
 				WithStringAttribute("cluster_name", clusterName).
 				WithStringAttribute("value", "500").
@@ -185,7 +185,7 @@ func TestSettingsProfileSettings_acceptance(t *testing.T) {
 			Protocol:    "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				AddDependency(settingProfileBuilder.WithStringAttribute("cluster_name", clusterName).Build()).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithStringAttribute("name", "max_threads").
 				WithStringAttribute("cluster_name", clusterName).
 				WithStringAttribute("value", "500").
