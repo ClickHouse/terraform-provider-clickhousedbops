@@ -111,7 +111,7 @@ func (i *httpClient) runQuery(ctx context.Context, qry string) (string, error) {
 
 	req, err := http.NewRequest(http.MethodPost, i.baseUrl.String(), strings.NewReader(qry))
 	if err != nil {
-		return "", errors.WithMessage(err, "error prepary HTTP request")
+		return "", errors.WithMessage(err, "error preparing HTTP request")
 	}
 
 	req.Header.Add("X-ClickHouse-Format", "JSONCompactStrings")
