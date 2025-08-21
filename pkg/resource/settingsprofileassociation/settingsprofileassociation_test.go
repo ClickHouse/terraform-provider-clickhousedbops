@@ -13,14 +13,14 @@ import (
 )
 
 const (
-	resourceType = "clickhousedbops_settingsprofileassociation"
+	resourceType = "clickhousedbops_settings_profile_association"
 	resourceName = "foo"
 )
 
 func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
-	settingsProfile := resourcebuilder.New("clickhousedbops_settingsprofile", "profile1").
+	settingsProfile := resourcebuilder.New("clickhousedbops_settings_profile", "profile1").
 		WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
 
 	role := resourcebuilder.New("clickhousedbops_role", "role").
@@ -143,7 +143,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithResourceFieldReference("role_id", "clickhousedbops_role", "role", "id").
 				AddDependency(role.Build()).
 				AddDependency(settingsProfile.Build()).
@@ -158,7 +158,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
 				AddDependency(user.Build()).
 				AddDependency(settingsProfile.Build()).
@@ -173,7 +173,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithResourceFieldReference("role_id", "clickhousedbops_role", "role", "id").
 				AddDependency(role.Build()).
 				AddDependency(settingsProfile.Build()).
@@ -188,7 +188,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
 			Protocol: "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
 				AddDependency(user.Build()).
 				AddDependency(settingsProfile.Build()).
@@ -204,7 +204,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			ClusterName: &clusterName,
 			Protocol:    "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithResourceFieldReference("role_id", "clickhousedbops_role", "role", "id").
 				AddDependency(role.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(settingsProfile.WithStringAttribute("cluster_name", clusterName).Build()).
@@ -221,7 +221,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			ClusterName: &clusterName,
 			Protocol:    "http",
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settingsprofile", "profile1", "id").
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
 				AddDependency(user.WithStringAttribute("cluster_name", clusterName).Build()).
 				AddDependency(settingsProfile.WithStringAttribute("cluster_name", clusterName).Build()).

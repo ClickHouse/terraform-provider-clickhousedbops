@@ -1,4 +1,4 @@
-package settingsprofilesetting
+package setting
 
 import (
 	"context"
@@ -17,8 +17,8 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 )
 
-//go:embed settingsprofilesetting.md
-var settingsProfileSettingResourceDescription string
+//go:embed setting.md
+var settingResourceDescription string
 
 var (
 	_ resource.Resource               = &Resource{}
@@ -35,7 +35,7 @@ type Resource struct {
 }
 
 func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_settingsprofilesetting"
+	resp.TypeName = req.ProviderTypeName + "_setting"
 }
 
 func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -117,7 +117,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				},
 			},
 		},
-		MarkdownDescription: settingsProfileSettingResourceDescription,
+		MarkdownDescription: settingResourceDescription,
 	}
 }
 
@@ -138,18 +138,18 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		}
 
 		if isReplicatedStorage {
-			var config SettingsProfileSetting
+			var config Setting
 			diags := req.Config.Get(ctx, &config)
 			resp.Diagnostics.Append(diags...)
 			if resp.Diagnostics.HasError() {
 				return
 			}
 
-			// SettingsProfileSetting cannot specify 'cluster_name' or apply will fail.
+			// Setting cannot specify 'cluster_name' or apply will fail.
 			if !config.ClusterName.IsNull() {
 				resp.Diagnostics.AddWarning(
 					"Invalid configuration",
-					"Your ClickHouse cluster is using Replicated storage, please remove the 'cluster_name' attribute from your SettingsProfileSetting resource definition if you encounter any errors.",
+					"Your ClickHouse cluster is using Replicated storage, please remove the 'cluster_name' attribute from your Setting resource definition if you encounter any errors.",
 				)
 			}
 		}
@@ -165,7 +165,7 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, _
 }
 
 func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan SettingsProfileSetting
+	var plan Setting
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -183,13 +183,13 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	createdSetting, err := r.client.CreateSetting(ctx, plan.SettingsProfileID.ValueString(), setting, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error Creating ClickHouse SettingsProfileSetting",
+			"Error Creating ClickHouse Setting",
 			fmt.Sprintf("%+v\n", err),
 		)
 		return
 	}
 
-	state := SettingsProfileSetting{
+	state := Setting{
 		ClusterName:       plan.ClusterName,
 		SettingsProfileID: plan.SettingsProfileID,
 	}
@@ -204,7 +204,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 }
 
 func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var state SettingsProfileSetting
+	var state Setting
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -235,7 +235,7 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 }
 
 func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	var state SettingsProfileSetting
+	var state Setting
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -245,14 +245,14 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 	err := r.client.DeleteSetting(ctx, state.SettingsProfileID.ValueString(), state.Name.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error Deleting ClickHouse SettingsProfileSetting",
+			"Error Deleting ClickHouse Setting",
 			fmt.Sprintf("%+v\n", err),
 		)
 		return
 	}
 }
 
-func modelFromApiResponse(state *SettingsProfileSetting, settingsProfile dbops.Setting) {
+func modelFromApiResponse(state *Setting, settingsProfile dbops.Setting) {
 	state.Name = types.StringValue(settingsProfile.Name)
 	state.Value = types.StringPointerValue(settingsProfile.Value)
 	state.Min = types.StringPointerValue(settingsProfile.Min)

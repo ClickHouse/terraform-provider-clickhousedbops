@@ -1,10 +1,10 @@
-package settingsprofilesetting
+package setting
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-type SettingsProfileSetting struct {
+type Setting struct {
 	ClusterName       types.String `tfsdk:"cluster_name"`
 	SettingsProfileID types.String `tfsdk:"settings_profile_id"`
 	Name              types.String `tfsdk:"name"`

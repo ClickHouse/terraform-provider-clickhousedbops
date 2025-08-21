@@ -197,7 +197,7 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 	}
 
 	sql, err := querybuilder.NewSelect([]querybuilder.Field{
-		querybuilder.NewField("access_type"),
+		querybuilder.NewField("access_type").ToString(),
 		querybuilder.NewField("database"),
 		querybuilder.NewField("table"),
 		querybuilder.NewField("column"),
