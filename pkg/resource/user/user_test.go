@@ -147,7 +147,43 @@ func TestUser_acceptance(t *testing.T) {
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
+		// Test cases for legacy password field (backward compatibility)
+		{
+			Name:        "Create User using legacy password field (sensitive)",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:    "native",
+			ClusterName: nil,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithFunction("password_sha256_hash", "sha256", "changeme").
+				WithIntAttribute("password_sha256_hash_wo_version", 1).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:        "Create User using legacy password field on cluster",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
+			Protocol:    "native",
+			ClusterName: &clusterName,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("cluster_name", clusterName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithFunction("password_sha256_hash", "sha256", "changeme").
+				WithIntAttribute("password_sha256_hash_wo_version", 1).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
 	}
 
 	runner.RunTests(t, tests)
 }
+
+// TODO: Add validation tests for password field mutual exclusivity
+// The current test framework doesn't support ExpectError field
+// These tests would need to be implemented with the standard terraform-plugin-testing framework
