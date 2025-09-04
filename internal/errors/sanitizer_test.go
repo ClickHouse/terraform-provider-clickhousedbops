@@ -51,12 +51,12 @@ func TestSanitizeError(t *testing.T) {
 				}
 				return
 			}
-			
+
 			resultStr := result.Error()
 			if !strings.Contains(resultStr, tt.want) && tt.want != "" {
 				t.Errorf("SanitizeError() = %v, want to contain %v", resultStr, tt.want)
 			}
-			
+
 			// Ensure no sensitive patterns remain - check for original hash specifically
 			if strings.Contains(resultStr, testHash) {
 				t.Errorf("SanitizeError() still contains sensitive hash: %v", resultStr)
@@ -70,52 +70,52 @@ func TestSanitizeError(t *testing.T) {
 
 func TestSanitizeString(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		category ErrorCategory
-		want     string
+		name           string
+		input          string
+		category       ErrorCategory
+		want           string
 		mustNotContain []string
 	}{
 		{
-			name:     "CREATE USER with password hash",
-			input:    fmt.Sprintf("CREATE USER test IDENTIFIED WITH sha256_hash BY '%s'", testHash),
-			category: CategoryDatabase,
-			want:     "[REDACTED]",
+			name:           "CREATE USER with password hash",
+			input:          fmt.Sprintf("CREATE USER test IDENTIFIED WITH sha256_hash BY '%s'", testHash),
+			category:       CategoryDatabase,
+			want:           "[REDACTED]",
 			mustNotContain: []string{testHash},
 		},
 		{
-			name:     "ClickHouse error with SQL query",
-			input:    "Code: 516, e.message = Unknown user, executing query: CREATE USER test IDENTIFIED WITH sha256_hash BY 'hash123'",
-			category: CategoryDatabase,
-			want:     "executing query: [SQL QUERY]",
+			name:           "ClickHouse error with SQL query",
+			input:          "Code: 516, e.message = Unknown user, executing query: CREATE USER test IDENTIFIED WITH sha256_hash BY 'hash123'",
+			category:       CategoryDatabase,
+			want:           "executing query: [SQL QUERY]",
 			mustNotContain: []string{"hash123", "CREATE USER test"},
 		},
 		{
-			name:     "Stack trace with file paths",
-			input:    "error occurred\n    at /usr/local/lib/clickhouse/user.go:123\n    at /home/user/app/main.go:456",
-			category: CategoryGeneral,
-			want:     "error occurred",
+			name:           "Stack trace with file paths",
+			input:          "error occurred\n    at /usr/local/lib/clickhouse/user.go:123\n    at /home/user/app/main.go:456",
+			category:       CategoryGeneral,
+			want:           "error occurred",
 			mustNotContain: []string{"/usr/local/lib", "/home/user"},
 		},
 		{
-			name:     "API key in configuration",
-			input:    "invalid api_key: 'sk_test_1234567890abcdef'",
-			category: CategoryAuthentication,
-			want:     "[REDACTED]",
+			name:           "API key in configuration",
+			input:          "invalid api_key: 'sk_test_1234567890abcdef'",
+			category:       CategoryAuthentication,
+			want:           "[REDACTED]",
 			mustNotContain: []string{"sk_test_1234567890abcdef"},
 		},
 		{
-			name:     "Connection string with password",
-			input:    "failed to connect to clickhouse://user:mypassword123@localhost:9000/default",
-			category: CategoryDatabase,
-			want:     "[REDACTED]",
+			name:           "Connection string with password",
+			input:          "failed to connect to clickhouse://user:mypassword123@localhost:9000/default",
+			category:       CategoryDatabase,
+			want:           "[REDACTED]",
 			mustNotContain: []string{"mypassword123"},
 		},
 		{
-			name:     "Standalone hash without SQL context",
-			input:    fmt.Sprintf("Invalid hash provided: %s for authentication", testHash),
-			category: CategoryGeneral,
-			want:     "[REDACTED]",
+			name:           "Standalone hash without SQL context",
+			input:          fmt.Sprintf("Invalid hash provided: %s for authentication", testHash),
+			category:       CategoryGeneral,
+			want:           "[REDACTED]",
 			mustNotContain: []string{testHash},
 		},
 	}
@@ -123,11 +123,11 @@ func TestSanitizeString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := sanitizeString(tt.input, tt.category)
-			
+
 			if tt.want != "" && !strings.Contains(result, tt.want) {
 				t.Errorf("sanitizeString() = %v, want to contain %v", result, tt.want)
 			}
-			
+
 			for _, forbidden := range tt.mustNotContain {
 				if strings.Contains(result, forbidden) {
 					t.Errorf("sanitizeString() = %v, must not contain %v", result, forbidden)
@@ -139,27 +139,27 @@ func TestSanitizeString(t *testing.T) {
 
 func TestCreateSecureErrorMessage(t *testing.T) {
 	tests := []struct {
-		name                    string
-		operation               string
+		name                   string
+		operation              string
 		resourceType           string
 		inputError             error
 		expectedUserMessage    string
 		expectedTechnicalEmpty bool
 	}{
 		{
-			name:                "database error with sensitive info",
-			operation:           "create",
-			resourceType:        "user",
-			inputError:          fmt.Errorf("executing query: CREATE USER test IDENTIFIED WITH sha256_hash BY '%s'", testHash),
-			expectedUserMessage: "Failed to create user. Please check your configuration and try again.",
+			name:                   "database error with sensitive info",
+			operation:              "create",
+			resourceType:           "user",
+			inputError:             fmt.Errorf("executing query: CREATE USER test IDENTIFIED WITH sha256_hash BY '%s'", testHash),
+			expectedUserMessage:    "Failed to create user. Please check your configuration and try again.",
 			expectedTechnicalEmpty: false,
 		},
 		{
-			name:                "nil error",
-			operation:           "update",
-			resourceType:        "role",
-			inputError:          nil,
-			expectedUserMessage: "",
+			name:                   "nil error",
+			operation:              "update",
+			resourceType:           "role",
+			inputError:             nil,
+			expectedUserMessage:    "",
 			expectedTechnicalEmpty: true,
 		},
 	}
@@ -167,16 +167,16 @@ func TestCreateSecureErrorMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			userMsg, techDetails := CreateSecureErrorMessage(tt.operation, tt.resourceType, tt.inputError)
-			
+
 			if userMsg != tt.expectedUserMessage {
 				t.Errorf("CreateSecureErrorMessage() userMessage = %v, want %v", userMsg, tt.expectedUserMessage)
 			}
-			
+
 			isEmpty := techDetails == ""
 			if isEmpty != tt.expectedTechnicalEmpty {
 				t.Errorf("CreateSecureErrorMessage() technical details empty = %v, want %v", isEmpty, tt.expectedTechnicalEmpty)
 			}
-			
+
 			// Ensure technical details don't contain sensitive info
 			if !isEmpty {
 				if strings.Contains(techDetails, testHash) {

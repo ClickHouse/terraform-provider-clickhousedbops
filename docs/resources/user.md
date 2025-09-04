@@ -4,22 +4,24 @@ page_title: "clickhousedbops_user Resource - clickhousedbops"
 subcategory: ""
 description: |-
   You can use the clickhousedbops_user resource to create a user in a ClickHouse instance.
-  
   Password Field Options
-  
-  This resource supports two mutually exclusive password fields for different Terraform versions:
-  
-  * password_sha256_hash_wo (Recommended, Terraform 1.11+): Write-only field that is not stored in state for enhanced security
-  * password_sha256_hash (Legacy compatibility): Sensitive field stored encrypted in state for Terraform <1.11 and OpenTofu compatibility
-  
-  You must specify exactly one of these fields. If both are specified, validation will fail.
-  
+  This resource supports two mutually exclusive password fields designed for different Terraform/OpenTofu environments:
+  Modern Approach (Recommended)
+  password_sha256_hash_wo: Write-only field for Terraform 1.11+Enhanced Security: Password hash never stored in state fileBetter Privacy: No password data persisted or transmitted in state operationsVersion Requirement: Requires Terraform 1.11.0 or later
+  Legacy Compatibility
+  password_sha256_hash: Sensitive field for Terraform <1.11 and OpenTofuState Storage: Password hash stored encrypted in state fileCompatibility: Works with all Terraform and OpenTofu versionsUse Case: Required for Terraform <1.11 or when using OpenTofu
+  Decision Criteria
+  Choose your password field based on:
+  | Environment | Recommended Field | Reason |
+  |-------------|------------------|---------|
+  | Terraform 1.11+ | `password_sha256_hash_wo` | Enhanced security, no state storage |
+  | Terraform <1.11 | `password_sha256_hash` | Write-only fields not supported |
+  | OpenTofu (any version) | `password_sha256_hash` | Write-only fields not supported |
+  | Security-critical environments | `password_sha256_hash_wo` | Password never persisted |
+  | Mixed tool environments | `password_sha256_hash` | Universal compatibility |
+  Important: You must specify exactly one of these fields. Specifying both will cause validation failure.
   Known limitations:
-  
-  * Changing password fields alone does not have any effect. In order to change the password of a user, you also need to bump password_sha256_hash_wo_version field.
-  * Changing the user's password as described above will cause the database user to be deleted and recreated.
-  * When importing an existing user, the clickhousedbops_user resource will be lacking the password_sha256_hash_wo_version and thus the subsequent apply will need to recreate the database User in order to set a password.
-  * The password_sha256_hash_wo_version field applies to both password field options.
+  Password changes require version bump: Changing password fields alone has no effect. You must increment password_sha256_hash_wo_version.User recreation on password change: Password updates cause the database user to be deleted and recreated.Import limitations: Imported users lack password_sha256_hash_wo_version, requiring recreation on first apply.Version field applies to both: The password_sha256_hash_wo_version field controls both password field types.
 ---
 
 # clickhousedbops_user (Resource)
@@ -56,225 +58,57 @@ Choose your password field based on:
 
 **Important**: You must specify exactly one of these fields. Specifying both will cause validation failure.
 
-## Example Usage
-
-### Modern Terraform 1.11+ (Recommended)
-
-```terraform
-# Terraform 1.11+ - Write-only password field
-resource "clickhousedbops_user" "modern_user" {
-  cluster_name = "production-cluster"
-  name         = "app_user"
-  
-  # Password hash not stored in state
-  password_sha256_hash_wo         = sha256("secure_password_123")
-  password_sha256_hash_wo_version = 1
-}
-
-# Using external password management
-resource "clickhousedbops_user" "secure_user" {
-  cluster_name = "production-cluster" 
-  name         = "service_account"
-  
-  # Generate password externally and pass hash
-  password_sha256_hash_wo         = var.service_account_password_hash
-  password_sha256_hash_wo_version = var.password_version
-}
-```
-
-### Legacy Terraform <1.11 and OpenTofu
-
-```terraform
-# Terraform <1.11 or OpenTofu - Legacy compatible field
-resource "clickhousedbops_user" "legacy_user" {
-  cluster_name = "production-cluster"
-  name         = "legacy_user"
-  
-  # Password hash stored encrypted in state
-  password_sha256_hash            = sha256("legacy_password_123")
-  password_sha256_hash_wo_version = 1
-}
-
-# With variable for password management
-resource "clickhousedbops_user" "variable_user" {
-  cluster_name = "production-cluster"
-  name         = "variable_user"
-  
-  # Using sensitive variables
-  password_sha256_hash            = sha256(var.user_password)
-  password_sha256_hash_wo_version = 1
-}
-```
-
-### Side-by-Side Comparison
-
-```terraform
-# Modern approach (Terraform 1.11+)
-resource "clickhousedbops_user" "modern" {
-  name                            = "modern_user"
-  password_sha256_hash_wo         = sha256("password123")  # Not stored in state
-  password_sha256_hash_wo_version = 1
-}
-
-# Legacy approach (all versions)
-resource "clickhousedbops_user" "legacy" {
-  name                            = "legacy_user" 
-  password_sha256_hash            = sha256("password123")  # Stored encrypted in state
-  password_sha256_hash_wo_version = 1
-}
-```
-
-## Password Management Best Practices
-
-### Security Recommendations
-
-1. **Never hardcode passwords** in your Terraform configuration
-2. **Use external secret management** systems when possible
-3. **Rotate passwords regularly** by incrementing `password_sha256_hash_wo_version`
-4. **Choose write-only fields** when using Terraform 1.11+
-
-### External Secret Integration
-
-```terraform
-# Using HashiCorp Vault
-data "vault_generic_secret" "db_password" {
-  path = "secret/database/users/app_user"
-}
-
-resource "clickhousedbops_user" "app_user" {
-  name                            = "app_user"
-  password_sha256_hash_wo         = sha256(data.vault_generic_secret.db_password.data["password"])
-  password_sha256_hash_wo_version = data.vault_generic_secret.db_password.data["version"]
-}
-
-# Using environment variables
-variable "user_password" {
-  description = "Password for ClickHouse user"
-  type        = string
-  sensitive   = true
-}
-
-resource "clickhousedbops_user" "env_user" {
-  name                            = "env_user"
-  password_sha256_hash            = sha256(var.user_password)
-  password_sha256_hash_wo_version = 1
-}
-```
-
-## Password Updates and Versioning
-
-Both password fields use the `password_sha256_hash_wo_version` field for change tracking:
-
-```terraform
-# Initial user creation
-resource "clickhousedbops_user" "versioned_user" {
-  name                            = "versioned_user"
-  password_sha256_hash_wo         = sha256("initial_password")
-  password_sha256_hash_wo_version = 1  # Initial version
-}
-
-# Password update - increment version to trigger update
-resource "clickhousedbops_user" "versioned_user" {
-  name                            = "versioned_user"
-  password_sha256_hash_wo         = sha256("new_password")
-  password_sha256_hash_wo_version = 2  # Incremented version
-}
-```
-
-## Known Limitations
+## Known limitations:
 
 - **Password changes require version bump**: Changing password fields alone has no effect. You must increment `password_sha256_hash_wo_version`.
 - **User recreation on password change**: Password updates cause the database user to be deleted and recreated.
 - **Import limitations**: Imported users lack `password_sha256_hash_wo_version`, requiring recreation on first apply.
 - **Version field applies to both**: The `password_sha256_hash_wo_version` field controls both password field types.
 
-## Troubleshooting Guide
-
-### Common Errors and Solutions
-
-#### Validation Error: Both Password Fields Specified
-```
-Error: Conflicting configuration arguments
-│ "password_sha256_hash_wo": conflicts with password_sha256_hash
-```
-**Solution**: Remove one of the password fields. Use only `password_sha256_hash_wo` OR `password_sha256_hash`.
-
-#### Write-Only Field Not Supported
-```
-Error: Unsupported argument
-│ "password_sha256_hash_wo" is not supported in this version
-```
-**Solution**: 
-- Upgrade to Terraform 1.11+ OR
-- Use `password_sha256_hash` instead for legacy compatibility
-
-#### User Recreation on Every Apply
-```
-Plan: 1 to add, 0 to change, 1 to destroy
-│ clickhousedbops_user.example must be replaced
-```
-**Solution**: 
-- Ensure `password_sha256_hash_wo_version` is consistent
-- For imported users, set an initial version value
-
-#### Import Recreation Warning
-```
-Warning: Resource will be recreated
-│ Imported user will be recreated on first apply
-```
-**Solution**: This is expected behavior. After import:
-1. Set `password_sha256_hash_wo_version = 1` 
-2. Run `terraform apply` to recreate with password
-3. Future applies will be stable
-
-### Migration Between Password Fields
-
-#### From Legacy to Modern (Terraform 1.11+ Upgrade)
+## Example Usage
 
 ```terraform
-# Before: Legacy field
-resource "clickhousedbops_user" "user" {
-  name                            = "migration_user"
-  password_sha256_hash            = sha256("password123")
+# Basic user creation example with modern write-only password field (Terraform 1.11+)
+resource "clickhousedbops_user" "john" {
+  cluster_name = "cluster"
+  name         = "john"
+  
+  # Modern approach: Write-only password field (recommended for Terraform 1.11+)
+  # Password hash is never stored in Terraform state for enhanced security
+  password_sha256_hash_wo         = sha256("secure_password_123")
   password_sha256_hash_wo_version = 1
 }
 
-# After: Modern field
-resource "clickhousedbops_user" "user" {
-  name                            = "migration_user"  
-  password_sha256_hash_wo         = sha256("password123")
-  password_sha256_hash_wo_version = 1  # Keep same version
-}
-```
-
-#### From Modern to Legacy (OpenTofu Migration)
-
-```terraform
-# Before: Modern field
-resource "clickhousedbops_user" "user" {
-  name                            = "migration_user"
-  password_sha256_hash_wo         = sha256("password123") 
+# Alternative: Legacy compatibility example for Terraform <1.11 and OpenTofu
+# Uncomment this resource and comment the one above if using older Terraform or OpenTofu
+/*
+resource "clickhousedbops_user" "john_legacy" {
+  cluster_name = "cluster"
+  name         = "john"
+  
+  # Legacy approach: Sensitive field stored encrypted in state
+  # Use this for Terraform <1.11 or OpenTofu compatibility
+  password_sha256_hash            = sha256("secure_password_123")
   password_sha256_hash_wo_version = 1
 }
+*/
 
-# After: Legacy field
-resource "clickhousedbops_user" "user" {
-  name                            = "migration_user"
-  password_sha256_hash            = sha256("password123")
-  password_sha256_hash_wo_version = 1  # Keep same version
+# Best practice: Use variables for password management
+variable "user_password" {
+  description = "Password for ClickHouse user"
+  type        = string
+  sensitive   = true
+  # Set via environment variable: TF_VAR_user_password or terraform.tfvars
 }
-```
 
-### Version Selection Decision Tree
-
-```
-Are you using Terraform 1.11 or later?
-├─ YES → Is security a primary concern?
-│  ├─ YES → Use password_sha256_hash_wo (recommended)
-│  └─ NO  → Either field works, password_sha256_hash_wo preferred
-└─ NO  → Are you using OpenTofu?
-   ├─ YES → Use password_sha256_hash (only option)
-   └─ NO  → Use password_sha256_hash (Terraform <1.11)
+resource "clickhousedbops_user" "variable_example" {
+  cluster_name = "cluster"
+  name         = "variable_user"
+  
+  # Use variable instead of hardcoding password
+  password_sha256_hash_wo         = sha256(var.user_password)
+  password_sha256_hash_wo_version = 1
+}
 ```
 
 <!-- schema generated by tfplugindocs -->
@@ -283,7 +117,7 @@ Are you using Terraform 1.11 or later?
 ### Required
 
 - `name` (String) Name of the user
-- `password_sha256_hash_wo_version` (Number) Version of the password field. Increment this value to trigger a password update. Applies to both `password_sha256_hash_wo` and `password_sha256_hash` fields.
+- `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
 
 ### Optional
 
@@ -292,8 +126,8 @@ Are you using Terraform 1.11 or later?
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
-- `password_sha256_hash` (String, Sensitive) SHA256 hash of the password to be set for the user. This is the legacy compatibility field that stores the password hash encrypted in the Terraform state file. Use this field for Terraform versions prior to 1.11 or when using OpenTofu. Mutually exclusive with `password_sha256_hash_wo`.
-- `password_sha256_hash_wo` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user. This field is write-only and never stored in state, providing enhanced security. Requires Terraform 1.11 or later. Mutually exclusive with `password_sha256_hash`.
+- `password_sha256_hash` (String, Sensitive) SHA256 hash of the password to be set for the user (legacy compatibility, stored encrypted in state)
+- `password_sha256_hash_wo` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user (Terraform 1.11+ only, not stored in state)
 
 ### Read-Only
 
@@ -310,22 +144,11 @@ Import is supported using the following syntax:
 terraform import clickhousedbops_user.example xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 # It's also possible to import users using the username:
+
 terraform import clickhousedbops_user.example username
 
 # IMPORTANT: if you have a multi node cluster, you need to specify the cluster name!
+
 terraform import clickhousedbops_user.example cluster:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 terraform import clickhousedbops_user.example cluster:username
 ```
-
-### Import Behavior and Caveats
-
-**Expected Recreation**: All imported users will be recreated on the first `terraform apply` after import because password information cannot be imported from ClickHouse.
-
-**Post-Import Steps**:
-1. Import the user resource
-2. Add password configuration to your Terraform file
-3. Set `password_sha256_hash_wo_version = 1` (or desired version)
-4. Run `terraform apply` to recreate user with password
-5. Subsequent applies will maintain the user without recreation
-
-**Cluster Considerations**: When working with multi-node clusters, always include the cluster name in the import identifier to ensure proper resource targeting.

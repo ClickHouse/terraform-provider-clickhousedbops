@@ -133,12 +133,12 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		if err != nil {
 			// Use sanitized error message for storage check failure
 			userMessage, technicalDetails := errors.CreateSecureErrorMessage("check", "replicated storage configuration", err)
-			
+
 			resp.Diagnostics.AddError(
 				"Error Checking Replicated Storage Configuration",
 				userMessage,
 			)
-			
+
 			// Log technical details for debugging (these are sanitized)
 			if technicalDetails != "" {
 				// In a real implementation, this would go to structured logging

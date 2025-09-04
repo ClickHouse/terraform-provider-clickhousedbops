@@ -21,7 +21,7 @@ func TestSanitizeError_IntegrationScenarios(t *testing.T) {
 			category:       CategoryDatabase,
 			shouldNotContain: []string{
 				"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", // Original hash
-				"CREATE USER test",                                                     // SQL structure
+				"CREATE USER test", // SQL structure
 			},
 			shouldContain: []string{
 				"operation failed",
@@ -54,9 +54,9 @@ func TestSanitizeError_IntegrationScenarios(t *testing.T) {
 			},
 		},
 		{
-			name:           "Authentication error should remain informative",
-			simulatedError: fmt.Errorf("authentication failed: access denied for user 'terraform_user'"),
-			category:       CategoryAuthentication,
+			name:             "Authentication error should remain informative",
+			simulatedError:   fmt.Errorf("authentication failed: access denied for user 'terraform_user'"),
+			category:         CategoryAuthentication,
 			shouldNotContain: []string{
 				// No sensitive info to sanitize here
 			},
@@ -91,24 +91,24 @@ func TestSanitizeError_IntegrationScenarios(t *testing.T) {
 
 func TestCreateSecureErrorMessage_UserFriendliness(t *testing.T) {
 	tests := []struct {
-		name         string
-		operation    string
-		resourceType string
-		inputError   error
+		name             string
+		operation        string
+		resourceType     string
+		inputError       error
 		wantUserFriendly bool
 	}{
 		{
-			name:         "Database error should be user-friendly",
-			operation:    "create",
-			resourceType: "user",
-			inputError:   fmt.Errorf("executing query: CREATE USER test IDENTIFIED WITH sha256_hash BY '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'"),
+			name:             "Database error should be user-friendly",
+			operation:        "create",
+			resourceType:     "user",
+			inputError:       fmt.Errorf("executing query: CREATE USER test IDENTIFIED WITH sha256_hash BY '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'"),
 			wantUserFriendly: true,
 		},
 		{
-			name:         "Complex connection error should be user-friendly",
-			operation:    "connect",
-			resourceType: "database",
-			inputError:   fmt.Errorf("dial tcp 127.0.0.1:9000: connection refused after 30 seconds with ssl handshake failure"),
+			name:             "Complex connection error should be user-friendly",
+			operation:        "connect",
+			resourceType:     "database",
+			inputError:       fmt.Errorf("dial tcp 127.0.0.1:9000: connection refused after 30 seconds with ssl handshake failure"),
 			wantUserFriendly: true,
 		},
 	}
@@ -140,10 +140,10 @@ func TestCreateSecureErrorMessage_UserFriendliness(t *testing.T) {
 
 func TestErrorCategorization_RealisticScenarios(t *testing.T) {
 	tests := []struct {
-		name        string
-		error       error
+		name             string
+		error            error
 		expectConnection bool
-		expectAuth  bool
+		expectAuth       bool
 	}{
 		{
 			name:             "ClickHouse connection refused",

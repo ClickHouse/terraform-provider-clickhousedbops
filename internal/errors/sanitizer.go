@@ -51,7 +51,7 @@ func SanitizeError(err error, category ErrorCategory) error {
 
 	message := err.Error()
 	sanitized := sanitizeString(message, category)
-	
+
 	// Return a new error with the sanitized message
 	return fmt.Errorf("operation failed: %s", sanitized)
 }
@@ -133,7 +133,7 @@ func sanitizeClickHouseErrors(message string) string {
 	return result
 }
 
-// CreateSecureErrorMessage creates a user-friendly error message while optionally preserving 
+// CreateSecureErrorMessage creates a user-friendly error message while optionally preserving
 // technical details for internal logging
 func CreateSecureErrorMessage(operation, resourceType string, err error) (userMessage string, technicalDetails string) {
 	if err == nil {
@@ -142,10 +142,10 @@ func CreateSecureErrorMessage(operation, resourceType string, err error) (userMe
 
 	// Create a generic user-friendly message
 	userMessage = fmt.Sprintf("Failed to %s %s. Please check your configuration and try again.", operation, resourceType)
-	
+
 	// Preserve technical details (sanitized) for internal logging
 	technicalDetails = sanitizeString(err.Error(), CategoryDatabase)
-	
+
 	return userMessage, technicalDetails
 }
 
@@ -154,7 +154,7 @@ func IsConnectionError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	message := strings.ToLower(err.Error())
 	connectionKeywords := []string{
 		"connection refused",
@@ -165,13 +165,13 @@ func IsConnectionError(err error) bool {
 		"no such host",
 		"connection reset",
 	}
-	
+
 	for _, keyword := range connectionKeywords {
 		if strings.Contains(message, keyword) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -180,7 +180,7 @@ func IsAuthenticationError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	message := strings.ToLower(err.Error())
 	authKeywords := []string{
 		"authentication failed",
@@ -190,12 +190,12 @@ func IsAuthenticationError(err error) bool {
 		"login failed",
 		"permission denied",
 	}
-	
+
 	for _, keyword := range authKeywords {
 		if strings.Contains(message, keyword) {
 			return true
 		}
 	}
-	
+
 	return false
 }
