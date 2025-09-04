@@ -184,6 +184,5 @@ func TestUser_acceptance(t *testing.T) {
 	runner.RunTests(t, tests)
 }
 
-// TODO: Add validation tests for password field mutual exclusivity
-// The current test framework doesn't support ExpectError field
-// These tests would need to be implemented with the standard terraform-plugin-testing framework
+// Comprehensive validation tests for password field mutual exclusivity and security
+// are implemented in user_validation_test.go
