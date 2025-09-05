@@ -19,7 +19,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
-	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/errors"
 )
 
 // Use main documentation content
@@ -131,23 +130,10 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	if r.client != nil {
 		isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
 		if err != nil {
-			// Use sanitized error message for storage check failure
-			userMessage, technicalDetails := errors.CreateSecureErrorMessage("check", "replicated storage configuration", err)
-
 			resp.Diagnostics.AddError(
 				"Error Checking Replicated Storage Configuration",
-				userMessage,
+				fmt.Sprintf("Failed to check replicated storage configuration: %v", err),
 			)
-
-			// Log technical details for debugging (these are sanitized)
-			if technicalDetails != "" {
-				// In a real implementation, this would go to structured logging
-				// For now, we'll include sanitized details in a less prominent way
-				resp.Diagnostics.AddWarning(
-					"Technical Details",
-					fmt.Sprintf("Sanitized error details: %s", technicalDetails),
-				)
-			}
 			return
 		}
 
@@ -176,34 +162,6 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, _
 	}
 
 	r.client = req.ProviderData.(dbops.Client)
-}
-
-// DiagnosticAdder is an interface for responses that can add diagnostics
-type DiagnosticAdder interface {
-	AddError(summary, detail string)
-}
-
-// handleDatabaseError provides consistent error handling for all database operations
-func (r *Resource) handleDatabaseError(diagnostics DiagnosticAdder, operation string, err error) {
-	if errors.IsConnectionError(err) {
-		diagnostics.AddError(
-			"Database Connection Error",
-			fmt.Sprintf("Unable to connect to ClickHouse database while %s user. Please check your connection configuration.", operation),
-		)
-	} else if errors.IsAuthenticationError(err) {
-		diagnostics.AddError(
-			"Authentication Error",
-			fmt.Sprintf("Database authentication failed while %s user. Please verify your credentials and permissions.", operation),
-		)
-	} else {
-		sanitizedErr := errors.SanitizeError(err, errors.CategoryDatabase)
-		// Capitalize operation name for error message
-		operationTitle := strings.ToUpper(operation[:1]) + operation[1:]
-		diagnostics.AddError(
-			fmt.Sprintf("Error %s ClickHouse User", operationTitle),
-			fmt.Sprintf("Unable to %s user. %s", operation, sanitizedErr.Error()),
-		)
-	}
 }
 
 func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -239,7 +197,10 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 
 	createdUser, err := r.client.CreateUser(ctx, user, plan.ClusterName.ValueStringPointer())
 	if err != nil {
-		r.handleDatabaseError(&resp.Diagnostics, "creating", err)
+		resp.Diagnostics.AddError(
+			"Error Creating ClickHouse User",
+			fmt.Sprintf("Unable to create user: %v", err),
+		)
 		return
 	}
 
@@ -272,7 +233,10 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 
 	user, err := r.client.GetUser(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
-		r.handleDatabaseError(&resp.Diagnostics, "reading", err)
+		resp.Diagnostics.AddError(
+			"Error Reading ClickHouse User",
+			fmt.Sprintf("Unable to read user: %v", err),
+		)
 		return
 	}
 
@@ -305,7 +269,10 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		Name: plan.Name.ValueString(),
 	}, plan.ClusterName.ValueStringPointer())
 	if err != nil {
-		r.handleDatabaseError(&resp.Diagnostics, "updating", err)
+		resp.Diagnostics.AddError(
+			"Error Updating ClickHouse User",
+			fmt.Sprintf("Unable to update user: %v", err),
+		)
 		return
 	}
 
@@ -324,7 +291,10 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 
 	err := r.client.DeleteUser(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
-		r.handleDatabaseError(&resp.Diagnostics, "deleting", err)
+		resp.Diagnostics.AddError(
+			"Error Deleting ClickHouse User",
+			fmt.Sprintf("Unable to delete user: %v", err),
+		)
 		return
 	}
 }
@@ -347,24 +317,10 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 		// Failed parsing UUID, try importing using the database name
 		user, err := r.client.FindUserByName(ctx, ref, clusterName)
 		if err != nil {
-			// Import errors need a different message format
-			if errors.IsConnectionError(err) {
-				resp.Diagnostics.AddError(
-					"Database Connection Error",
-					"Unable to connect to ClickHouse database while importing user. Please check your connection configuration.",
-				)
-			} else if errors.IsAuthenticationError(err) {
-				resp.Diagnostics.AddError(
-					"Authentication Error",
-					"Database authentication failed while importing user. Please verify your credentials and permissions.",
-				)
-			} else {
-				sanitizedErr := errors.SanitizeError(err, errors.CategoryDatabase)
-				resp.Diagnostics.AddError(
-					"Cannot Find User",
-					fmt.Sprintf("Unable to find user for import. %s", sanitizedErr.Error()),
-				)
-			}
+			resp.Diagnostics.AddError(
+				"Cannot Find User",
+				fmt.Sprintf("Unable to find user for import: %v", err),
+			)
 			return
 		}
 
