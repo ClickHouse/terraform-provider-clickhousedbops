@@ -21,8 +21,8 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 )
 
-// Use main documentation content
-var userResourceDescription = "Manages a ClickHouse user with dual-path password field support for different Terraform/OpenTofu versions."
+//go:embed user.md
+var userResourceDescription string
 
 var (
 	_ resource.Resource               = &Resource{}
@@ -131,8 +131,8 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Error Checking Replicated Storage Configuration",
-				fmt.Sprintf("Failed to check replicated storage configuration: %v", err),
+				"Error Checking if service is using replicated storage",
+				fmt.Sprintf("%+v\n", err),
 			)
 			return
 		}
@@ -199,7 +199,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse User",
-			fmt.Sprintf("Unable to create user: %v", err),
+			fmt.Sprintf("%+v\n", err),
 		)
 		return
 	}
@@ -235,7 +235,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse User",
-			fmt.Sprintf("Unable to read user: %v", err),
+			fmt.Sprintf("%+v\n", err),
 		)
 		return
 	}
@@ -271,7 +271,7 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating ClickHouse User",
-			fmt.Sprintf("Unable to update user: %v", err),
+			fmt.Sprintf("%+v\n", err),
 		)
 		return
 	}
@@ -293,7 +293,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting ClickHouse User",
-			fmt.Sprintf("Unable to delete user: %v", err),
+			fmt.Sprintf("%+v\n", err),
 		)
 		return
 	}
@@ -318,8 +318,8 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 		user, err := r.client.FindUserByName(ctx, ref, clusterName)
 		if err != nil {
 			resp.Diagnostics.AddError(
-				"Cannot Find User",
-				fmt.Sprintf("Unable to find user for import: %v", err),
+				"Cannot find user",
+				fmt.Sprintf("%+v\n", err),
 			)
 			return
 		}
