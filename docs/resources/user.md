@@ -8,7 +8,7 @@ description: |-
 
 # clickhousedbops_user (Resource)
 
-Manages a ClickHouse user with dual-path password field support.
+Manages a ClickHouse user with dual-path password field support for different Terraform/OpenTofu versions.
 
 ## Example Usage
 
