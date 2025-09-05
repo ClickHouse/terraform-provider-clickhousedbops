@@ -16,7 +16,28 @@ import (
 const (
 	resourceType = "clickhousedbops_user"
 	resourceName = "foo"
+	testPassword = "changeme"
+	passwordVersion = 1
 )
+
+// buildUserResource creates a test user resource with specified password field type
+func buildUserResource(clusterName *string, useLegacyPassword bool) string {
+	rb := resourcebuilder.New(resourceType, resourceName).
+		WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+		WithIntAttribute("password_sha256_hash_wo_version", passwordVersion)
+
+	if clusterName != nil {
+		rb = rb.WithStringAttribute("cluster_name", *clusterName)
+	}
+
+	if useLegacyPassword {
+		rb = rb.WithFunction("password_sha256_hash", "sha256", testPassword)
+	} else {
+		rb = rb.WithFunction("password_sha256_hash_wo", "sha256", testPassword)
+	}
+
+	return rb.Build()
+}
 
 func TestUser_acceptance(t *testing.T) {
 	clusterName := "cluster1"
@@ -59,89 +80,63 @@ func TestUser_acceptance(t *testing.T) {
 
 	tests := []runner.TestCase{
 		{
-			Name:        "Create User using Native protocol on a single replica",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
-			Protocol:    "native",
-			ClusterName: nil,
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
-				WithIntAttribute("password_sha256_hash_wo_version", 1).
-				Build(),
+			Name:                "Create User using Native protocol on a single replica",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:            "native",
+			ClusterName:         nil,
+			Resource:            buildUserResource(nil, false),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:     "Create User using HTTP protocol on a single replica",
-			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
-			Protocol: "http",
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
-				WithIntAttribute("password_sha256_hash_wo_version", 1).
-				Build(),
+			Name:                "Create User using HTTP protocol on a single replica",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:            "http",
+			Resource:            buildUserResource(nil, false),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:     "Create User using Native protocol on a cluster using replicated storage",
-			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
-			Protocol: "native",
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
-				WithIntAttribute("password_sha256_hash_wo_version", 1).
-				Build(),
+			Name:                "Create User using Native protocol on a cluster using replicated storage",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-replicated.xml"},
+			Protocol:            "native",
+			Resource:            buildUserResource(nil, false),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:     "Create User using HTTP protocol on a cluster using replicated storage",
-			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
-			Protocol: "http",
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
-				WithIntAttribute("password_sha256_hash_wo_version", 1).
-				Build(),
+			Name:                "Create User using HTTP protocol on a cluster using replicated storage",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-replicated.xml"},
+			Protocol:            "http",
+			Resource:            buildUserResource(nil, false),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:        "Create User using Native protocol on a cluster using localfile storage",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
-			Protocol:    "native",
-			ClusterName: &clusterName,
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("cluster_name", clusterName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
-				WithIntAttribute("password_sha256_hash_wo_version", 1).
-				Build(),
+			Name:                "Create User using Native protocol on a cluster using localfile storage",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-localfile.xml"},
+			Protocol:            "native",
+			ClusterName:         &clusterName,
+			Resource:            buildUserResource(&clusterName, false),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:        "Create User using HTTP protocol on a cluster using localfile storage",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
-			Protocol:    "http",
-			ClusterName: &clusterName,
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("cluster_name", clusterName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
-				WithIntAttribute("password_sha256_hash_wo_version", 1).
-				Build(),
+			Name:                "Create User using HTTP protocol on a cluster using localfile storage",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-localfile.xml"},
+			Protocol:            "http",
+			ClusterName:         &clusterName,
+			Resource:            buildUserResource(&clusterName, false),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
@@ -149,31 +144,22 @@ func TestUser_acceptance(t *testing.T) {
 		},
 		// Test cases for legacy password field (backward compatibility)
 		{
-			Name:        "Create User using legacy password field (sensitive)",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
-			Protocol:    "native",
-			ClusterName: nil,
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithFunction("password_sha256_hash", "sha256", "changeme").
-				WithIntAttribute("password_sha256_hash_wo_version", 1).
-				Build(),
+			Name:                "Create User using legacy password field (sensitive)",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:            "native",
+			ClusterName:         nil,
+			Resource:            buildUserResource(nil, true),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:        "Create User using legacy password field on cluster",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
-			Protocol:    "native",
-			ClusterName: &clusterName,
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("cluster_name", clusterName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithFunction("password_sha256_hash", "sha256", "changeme").
-				WithIntAttribute("password_sha256_hash_wo_version", 1).
-				Build(),
+			Name:                "Create User using legacy password field on cluster",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-localfile.xml"},
+			Protocol:            "native",
+			ClusterName:         &clusterName,
+			Resource:            buildUserResource(&clusterName, true),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,

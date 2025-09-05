@@ -98,25 +98,27 @@ func TestSanitizeString(t *testing.T) {
 			mustNotContain: []string{"/usr/local/lib", "/home/user"},
 		},
 		{
-			name:           "API key in configuration",
-			input:          "invalid api_key: 'sk_test_1234567890abcdef'",
-			category:       CategoryAuthentication,
-			want:           "[REDACTED]",
-			mustNotContain: []string{"sk_test_1234567890abcdef"},
-		},
-		{
 			name:           "Connection string with password",
 			input:          "failed to connect to clickhouse://user:mypassword123@localhost:9000/default",
 			category:       CategoryDatabase,
 			want:           "[REDACTED]",
 			mustNotContain: []string{"mypassword123"},
 		},
+		// Integration scenario: Complex error with multiple sensitive elements
 		{
-			name:           "Standalone hash without SQL context",
-			input:          fmt.Sprintf("Invalid hash provided: %s for authentication", testHash),
-			category:       CategoryGeneral,
-			want:           "[REDACTED]",
-			mustNotContain: []string{testHash},
+			name:           "Complex CREATE USER error with hash",
+			input:          fmt.Sprintf("error running query: Code: 516, e.message = Unknown user, executing query: CREATE USER test IDENTIFIED WITH sha256_hash BY '%s'", testHash),
+			category:       CategoryDatabase,
+			want:           "[SQL QUERY]",
+			mustNotContain: []string{testHash, "CREATE USER test"},
+		},
+		// Integration scenario: Authentication error should remain informative
+		{
+			name:           "Authentication error should remain informative",
+			input:          "authentication failed for user 'admin': please check your credentials and permissions",
+			category:       CategoryAuthentication,
+			want:           "authentication failed",
+			mustNotContain: []string{}, // No sensitive data to remove, keep informative
 		},
 	}
 

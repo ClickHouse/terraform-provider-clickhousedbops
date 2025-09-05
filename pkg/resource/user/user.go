@@ -22,8 +22,8 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/errors"
 )
 
-//go:embed user.md
-var userResourceDescription string
+// Use main documentation content
+var userResourceDescription = "See docs/resources/user.md for detailed documentation"
 
 var (
 	_ resource.Resource               = &Resource{}
@@ -178,6 +178,34 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, _
 	r.client = req.ProviderData.(dbops.Client)
 }
 
+// DiagnosticAdder is an interface for responses that can add diagnostics
+type DiagnosticAdder interface {
+	AddError(summary, detail string)
+}
+
+// handleDatabaseError provides consistent error handling for all database operations
+func (r *Resource) handleDatabaseError(diagnostics DiagnosticAdder, operation string, err error) {
+	if errors.IsConnectionError(err) {
+		diagnostics.AddError(
+			"Database Connection Error",
+			fmt.Sprintf("Unable to connect to ClickHouse database while %s user. Please check your connection configuration.", operation),
+		)
+	} else if errors.IsAuthenticationError(err) {
+		diagnostics.AddError(
+			"Authentication Error",
+			fmt.Sprintf("Database authentication failed while %s user. Please verify your credentials and permissions.", operation),
+		)
+	} else {
+		sanitizedErr := errors.SanitizeError(err, errors.CategoryDatabase)
+		// Capitalize operation name for error message
+		operationTitle := strings.ToUpper(operation[:1]) + operation[1:]
+		diagnostics.AddError(
+			fmt.Sprintf("Error %s ClickHouse User", operationTitle),
+			fmt.Sprintf("Unable to %s user. %s", operation, sanitizedErr.Error()),
+		)
+	}
+}
+
 func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan User
 	var config User
@@ -211,25 +239,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 
 	createdUser, err := r.client.CreateUser(ctx, user, plan.ClusterName.ValueStringPointer())
 	if err != nil {
-		// Use comprehensive error handling for user creation
-		if errors.IsConnectionError(err) {
-			resp.Diagnostics.AddError(
-				"Database Connection Error",
-				"Unable to connect to ClickHouse database. Please check your connection configuration and ensure the database is accessible.",
-			)
-		} else if errors.IsAuthenticationError(err) {
-			resp.Diagnostics.AddError(
-				"Authentication Error",
-				"Database authentication failed. Please verify your credentials and permissions.",
-			)
-		} else {
-			// Use sanitized error message for user creation failure
-			sanitizedErr := errors.SanitizeError(err, errors.CategoryDatabase)
-			resp.Diagnostics.AddError(
-				"Error Creating ClickHouse User",
-				fmt.Sprintf("Unable to create user. %s", sanitizedErr.Error()),
-			)
-		}
+		r.handleDatabaseError(&resp.Diagnostics, "creating", err)
 		return
 	}
 
@@ -262,25 +272,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 
 	user, err := r.client.GetUser(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
-		// Use comprehensive error handling for user read
-		if errors.IsConnectionError(err) {
-			resp.Diagnostics.AddError(
-				"Database Connection Error",
-				"Unable to connect to ClickHouse database while reading user. Please check your connection configuration.",
-			)
-		} else if errors.IsAuthenticationError(err) {
-			resp.Diagnostics.AddError(
-				"Authentication Error",
-				"Database authentication failed while reading user. Please verify your credentials and permissions.",
-			)
-		} else {
-			// Use sanitized error message for user read failure
-			sanitizedErr := errors.SanitizeError(err, errors.CategoryDatabase)
-			resp.Diagnostics.AddError(
-				"Error Reading ClickHouse User",
-				fmt.Sprintf("Unable to read user. %s", sanitizedErr.Error()),
-			)
-		}
+		r.handleDatabaseError(&resp.Diagnostics, "reading", err)
 		return
 	}
 
@@ -313,25 +305,7 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		Name: plan.Name.ValueString(),
 	}, plan.ClusterName.ValueStringPointer())
 	if err != nil {
-		// Use comprehensive error handling for user update
-		if errors.IsConnectionError(err) {
-			resp.Diagnostics.AddError(
-				"Database Connection Error",
-				"Unable to connect to ClickHouse database while updating user. Please check your connection configuration.",
-			)
-		} else if errors.IsAuthenticationError(err) {
-			resp.Diagnostics.AddError(
-				"Authentication Error",
-				"Database authentication failed while updating user. Please verify your credentials and permissions.",
-			)
-		} else {
-			// Use sanitized error message for user update failure
-			sanitizedErr := errors.SanitizeError(err, errors.CategoryDatabase)
-			resp.Diagnostics.AddError(
-				"Error Updating ClickHouse User",
-				fmt.Sprintf("Unable to update user. %s", sanitizedErr.Error()),
-			)
-		}
+		r.handleDatabaseError(&resp.Diagnostics, "updating", err)
 		return
 	}
 
@@ -350,25 +324,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 
 	err := r.client.DeleteUser(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
 	if err != nil {
-		// Use comprehensive error handling for user deletion
-		if errors.IsConnectionError(err) {
-			resp.Diagnostics.AddError(
-				"Database Connection Error",
-				"Unable to connect to ClickHouse database while deleting user. Please check your connection configuration.",
-			)
-		} else if errors.IsAuthenticationError(err) {
-			resp.Diagnostics.AddError(
-				"Authentication Error",
-				"Database authentication failed while deleting user. Please verify your credentials and permissions.",
-			)
-		} else {
-			// Use sanitized error message for user deletion failure
-			sanitizedErr := errors.SanitizeError(err, errors.CategoryDatabase)
-			resp.Diagnostics.AddError(
-				"Error Deleting ClickHouse User",
-				fmt.Sprintf("Unable to delete user. %s", sanitizedErr.Error()),
-			)
-		}
+		r.handleDatabaseError(&resp.Diagnostics, "deleting", err)
 		return
 	}
 }
@@ -391,7 +347,7 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 		// Failed parsing UUID, try importing using the database name
 		user, err := r.client.FindUserByName(ctx, ref, clusterName)
 		if err != nil {
-			// Use comprehensive error handling for user import
+			// Import errors need a different message format
 			if errors.IsConnectionError(err) {
 				resp.Diagnostics.AddError(
 					"Database Connection Error",
@@ -403,7 +359,6 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 					"Database authentication failed while importing user. Please verify your credentials and permissions.",
 				)
 			} else {
-				// Use sanitized error message for user import failure
 				sanitizedErr := errors.SanitizeError(err, errors.CategoryDatabase)
 				resp.Diagnostics.AddError(
 					"Cannot Find User",

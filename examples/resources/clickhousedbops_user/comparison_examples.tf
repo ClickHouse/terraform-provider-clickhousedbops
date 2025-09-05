@@ -1,25 +1,5 @@
-# Side-by-side comparison of password field approaches
-# Demonstrates the differences between modern and legacy password fields
-
-# Modern approach (Terraform 1.11+) - Recommended for enhanced security
-resource "clickhousedbops_user" "modern_comparison" {
-  cluster_name = "production-cluster"
-  name         = "modern_user"
-  
-  # Write-only field - password hash never stored in state
-  password_sha256_hash_wo         = sha256("comparison_password_123")
-  password_sha256_hash_wo_version = 1
-}
-
-# Legacy approach (all versions) - Compatible with Terraform <1.11 and OpenTofu  
-resource "clickhousedbops_user" "legacy_comparison" {
-  cluster_name = "production-cluster"
-  name         = "legacy_user"
-  
-  # Sensitive field - password hash stored encrypted in state
-  password_sha256_hash            = sha256("comparison_password_123") 
-  password_sha256_hash_wo_version = 1
-}
+# Advanced comparison examples - Demonstrates specific scenarios beyond basic usage
+# For basic examples, see resource.tf
 
 # Migration example: From legacy to modern
 # Step 1: Current configuration (legacy)
