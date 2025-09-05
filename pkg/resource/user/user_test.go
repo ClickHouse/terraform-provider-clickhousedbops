@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	resourceType = "clickhousedbops_user"
-	resourceName = "foo"
-	testPassword = "changeme"
+	resourceType    = "clickhousedbops_user"
+	resourceName    = "foo"
+	testPassword    = "changeme"
 	passwordVersion = 1
 )
 

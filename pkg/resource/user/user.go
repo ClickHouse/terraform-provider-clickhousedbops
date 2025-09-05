@@ -22,7 +22,7 @@ import (
 )
 
 // Use main documentation content
-var userResourceDescription = "See docs/resources/user.md for detailed documentation"
+var userResourceDescription = "Manages a ClickHouse user with dual-path password field support for different Terraform/OpenTofu versions."
 
 var (
 	_ resource.Resource               = &Resource{}
