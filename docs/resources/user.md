@@ -4,29 +4,53 @@ page_title: "clickhousedbops_user Resource - clickhousedbops"
 subcategory: ""
 description: |-
   You can use the clickhousedbops_user resource to create a user in a ClickHouse instance.
+  Password Field Options
+  This resource supports two approaches for setting passwords:
+  password_sha256_hash_wo and password_sha256_hash_wo_version:  field uses the write-only pattern (not stored in state), so you must bump password_sha256_hash_wo_version to trigger password updates.password_sha256_hash: Use this field for OpenTofu (version < 1.11) compatibility. This field uses the standard Sensitive attribute and is stored in state, so OpenTofu can automatically detect password changes. Any change to this field will trigger resource replacement.
+  You must use either password_sha256_hash_wo/password_sha256_hash_wo_version pair
+  OR password_sha256_hash, but not both.
   Known limitations:
-  Changing the password_sha256_hash_wo field alone does not have any effect. In order to change the password of a user, you also need to bump password_sha256_hash_wo_version field.Changing the user's password as described above will cause the database user to be deleted and recreated.When importing an existing user, the clickhousedbops_user resource will be lacking the password_sha256_hash_wo_version and thus the subsequent apply will need to recreate the database User in order to set a password.
+  Changing the password will cause the database user to be deleted and recreated.Changing password_sha256_hash_wo alone does not trigger an update. You must also bump password_sha256_hash_wo_version.When importing an existing user, the clickhousedbops_user resource will be lacking the password or the password_sha256_hash_wo_version, and thus the subsequent apply will need to recreate the database User in order to set a password.
 ---
 
 # clickhousedbops_user (Resource)
 
 You can use the `clickhousedbops_user` resource to create a user in a `ClickHouse` instance.
 
+## Password Field Options
+
+This resource supports two approaches for setting passwords:
+
+- **`password_sha256_hash_wo` and `password_sha256_hash_wo_version`**:  field uses the write-only pattern (not stored in state), so you must bump `password_sha256_hash_wo_version` to trigger password updates.
+- **`password_sha256_hash`**: Use this field for OpenTofu (version < 1.11) compatibility. This field uses the standard `Sensitive` attribute and is stored in state, so OpenTofu can automatically detect password changes. Any change to this field will trigger resource replacement.
+
+You must use either `password_sha256_hash_wo`/`password_sha256_hash_wo_version` pair
+OR `password_sha256_hash`, but not both.
+
 Known limitations:
 
-- Changing the `password_sha256_hash_wo` field alone does not have any effect. In order to change the password of a user, you also need to bump `password_sha256_hash_wo_version` field.
-- Changing the user's password as described above will cause the database user to be deleted and recreated.
-- When importing an existing user, the `clickhousedbops_user` resource will be lacking the `password_sha256_hash_wo_version` and thus the subsequent apply will need to recreate the database User in order to set a password.
+- Changing the password will cause the database user to be deleted and recreated.
+- Changing `password_sha256_hash_wo` alone does not trigger an update. You must also bump `password_sha256_hash_wo_version`.
+- When importing an existing user, the `clickhousedbops_user` resource will be lacking the password or the `password_sha256_hash_wo_version`, and thus the subsequent apply will need to recreate the database User in order to set a password.
 
 ## Example Usage
 
 ```terraform
+# Example using password_sha256_hash_wo field 
+resource "clickhousedbops_user" "jane" {
+  cluster_name = "cluster"
+  name         = "jane"
+  # You'll want to generate the password and feed it here instead of hardcoding.
+  password_sha256_hash_wo         = sha256("test")
+  password_sha256_hash_wo_version = 4
+}
+
+# Example using the new password_sha256_hash field (recommended only for OpenTofu (version < 1.11) compatibility)
 resource "clickhousedbops_user" "john" {
   cluster_name = "cluster"
-  name = "john"
+  name         = "john"
   # You'll want to generate the password and feed it here instead of hardcoding.
-  password_sha256_hash_wo = sha256("test")
-  password_sha256_hash_wo_version = 4
+  password_sha256_hash = sha256("test")
 }
 ```
 
@@ -39,12 +63,14 @@ resource "clickhousedbops_user" "john" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `host_ips` (Set of String) IP addresses from which the user is allowed to connect. If not specified, user can connect from any host.
-- `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user. Use this field for OpenTofu compatibility. Changes to this field will trigger a resource replacement.
-- `password_sha256_hash_wo` (String, Sensitive) SHA256 hash of the password to be set for the user.
+- `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user.
+- `password_sha256_hash_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.
 - `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
 
 ### Read-Only
