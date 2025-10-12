@@ -35,11 +35,7 @@ resource "clickhousedbops_user" "john" {
 
 ### Required
 
-> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
-
 - `name` (String) Name of the user
-- `password_sha256_hash_wo` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user
-- `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
 
 ### Optional
 
@@ -47,6 +43,9 @@ resource "clickhousedbops_user" "john" {
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `host_ips` (Set of String) IP addresses from which the user is allowed to connect. If not specified, user can connect from any host.
+- `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user. Use this field for OpenTofu compatibility. Changes to this field will trigger a resource replacement.
+- `password_sha256_hash_wo` (String, Sensitive) SHA256 hash of the password to be set for the user.
+- `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
 
 ### Read-Only
 
