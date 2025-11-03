@@ -129,7 +129,7 @@ jobs:
           clickhouse_versions_json: ${{ needs.list-clickhouse-versions.outputs.versions }}
 
   build:
-    runs-on: k8s-nano
+    runs-on: k8s-medium
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -332,12 +332,12 @@ jobs:
         tag="v${{ needs.validate.outputs.version }}"
         git tag $tag
         git push origin $tag
-        
+
   # Make a new release out of the tag
   goreleaser:
     permissions:
       contents: write
-    runs-on: k8s-medium
+    runs-on: k8s-large
     needs: [ "validate", "tag", 'database', 'role', 'user', 'grantrole', 'grantprivilege' ]
     if: ${{ !(contains(needs.*.result, 'failure')) }}
     steps:

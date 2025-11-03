@@ -63,7 +63,7 @@ jobs:
           clickhouse_versions_json: ${{ needs.list-clickhouse-versions.outputs.versions }}
 
   build:
-    runs-on: k8s-medium
+    runs-on: k8s-large
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,7 +89,7 @@ jobs:
           path: ${{ env.TMPDIR }}
 
   database:
-    runs-on: k8s-medium
+    runs-on: ubuntu-latest
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -110,7 +110,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   role:
-    runs-on: k8s-medium
+    runs-on: ubuntu-latest
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -131,7 +131,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   user:
-    runs-on: k8s-medium
+    runs-on: ubuntu-latest
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -152,7 +152,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   grantrole:
-    runs-on: k8s-medium
+    runs-on: ubuntu-latest
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -173,7 +173,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   grantprivilege:
-    runs-on: k8s-medium
+    runs-on: ubuntu-latest
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -194,7 +194,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   settingsprofile:
-    runs-on: k8s-medium
+    runs-on: ubuntu-latest
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
