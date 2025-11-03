@@ -112,6 +112,8 @@ jobs:
         with:
           repo: 'opentofu/opentofu'
           count: '3'
+          min: '1.11.0-beta1'
+          include-pre-releases: "true"
 
   prepare-matrix:
     outputs:
