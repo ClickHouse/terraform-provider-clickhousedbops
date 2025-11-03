@@ -9,7 +9,7 @@ defaults:
 
 jobs:
   fmt:
-    runs-on: ubuntu-latest
+    runs-on: k8s-medium
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +28,3 @@ jobs:
 
       - name: Check for changes
         run: git diff --exit-code
-
-
-
