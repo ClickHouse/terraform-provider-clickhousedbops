@@ -14,7 +14,7 @@ defaults:
 jobs:
   # Validate the input
   validate:
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     outputs:
       version: ${{ steps.check.outputs.version }}
     steps:
@@ -67,7 +67,7 @@ jobs:
   list-examples:
     outputs:
       examples: ${{ steps.list.outputs.examples }}
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
   list-clickhouse-versions:
     outputs:
       versions: ${{ steps.list.outputs.versions }}
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,7 +89,7 @@ jobs:
   list-terraform-versions:
     outputs:
       versions: ${{ steps.list.outputs.versions }}
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -103,7 +103,7 @@ jobs:
   list-tofu-versions:
     outputs:
       versions: ${{ steps.list.outputs.versions }}
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -116,7 +116,7 @@ jobs:
   prepare-matrix:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     needs: ['list-clickhouse-versions', 'list-terraform-versions', 'list-tofu-versions']
     steps:
       - name: Checkout
@@ -129,7 +129,7 @@ jobs:
           clickhouse_versions_json: ${{ needs.list-clickhouse-versions.outputs.versions }}
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -155,7 +155,7 @@ jobs:
           path: ${{ env.TMPDIR }}
 
   database:
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
       fail-fast: false
@@ -176,7 +176,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   role:
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
       fail-fast: false
@@ -197,7 +197,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   user:
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
       fail-fast: false
@@ -218,7 +218,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   grantrole:
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
       fail-fast: false
@@ -239,7 +239,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   grantprivilege:
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
       fail-fast: false
@@ -260,7 +260,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   report:
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     needs: ['database', 'role', 'user', 'grantrole', 'grantprivilege']
     if: always()
     steps:
@@ -276,7 +276,7 @@ jobs:
   bump-examples:
     needs: [ 'validate', 'database', 'role', 'user', 'grantrole', 'grantprivilege']
     if: ${{ !(contains(needs.*.result, 'failure')) }}
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     permissions:
       contents: write
       pull-requests: write
@@ -316,7 +316,7 @@ jobs:
 
   # Create tag for the release
   tag:
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     permissions:
       contents: write
       pull-requests: write
@@ -337,7 +337,7 @@ jobs:
   goreleaser:
     permissions:
       contents: write
-    runs-on: ubuntu-latest
+    runs-on: k8s-medium
     needs: [ "validate", "tag", 'database', 'role', 'user', 'grantrole', 'grantprivilege' ]
     if: ${{ !(contains(needs.*.result, 'failure')) }}
     steps:
