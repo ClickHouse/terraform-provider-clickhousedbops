@@ -276,7 +276,7 @@ jobs:
   bump-examples:
     needs: [ 'validate', 'database', 'role', 'user', 'grantrole', 'grantprivilege']
     if: ${{ !(contains(needs.*.result, 'failure')) }}
-    runs-on: k8s-nano
+    runs-on: k8s-small
     permissions:
       contents: write
       pull-requests: write
