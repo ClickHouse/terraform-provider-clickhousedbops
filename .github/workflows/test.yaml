@@ -40,7 +40,7 @@ jobs:
 
   tftest:
     needs: ["tftestprepare"]
-    runs-on: [dataplane, self-hosted, linux, arm64, large]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         resource: ${{ fromJSON(needs.tftestprepare.outputs.resources) }}
