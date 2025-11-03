@@ -9,7 +9,7 @@ defaults:
 
 jobs:
   test:
-    runs-on: k8s-nano
+    runs-on: k8s-small
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +40,7 @@ jobs:
 
   tftest:
     needs: ["tftestprepare"]
-    runs-on: k8s-nano
+    runs-on: k8s-small
     strategy:
       matrix:
         resource: ${{ fromJSON(needs.tftestprepare.outputs.resources) }}

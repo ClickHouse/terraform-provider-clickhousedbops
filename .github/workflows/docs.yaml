@@ -9,7 +9,7 @@ defaults:
 
 jobs:
   check_docs:
-    runs-on: k8s-nano
+    runs-on: k8s-small
     steps:
       - name: Checkout
         uses: actions/checkout@v4
