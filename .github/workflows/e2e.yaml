@@ -63,7 +63,7 @@ jobs:
           clickhouse_versions_json: ${{ needs.list-clickhouse-versions.outputs.versions }}
 
   build:
-    runs-on: k8s-small
+    runs-on: k8s-medium
     steps:
       - name: Checkout
         uses: actions/checkout@v4
