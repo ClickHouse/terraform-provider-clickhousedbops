@@ -44,8 +44,7 @@ jobs:
         with:
           repo: 'opentofu/opentofu'
           count: '1'
-          min: '1.11.0-beta1'
-          include-pre-releases: "true"
+          min: '1.10.6'
 
   prepare-matrix:
     outputs:
