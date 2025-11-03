@@ -112,6 +112,8 @@ jobs:
         with:
           repo: 'opentofu/opentofu'
           count: '3'
+          min: '1.11.0-beta1'
+          include-pre-releases: "true"
 
   prepare-matrix:
     outputs:
@@ -155,7 +157,7 @@ jobs:
           path: ${{ env.TMPDIR }}
 
   database:
-    runs-on: k8s-nano
+    runs-on: ubuntu-latest
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
       fail-fast: false
@@ -176,7 +178,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   role:
-    runs-on: k8s-nano
+    runs-on: ubuntu-latest
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
       fail-fast: false
@@ -197,7 +199,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   user:
-    runs-on: k8s-nano
+    runs-on: ubuntu-latest
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
       fail-fast: false
@@ -218,7 +220,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   grantrole:
-    runs-on: k8s-nano
+    runs-on: ubuntu-latest
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
       fail-fast: false
@@ -239,7 +241,7 @@ jobs:
           cluster_type: ${{ matrix.cluster_type }}
 
   grantprivilege:
-    runs-on: k8s-nano
+    runs-on: ubuntu-latest
     needs: [ 'build', 'prepare-matrix' ]
     strategy:
       fail-fast: false
@@ -276,7 +278,7 @@ jobs:
   bump-examples:
     needs: [ 'validate', 'database', 'role', 'user', 'grantrole', 'grantprivilege']
     if: ${{ !(contains(needs.*.result, 'failure')) }}
-    runs-on: k8s-small
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
