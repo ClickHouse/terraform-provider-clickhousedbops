@@ -11,7 +11,7 @@ jobs:
   list-clickhouse-versions:
     outputs:
       versions: ${{ steps.list.outputs.versions }}
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,7 +21,7 @@ jobs:
   list-terraform-versions:
     outputs:
       versions: ${{ steps.list.outputs.versions }}
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,7 +35,7 @@ jobs:
   list-tofu-versions:
     outputs:
       versions: ${{ steps.list.outputs.versions }}
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,11 +44,13 @@ jobs:
         with:
           repo: 'opentofu/opentofu'
           count: '1'
+          min: '1.11.0-beta1'
+          include-pre-releases: "true"
 
   prepare-matrix:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     needs: ['list-clickhouse-versions', 'list-terraform-versions', 'list-tofu-versions']
     steps:
       - name: Checkout
@@ -61,7 +63,7 @@ jobs:
           clickhouse_versions_json: ${{ needs.list-clickhouse-versions.outputs.versions }}
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: k8s-large
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -214,7 +216,7 @@ jobs:
 
   notify:
     name: "E2E tests"
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     needs: ['build', 'list-clickhouse-versions', 'list-terraform-versions', 'list-tofu-versions', 'prepare-matrix', 'database', 'role', 'user', 'grantrole', 'grantprivilege', 'settingsprofile']
     if: always()
     steps:
@@ -253,4 +255,3 @@ jobs:
             -f "target_url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             -f "description=$description" \
             -f "context=E2E tests"
-          

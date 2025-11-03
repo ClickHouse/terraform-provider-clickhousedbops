@@ -10,7 +10,7 @@ jobs:
   check-comment:
     name: Parse action from comment
     if: github.event.issue.pull_request
-    runs-on: ubuntu-latest
+    runs-on: k8s-nano
     steps:
       - name: Check comment
         id: action

@@ -5,6 +5,7 @@ set -euo pipefail
 MIN=""
 WANT=""
 REPO=""
+INCLUDE_PRE_RELEASES="false"
 
 for arg in "$@"; do
   case "$arg" in
@@ -16,6 +17,9 @@ for arg in "$@"; do
       ;;
     --repo=*)
       REPO="${arg#*=}"
+      ;;
+    --include-pre-releases=*)
+      INCLUDE_PRE_RELEASES="${arg#*=}"
       ;;
     *)
       echo "Unknown parameter: $arg"
@@ -50,10 +54,20 @@ vergte() {
 
 versions=()
 current_nopatch=""
+
+# Set regex pattern based on whether pre-releases should be included
+if [ "$INCLUDE_PRE_RELEASES" == "true" ]; then
+  # Match final releases (x.y.z) and pre-releases (x.y.z-beta1, x.y.z-rc2, etc.)
+  version_pattern='^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+else
+  # Only match final releases (x.y.z)
+  version_pattern='^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+fi
+
 for candidate in $all
 do
-  # only keep final releases such as x.y.z
-  if [[ $candidate =~ ^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+  # Filter releases based on the version pattern
+  if [[ $candidate =~ $version_pattern ]]; then
     candidate=${candidate#v}
 
     if [ "${min}" != "" ]

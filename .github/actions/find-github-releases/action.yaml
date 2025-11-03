@@ -13,6 +13,10 @@ inputs:
     required: false
     default: "3"
     description: "The number of releases to return"
+  include-pre-releases:
+    required: false
+    default: "false"
+    description: "Whether to include pre-release versions (e.g., beta, rc, alpha)"
 
 outputs:
   versions:
@@ -31,4 +35,4 @@ runs:
         shell: bash
         command: |
           chmod +x .github/actions/find-github-releases/action.sh
-          .github/actions/find-github-releases/action.sh --repo="${{inputs.repo}}" --min="${{inputs.min}}" --want="${{inputs.count}}"
+          .github/actions/find-github-releases/action.sh --repo="${{inputs.repo}}" --min="${{inputs.min}}" --want="${{inputs.count}}" --include-pre-releases="${{inputs.include-pre-releases}}"

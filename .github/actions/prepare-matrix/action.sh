@@ -45,8 +45,7 @@ fi
 terraform=$(echo "${TERRAFORM_VERSIONS}" | jq -c 'map({binary: "terraform", image: "hashicorp/terraform", version: .})')
 
 # Opentofu support is blocked by https://github.com/opentofu/opentofu/issues/1996
-# tofu=$(echo "${TOFU_VERSIONS}" | jq -c 'map({binary: "tofu", image: "ghcr.io/opentofu/opentofu", version: .})')
-tofu="[]"
+tofu=$(echo "${TOFU_VERSIONS}" | jq -c 'map({binary: "tofu", image: "ghcr.io/opentofu/opentofu", version: .})')
 
 both=$(jq -cn --argjson tf "$terraform" --argjson tofu "$tofu" '$tf + $tofu')
 
