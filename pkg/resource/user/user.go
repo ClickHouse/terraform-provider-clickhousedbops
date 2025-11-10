@@ -78,6 +78,13 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					int32planmodifier.RequiresReplace(),
 				},
 			},
+			"host_ip": schema.StringAttribute{
+				Optional:    true,
+				Description: "IP address from which the user is allowed to connect. If not specified, user can connect from any host.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 		},
 		MarkdownDescription: userResourceDescription,
 	}
@@ -147,6 +154,11 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		PasswordSha256Hash: config.PasswordSha256Hash.ValueString(),
 	}
 
+	// Only set host IP if provided
+	if !plan.HostIP.IsNull() && plan.HostIP.ValueString() != "" {
+		user.HostIP = plan.HostIP.ValueString()
+	}
+
 	createdUser, err := r.client.CreateUser(ctx, user, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -161,6 +173,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		ID:                        types.StringValue(createdUser.ID),
 		Name:                      types.StringValue(createdUser.Name),
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
+		HostIP:                    plan.HostIP,
 	}
 
 	diags = resp.State.Set(ctx, state)
