@@ -1,5 +1,7 @@
 You can use the `clickhousedbops_user` resource to create a user in a `ClickHouse` instance.
 
+This resource supports two password fields: `password_sha256_hash_wo` (Terraform 1.11+) or `password_sha256_hash` (legacy compatibility). Use only one.
+
 Known limitations:
 
 - Changing the `password_sha256_hash_wo` field alone does not have any effect. In order to change the password of a user, you also need to bump `password_sha256_hash_wo_version` field.

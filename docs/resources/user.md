@@ -4,6 +4,7 @@ page_title: "clickhousedbops_user Resource - clickhousedbops"
 subcategory: ""
 description: |-
   You can use the clickhousedbops_user resource to create a user in a ClickHouse instance.
+  This resource supports two password fields: password_sha256_hash_wo (Terraform 1.11+) or password_sha256_hash (legacy compatibility). Use only one.
   Known limitations:
   Changing the password_sha256_hash_wo field alone does not have any effect. In order to change the password of a user, you also need to bump password_sha256_hash_wo_version field.Changing the user's password as described above will cause the database user to be deleted and recreated.When importing an existing user, the clickhousedbops_user resource will be lacking the password_sha256_hash_wo_version and thus the subsequent apply will need to recreate the database User in order to set a password.
 ---
@@ -11,6 +12,8 @@ description: |-
 # clickhousedbops_user (Resource)
 
 You can use the `clickhousedbops_user` resource to create a user in a `ClickHouse` instance.
+
+This resource supports two password fields: `password_sha256_hash_wo` (Terraform 1.11+) or `password_sha256_hash` (legacy compatibility). Use only one.
 
 Known limitations:
 
@@ -35,17 +38,18 @@ resource "clickhousedbops_user" "john" {
 
 ### Required
 
-> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
-
 - `name` (String) Name of the user
-- `password_sha256_hash_wo` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user
 - `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
+- `password_sha256_hash` (String, Sensitive) SHA256 hash of the password to be set for the user (legacy compatibility, stored encrypted in state)
+- `password_sha256_hash_wo` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user (Terraform 1.11+ only, not stored in state)
 
 ### Read-Only
 

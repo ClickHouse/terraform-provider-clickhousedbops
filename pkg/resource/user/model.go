@@ -9,5 +9,6 @@ type User struct {
 	ID                        types.String `tfsdk:"id"`
 	Name                      types.String `tfsdk:"name"`
 	PasswordSha256Hash        types.String `tfsdk:"password_sha256_hash_wo"`
+	PasswordSha256HashLegacy  types.String `tfsdk:"password_sha256_hash"`
 	PasswordSha256HashVersion types.Int32  `tfsdk:"password_sha256_hash_wo_version"`
 }

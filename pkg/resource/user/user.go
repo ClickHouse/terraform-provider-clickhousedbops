@@ -61,15 +61,26 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Description: "Name of the user",
 			},
 			"password_sha256_hash_wo": schema.StringAttribute{
-				Required:    true,
-				Description: "SHA256 hash of the password to be set for the user",
+				Optional:    true,
+				Description: "SHA256 hash of the password to be set for the user (Terraform 1.11+ only, not stored in state)",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash_wo must be a valid SHA256 hash"),
+				},
+				WriteOnly: true,
+			},
+			"password_sha256_hash": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "SHA256 hash of the password to be set for the user (legacy compatibility, stored encrypted in state)",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
 				},
-				WriteOnly: true,
 			},
 			"password_sha256_hash_wo_version": schema.Int32Attribute{
 				Required:    true,
@@ -86,6 +97,33 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() {
 		// If the entire plan is null, the resource is planned for destruction.
+		return
+	}
+
+	// Validate password field mutual exclusivity
+	var config User
+	diags := req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	hasWriteOnlyPassword := !config.PasswordSha256Hash.IsNull()
+	hasLegacyPassword := !config.PasswordSha256HashLegacy.IsNull()
+
+	if hasWriteOnlyPassword && hasLegacyPassword {
+		resp.Diagnostics.AddError(
+			"Conflicting password attributes",
+			"Cannot specify both 'password_sha256_hash_wo' and 'password_sha256_hash'. Use 'password_sha256_hash_wo' for Terraform 1.11+ (preferred) or 'password_sha256_hash' for legacy compatibility.",
+		)
+		return
+	}
+
+	if !hasWriteOnlyPassword && !hasLegacyPassword {
+		resp.Diagnostics.AddError(
+			"Missing password attribute",
+			"Must specify either 'password_sha256_hash_wo' (Terraform 1.11+, preferred) or 'password_sha256_hash' (legacy compatibility).",
+		)
 		return
 	}
 
@@ -142,9 +180,19 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	// Determine which password field to use (prefer WriteOnly over legacy)
+	var passwordHash string
+	if !config.PasswordSha256Hash.IsNull() {
+		// Use WriteOnly field (Terraform 1.11+)
+		passwordHash = config.PasswordSha256Hash.ValueString()
+	} else {
+		// Use legacy Sensitive field
+		passwordHash = plan.PasswordSha256HashLegacy.ValueString()
+	}
+
 	user := dbops.User{
 		Name:               plan.Name.ValueString(),
-		PasswordSha256Hash: config.PasswordSha256Hash.ValueString(),
+		PasswordSha256Hash: passwordHash,
 	}
 
 	createdUser, err := r.client.CreateUser(ctx, user, plan.ClusterName.ValueStringPointer())
@@ -161,6 +209,11 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		ID:                        types.StringValue(createdUser.ID),
 		Name:                      types.StringValue(createdUser.Name),
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
+	}
+
+	// Store legacy password in state if it was used (WriteOnly fields are never stored in state)
+	if !plan.PasswordSha256HashLegacy.IsNull() {
+		state.PasswordSha256HashLegacy = plan.PasswordSha256HashLegacy
 	}
 
 	diags = resp.State.Set(ctx, state)
