@@ -10,7 +10,7 @@ func Test_createuser(t *testing.T) {
 		resourceName    string
 		identifiedWith  Identification
 		identifiedBy    string
-		hostIP          string
+		hostIPs         []string
 		settingsProfile string
 		want            string
 		wantErr         bool
@@ -51,18 +51,25 @@ func Test_createuser(t *testing.T) {
 		{
 			name:         "Create user with host IP restriction",
 			resourceName: "mira",
-			hostIP:       "127.0.0.1",
+			hostIPs:      []string{"127.0.0.1"},
 			want:         "CREATE USER `mira` HOST IP '127.0.0.1';",
 			wantErr:      false,
 		},
 		{
 			name:           "Create user with host IP and password",
 			resourceName:   "mira",
-			hostIP:         "127.0.0.1",
+			hostIPs:        []string{"127.0.0.1"},
 			identifiedWith: IdentificationSHA256Hash,
 			identifiedBy:   "blah",
 			want:           "CREATE USER `mira` HOST IP '127.0.0.1' IDENTIFIED WITH sha256_hash BY 'blah';",
 			wantErr:        false,
+		},
+		{
+			name:         "Create user with multiple host IP restrictions",
+			resourceName: "mira",
+			hostIPs:      []string{"127.0.0.1", "192.168.1.1", "10.0.0.1"},
+			want:         "CREATE USER `mira` HOST IP '127.0.0.1' HOST IP '192.168.1.1' HOST IP '10.0.0.1';",
+			wantErr:      false,
 		},
 	}
 	for _, tt := range tests {
@@ -72,8 +79,8 @@ func Test_createuser(t *testing.T) {
 				resourceName: tt.resourceName,
 			}
 
-			if tt.hostIP != "" {
-				q = q.HostIP(tt.hostIP)
+			if len(tt.hostIPs) > 0 {
+				q = q.HostIPs(tt.hostIPs)
 			}
 
 			if tt.identifiedWith != "" && tt.identifiedBy != "" {

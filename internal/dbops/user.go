@@ -14,7 +14,7 @@ type User struct {
 	Name               string   `json:"name"`
 	PasswordSha256Hash string   `json:"-"`
 	SettingsProfiles   []string `json:"-"`
-	HostIP             string   `json:"-"`
+	HostIPs            []string `json:"-"`
 }
 
 func (u *User) HasSettingProfile(profileName string) bool {
@@ -31,8 +31,8 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 	builder := querybuilder.NewCreateUser(user.Name).Identified(querybuilder.IdentificationSHA256Hash, user.PasswordSha256Hash)
 
 	// Only set host IP restriction if provided
-	if user.HostIP != "" {
-		builder = builder.HostIP(user.HostIP)
+	if len(user.HostIPs) > 0 {
+		builder = builder.HostIPs(user.HostIPs)
 	}
 
 	sql, err := builder.WithCluster(clusterName).Build()

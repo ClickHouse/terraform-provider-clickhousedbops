@@ -46,7 +46,7 @@ resource "clickhousedbops_user" "john" {
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
-- `host_ip` (String) IP address from which the user is allowed to connect. If not specified, user can connect from any host.
+- `host_ips` (Set of String) IP addresses from which the user is allowed to connect. If not specified, user can connect from any host.
 
 ### Read-Only
 
