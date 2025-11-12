@@ -13,6 +13,7 @@ type CreateUserQueryBuilder interface {
 	Identified(with Identification, by string) CreateUserQueryBuilder
 	WithSettingsProfile(profileName *string) CreateUserQueryBuilder
 	WithCluster(clusterName *string) CreateUserQueryBuilder
+	HostIPs(ips []string) CreateUserQueryBuilder
 }
 
 type Identification string
@@ -24,6 +25,7 @@ const (
 type createUserQueryBuilder struct {
 	resourceName    string
 	identified      string
+	hostIPs         []string
 	settingsProfile *string
 	clusterName     *string
 }
@@ -36,6 +38,11 @@ func NewCreateUser(resourceName string) CreateUserQueryBuilder {
 
 func (q *createUserQueryBuilder) Identified(with Identification, by string) CreateUserQueryBuilder {
 	q.identified = fmt.Sprintf("IDENTIFIED WITH %s BY %s", with, quote(by))
+	return q
+}
+
+func (q *createUserQueryBuilder) HostIPs(ips []string) CreateUserQueryBuilder {
+	q.hostIPs = ips
 	return q
 }
 
@@ -61,6 +68,11 @@ func (q *createUserQueryBuilder) Build() (string, error) {
 	}
 	if q.clusterName != nil {
 		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
+	}
+	if len(q.hostIPs) > 0 {
+		for _, ip := range q.hostIPs {
+			tokens = append(tokens, "HOST", "IP", quote(ip))
+		}
 	}
 	if q.identified != "" {
 		tokens = append(tokens, q.identified)

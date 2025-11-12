@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -76,6 +77,14 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Description: "Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.",
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.RequiresReplace(),
+				},
+			},
+			"host_ips": schema.SetAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Description: "IP addresses from which the user is allowed to connect. If not specified, user can connect from any host.",
+				PlanModifiers: []planmodifier.Set{
+					setplanmodifier.RequiresReplace(),
 				},
 			},
 		},
@@ -147,6 +156,17 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		PasswordSha256Hash: config.PasswordSha256Hash.ValueString(),
 	}
 
+	// Only set host IPs if provided
+	if !plan.HostIPs.IsNull() && len(plan.HostIPs.Elements()) > 0 {
+		var hostIPs []string
+		diags = plan.HostIPs.ElementsAs(ctx, &hostIPs, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		user.HostIPs = hostIPs
+	}
+
 	createdUser, err := r.client.CreateUser(ctx, user, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -161,6 +181,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		ID:                        types.StringValue(createdUser.ID),
 		Name:                      types.StringValue(createdUser.Name),
 		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
+		HostIPs:                   plan.HostIPs,
 	}
 
 	diags = resp.State.Set(ctx, state)
