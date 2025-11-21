@@ -148,6 +148,41 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	// Validate that the grantee (user or role) exists before attempting to grant
+	if !plan.GranteeUserName.IsNull() {
+		user, err := r.client.FindUserByName(ctx, plan.GranteeUserName.ValueString(), plan.ClusterName.ValueStringPointer())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Validating Grantee User",
+				fmt.Sprintf("%+v\n", err),
+			)
+			return
+		}
+		if user == nil {
+			resp.Diagnostics.AddError(
+				"Grantee User Does Not Exist",
+				fmt.Sprintf("User '%s' does not exist. Please create the user before granting roles to it.", plan.GranteeUserName.ValueString()),
+			)
+			return
+		}
+	} else if !plan.GranteeRoleName.IsNull() {
+		role, err := r.client.FindRoleByName(ctx, plan.GranteeRoleName.ValueString(), plan.ClusterName.ValueStringPointer())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Validating Grantee Role",
+				fmt.Sprintf("%+v\n", err),
+			)
+			return
+		}
+		if role == nil {
+			resp.Diagnostics.AddError(
+				"Grantee Role Does Not Exist",
+				fmt.Sprintf("Role '%s' does not exist. Please create the role before granting roles to it.", plan.GranteeRoleName.ValueString()),
+			)
+			return
+		}
+	}
+
 	grant := dbops.GrantRole{
 		RoleName:        plan.RoleName.ValueString(),
 		GranteeUserName: plan.GranteeUserName.ValueStringPointer(),
@@ -160,6 +195,15 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse Role Grant",
 			fmt.Sprintf("%+v\n", err),
+		)
+		return
+	}
+
+	// Avoid potential nil dereference
+	if createdGrant == nil {
+		resp.Diagnostics.AddError(
+			"Error Creating ClickHouse Role Grant",
+			"Grant operation completed but the grant could not be found in system.role_grants with the specified grantee type.",
 		)
 		return
 	}
