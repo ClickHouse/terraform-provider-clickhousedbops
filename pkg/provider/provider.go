@@ -240,6 +240,13 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
+	// Initialize capability flags on provider configuration.
+	err = dbopsClient.SetCapabilityFlags(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError("error setting capability flags", fmt.Sprintf("%+v\n", err))
+		return
+	}
+
 	resp.ResourceData = dbopsClient
 	resp.DataSourceData = dbopsClient
 }

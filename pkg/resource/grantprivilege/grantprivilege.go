@@ -354,7 +354,17 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	grant, err := r.client.GetGrantPrivilege(ctx, state.Privilege.ValueString(), state.Database.ValueStringPointer(), state.Table.ValueStringPointer(), state.Column.ValueStringPointer(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.ClusterName.ValueStringPointer())
+	grantPrivilege := dbops.GrantPrivilege{
+		AccessType:      state.Privilege.ValueString(),
+		DatabaseName:    state.Database.ValueStringPointer(),
+		TableName:       state.Table.ValueStringPointer(),
+		ColumnName:      state.Column.ValueStringPointer(),
+		GranteeUserName: state.GranteeUserName.ValueStringPointer(),
+		GranteeRoleName: state.GranteeRoleName.ValueStringPointer(),
+		GrantOption:     state.GrantOption.ValueBool(),
+	}
+
+	grant, err := r.client.GetGrantPrivilege(ctx, &grantPrivilege, state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse Privilege Grant",
