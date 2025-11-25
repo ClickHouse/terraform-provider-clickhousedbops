@@ -206,8 +206,12 @@ func valOrNullWhere(field string, value *string) querybuilder.Where {
 
 func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string) (*GrantPrivilege, error) {
 	var matcher MatcherFunc
+	capabilityFlags, err := i.GetCapabilityFlags(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// Use sources matcher if capability and accessType is a source, otherwise classic one
-	if i.GetCapabilityFlags().SourcesGrantReadWriteSeparation && sourcesFamily[grantPrivilege.AccessType] {
+	if capabilityFlags.SourcesGrantReadWriteSeparation && sourcesFamily[grantPrivilege.AccessType] {
 		grantPrivilege.AccessObject = grantPrivilege.AccessType
 		matcher = SourcesReadWriteGrantMatcher
 	} else {

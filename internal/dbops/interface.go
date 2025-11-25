@@ -44,6 +44,5 @@ type Client interface {
 	DeleteSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) error
 
 	IsReplicatedStorage(ctx context.Context) (bool, error)
-	GetCapabilityFlags() CapabilityFlags
-	SetCapabilityFlags(ctx context.Context) error
+	GetCapabilityFlags(ctx context.Context) (CapabilityFlags, error)
 }

@@ -2,6 +2,7 @@ package dbops
 
 import (
 	"context"
+	"sync"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
 )
@@ -9,6 +10,8 @@ import (
 type impl struct {
 	clickhouseClient clickhouseclient.ClickhouseClient
 	CapabilityFlags  *CapabilityFlags
+	initOnce         sync.Once
+	initErr          error
 }
 
 func NewClient(clickhouseClient clickhouseclient.ClickhouseClient) (Client, error) {
@@ -18,21 +21,24 @@ func NewClient(clickhouseClient clickhouseclient.ClickhouseClient) (Client, erro
 	}, nil
 }
 
-// Retrieves the ClickHouse version and sets the capability flags accordingly.
-// Used to determine which features are supported by the connected ClickHouse server.
-func (i *impl) SetCapabilityFlags(ctx context.Context) error {
-	version, err := i.GetVersion(ctx)
-	if err != nil {
-		return err
-	}
-	i.CapabilityFlags = NewCapabilityFlags(version)
-	return nil
+func (i *impl) initCapabilities(ctx context.Context) {
+	i.initOnce.Do(func() {
+		version, err := i.GetVersion(ctx)
+		if err != nil {
+			i.initErr = err
+			return
+		}
+		i.CapabilityFlags = NewCapabilityFlags(version)
+	})
 }
 
 // Returns initialized capability flags for the connected ClickHouse server.
-func (i *impl) GetCapabilityFlags() CapabilityFlags {
+func (i *impl) GetCapabilityFlags(ctx context.Context) (CapabilityFlags, error) {
+	i.initCapabilities(ctx)
+
 	if i.CapabilityFlags == nil {
-		return CapabilityFlags{}
+		return CapabilityFlags{}, i.initErr
 	}
-	return *i.CapabilityFlags
+
+	return *i.CapabilityFlags, i.initErr
 }
