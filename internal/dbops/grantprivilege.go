@@ -9,8 +9,31 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/querybuilder"
 )
 
+// Source family, used in GetGrantPrivilege logic below to cover
+// transition to new grant model for external datasources with separation on READ/WRITE grants.
+var sourcesFamily = map[string]bool{
+	"AZURE":    true,
+	"FILE":     true,
+	"HDFS":     true,
+	"HIVE":     true,
+	"JDBC":     true,
+	"KAFKA":    true,
+	"MONGO":    true,
+	"MYSQL":    true,
+	"NATS":     true,
+	"ODBC":     true,
+	"POSTGRES": true,
+	"RABBITMQ": true,
+	"REDIS":    true,
+	"REMOTE":   true,
+	"S3":       true,
+	"SQLITE":   true,
+	"URL":      true,
+}
+
 type GrantPrivilege struct {
 	AccessType      string  `json:"access_type"`
+	AccessObject    string  `json:"access_object"`
 	DatabaseName    *string `json:"database"`
 	TableName       *string `json:"table"`
 	ColumnName      *string `json:"column"`
@@ -18,6 +41,9 @@ type GrantPrivilege struct {
 	GranteeRoleName *string `json:"role_name"`
 	GrantOption     bool    `json:"grant_option"`
 }
+
+// Defines the signature for a function that checks if privileges are granted.
+type MatcherFunc func(ctx context.Context, priv *GrantPrivilege, clusterName *string, i *impl) (bool, error)
 
 func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege, clusterName *string) (*GrantPrivilege, error) {
 	var to string
@@ -47,39 +73,23 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.GetGrantPrivilege(ctx, grantPrivilege.AccessType, grantPrivilege.DatabaseName, grantPrivilege.TableName, grantPrivilege.ColumnName, grantPrivilege.GranteeUserName, grantPrivilege.GranteeRoleName, clusterName)
+	return i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
 }
 
-func (i *impl) GetGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string, clusterName *string) (*GrantPrivilege, error) {
-	where := make([]querybuilder.Where, 0)
-
-	{
-		where = append(where, querybuilder.WhereEquals("access_type", accessType))
-		if database != nil {
-			where = append(where, querybuilder.WhereEquals("database", *database))
-		} else {
-			where = append(where, querybuilder.IsNull("database"))
-		}
-
-		if table != nil {
-			where = append(where, querybuilder.WhereEquals("table", *table))
-		} else {
-			where = append(where, querybuilder.IsNull("table"))
-		}
-
-		if column != nil {
-			where = append(where, querybuilder.WhereEquals("column", *column))
-		} else {
-			where = append(where, querybuilder.IsNull("column"))
-		}
-
-		if granteeUserName != nil {
-			where = append(where, querybuilder.WhereEquals("user_name", *granteeUserName))
-		} else if granteeRoleName != nil {
-			where = append(where, querybuilder.WhereEquals("role_name", *granteeRoleName))
-		} else {
-			return nil, errors.New("either GranteeUserName or GranteeRoleName must be set")
-		}
+// Matcher function to handle classic grants: https://clickhouse.com/docs/sql-reference/statements/grant#granting-privilege-syntax
+func ClassicGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName *string, i *impl) (bool, error) {
+	where := []querybuilder.Where{
+		querybuilder.WhereEquals("access_type", priv.AccessType),
+		valOrNullWhere("database", priv.DatabaseName),
+		valOrNullWhere("table", priv.TableName),
+		valOrNullWhere("column", priv.ColumnName),
+	}
+	if priv.GranteeUserName != nil {
+		where = append(where, querybuilder.WhereEquals("user_name", *priv.GranteeUserName))
+	} else if priv.GranteeRoleName != nil {
+		where = append(where, querybuilder.WhereEquals("role_name", *priv.GranteeRoleName))
+	} else {
+		return false, errors.New("either GranteeUserName or GranteeRoleName must be set")
 	}
 
 	sql, err := querybuilder.NewSelect(
@@ -95,58 +105,124 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, accessType string, databas
 		"system.grants",
 	).WithCluster(clusterName).Where(where...).Build()
 	if err != nil {
-		return nil, errors.WithMessage(err, "error building query")
+		return false, err
 	}
 
-	var grantPrivilege *GrantPrivilege
-
+	found := false
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-		accessType, err := data.GetString("access_type")
+		_, err = data.GetString("access_type")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'access_type' field")
 		}
-		database, err := data.GetNullableString("database")
+		_, err = data.GetNullableString("database")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'database' field")
 		}
-		table, err := data.GetNullableString("table")
+		_, err = data.GetNullableString("table")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'table' field")
 		}
-		column, err := data.GetNullableString("column")
+		_, err = data.GetNullableString("column")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'column' field")
 		}
-		granteeUserName, err := data.GetNullableString("user_name")
+		_, err = data.GetNullableString("user_name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'user_name' field")
 		}
-		granteeRoleName, err := data.GetNullableString("role_name")
+		_, err = data.GetNullableString("role_name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'role_name' field")
 		}
-		grantOption, err := data.GetBool("grant_option")
+		_, err = data.GetBool("grant_option")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'grant_option' field")
 		}
-		grantPrivilege = &GrantPrivilege{
-			AccessType:      accessType,
-			DatabaseName:    database,
-			TableName:       table,
-			ColumnName:      column,
-			GranteeUserName: granteeUserName,
-			GranteeRoleName: granteeRoleName,
-			GrantOption:     grantOption,
-		}
-
+		found = true
 		return nil
 	})
 	if err != nil {
-		return nil, errors.WithMessage(err, "error running query")
+		return false, err
 	}
 
-	if grantPrivilege == nil {
-		// Grant not found
+	return found, nil
+}
+
+// Matcher function to handle sources grants, applied via `clickhousedbops_grant_privilege` resource with READ/WRITE access:
+// https://clickhouse.com/docs/sql-reference/statements/grant#sources
+// TODO: grants for sources should be refactored to use separate resource.
+func SourcesReadWriteGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName *string, i *impl) (bool, error) {
+	if priv.AccessObject == "" {
+		return false, errors.New("incorrect query: access_object field required for sources matcher")
+	}
+	where := []querybuilder.Where{
+		querybuilder.WhereEquals("access_object", priv.AccessObject),
+		querybuilder.WhereIn("access_type", []string{"READ", "WRITE"}),
+		valOrNullWhere("database", priv.DatabaseName),
+		valOrNullWhere("table", priv.TableName),
+		valOrNullWhere("column", priv.ColumnName),
+	}
+	if priv.GranteeUserName != nil {
+		where = append(where, querybuilder.WhereEquals("user_name", *priv.GranteeUserName))
+	} else if priv.GranteeRoleName != nil {
+		where = append(where, querybuilder.WhereEquals("role_name", *priv.GranteeRoleName))
+	} else {
+		return false, errors.New("incorrect query: either user_name or role_name must be set")
+	}
+
+	sql, err := querybuilder.NewSelect(
+		[]querybuilder.Field{
+			querybuilder.NewField("access_type").ToString(),
+			querybuilder.NewField("access_object"),
+			querybuilder.NewField("user_name"),
+			querybuilder.NewField("role_name"),
+			querybuilder.NewField("grant_option"),
+		},
+		"system.grants",
+	).WithCluster(clusterName).Where(where...).Build()
+	if err != nil {
+		return false, err
+	}
+	// We expect 2 rows for both READ and WRITE grants.
+	rowsCount := 0
+	err = i.clickhouseClient.Select(ctx, sql, func(_ clickhouseclient.Row) error {
+		rowsCount++
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+
+	return rowsCount == 2, nil
+}
+
+// Helper function: Null or value clause
+func valOrNullWhere(field string, value *string) querybuilder.Where {
+	if value != nil {
+		return querybuilder.WhereEquals(field, *value)
+	}
+	return querybuilder.IsNull(field)
+}
+
+func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string) (*GrantPrivilege, error) {
+	var matcher MatcherFunc
+	capabilityFlags, err := i.GetCapabilityFlags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Use sources matcher if capability and accessType is a source, otherwise classic one
+	if capabilityFlags.SourcesGrantReadWriteSeparation && sourcesFamily[grantPrivilege.AccessType] {
+		grantPrivilege.AccessObject = grantPrivilege.AccessType
+		matcher = SourcesReadWriteGrantMatcher
+	} else {
+		matcher = ClassicGrantMatcher
+	}
+
+	ok, err := matcher(ctx, grantPrivilege, clusterName, i)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		return nil, nil
 	}
 

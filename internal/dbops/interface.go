@@ -27,7 +27,7 @@ type Client interface {
 	RevokeGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string, clusterName *string) error
 
 	GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege, clusterName *string) (*GrantPrivilege, error)
-	GetGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string, clusterName *string) (*GrantPrivilege, error)
+	GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string) (*GrantPrivilege, error)
 	RevokeGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string, clusterName *string) error
 	GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string, clusterName *string) ([]GrantPrivilege, error)
 
@@ -44,4 +44,5 @@ type Client interface {
 	DeleteSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) error
 
 	IsReplicatedStorage(ctx context.Context) (bool, error)
+	GetCapabilityFlags(ctx context.Context) (CapabilityFlags, error)
 }

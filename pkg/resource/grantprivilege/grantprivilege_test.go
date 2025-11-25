@@ -70,12 +70,21 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			granteeRoleName = &granteeRole
 		}
 
-		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, accessType, database, table, column, granteeUserName, granteeRoleName, clusterName)
+		grantPrivilege := dbops.GrantPrivilege{
+			AccessType:      accessType,
+			DatabaseName:    database,
+			TableName:       table,
+			ColumnName:      column,
+			GranteeUserName: granteeUserName,
+			GranteeRoleName: granteeRoleName,
+		}
+
+		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
 		return grantprivilege != nil, err
 	}
 
 	checkAttributesFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
-		accessType := attrs["privilege_name"]
+		accessType := attrs["privilege_name"].(string)
 		if accessType == "" {
 			return fmt.Errorf("privilege_name attribute was not set")
 		}
@@ -113,7 +122,23 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			return fmt.Errorf("both grantee_user_name and grantee_role_name attribute were not set")
 		}
 
-		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, accessType.(string), database, table, column, granteeUserName, granteeRoleName, clusterName)
+		grantOption := false
+		if attrs["grant_option"] != nil {
+			s := attrs["grant_option"].(bool)
+			grantOption = s
+		}
+
+		grantPrivilege := dbops.GrantPrivilege{
+			AccessType:      accessType,
+			DatabaseName:    database,
+			TableName:       table,
+			ColumnName:      column,
+			GranteeUserName: granteeUserName,
+			GranteeRoleName: granteeRoleName,
+			GrantOption:     grantOption,
+		}
+
+		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
 		if err != nil {
 			return err
 		}
