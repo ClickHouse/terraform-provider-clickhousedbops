@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -61,22 +62,41 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Required:    true,
 				Description: "Name of the user",
 			},
-			"password_sha256_hash_wo": schema.StringAttribute{
-				Required:    true,
-				Description: "SHA256 hash of the password to be set for the user",
+			"password_sha256_hash": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
+					stringvalidator.ConflictsWith(path.MatchRoot("password_sha256_hash_wo")),
+				},
+				DeprecationMessage: "Use password_sha256_hash_wo if you're on Terraform or OpenTofu >= 1.11",
+			},
+			"password_sha256_hash_wo": schema.StringAttribute{
+				Optional:    true,
+				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.",
+				Sensitive:   true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
+					stringvalidator.AlsoRequires(path.MatchRoot("password_sha256_hash_wo_version")),
+					stringvalidator.ConflictsWith(path.MatchRoot("password_sha256_hash")),
 				},
 				WriteOnly: true,
 			},
 			"password_sha256_hash_wo_version": schema.Int32Attribute{
-				Required:    true,
+				Optional:    true,
 				Description: "Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.",
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.RequiresReplace(),
+				},
+				Validators: []validator.Int32{
+					int32validator.AlsoRequires(path.MatchRoot("password_sha256_hash_wo")),
 				},
 			},
 			"host_ips": schema.SetAttribute{
@@ -136,8 +156,11 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, _
 }
 
 func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan User
-	var config User
+	var (
+		plan   User
+		config User
+	)
+
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -151,9 +174,24 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	var passwordHash string
+	switch {
+	case !plan.PasswordSha256Hash.IsNull():
+		// sensitive attribute for TF < 1.11
+		passwordHash = plan.PasswordSha256Hash.ValueString()
+	case !config.PasswordSha256HashWO.IsNull():
+		// sensitive attribute for TF >= 1.11
+		passwordHash = config.PasswordSha256HashWO.ValueString()
+	default:
+		resp.Diagnostics.AddError(
+			"Missing password configuration",
+			"Either password_sha256_hash or password_sha256_hash_wo must be specified",
+		)
+	}
+
 	user := dbops.User{
 		Name:               plan.Name.ValueString(),
-		PasswordSha256Hash: config.PasswordSha256Hash.ValueString(),
+		PasswordSha256Hash: passwordHash,
 	}
 
 	// Only set host IPs if provided
@@ -177,11 +215,12 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	state := User{
-		ClusterName:               plan.ClusterName,
-		ID:                        types.StringValue(createdUser.ID),
-		Name:                      types.StringValue(createdUser.Name),
-		PasswordSha256HashVersion: plan.PasswordSha256HashVersion,
-		HostIPs:                   plan.HostIPs,
+		ClusterName:                 plan.ClusterName,
+		ID:                          types.StringValue(createdUser.ID),
+		Name:                        types.StringValue(createdUser.Name),
+		PasswordSha256Hash:          plan.PasswordSha256Hash,
+		PasswordSha256HashVersionWO: plan.PasswordSha256HashVersionWO,
+		HostIPs:                     plan.HostIPs,
 	}
 
 	diags = resp.State.Set(ctx, state)
