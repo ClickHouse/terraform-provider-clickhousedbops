@@ -2,6 +2,7 @@ package dbops
 
 import (
 	"context"
+	"time"
 )
 
 type Client interface {
@@ -39,7 +40,7 @@ type Client interface {
 	AssociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error
 	DisassociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error
 
-	CreateSetting(ctx context.Context, settingsProfileID string, setting Setting, clusterName *string) (*Setting, error)
+	CreateSetting(ctx context.Context, settingsProfileID string, setting Setting, clusterName *string, timeout time.Duration) (*Setting, error)
 	GetSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) (*Setting, error)
 	DeleteSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) error
 

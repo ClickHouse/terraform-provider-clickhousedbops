@@ -4,7 +4,9 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -38,7 +40,7 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 	resp.TypeName = req.ProviderTypeName + "_setting"
 }
 
-func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *Resource) Schema(ctx context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
@@ -116,6 +118,9 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					),
 				},
 			},
+			"timeouts": timeouts.Attributes(ctx, timeouts.Opts{
+				Create: true,
+			}),
 		},
 		MarkdownDescription: settingResourceDescription,
 	}
@@ -180,7 +185,14 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		Writability: plan.Writability.ValueStringPointer(),
 	}
 
-	createdSetting, err := r.client.CreateSetting(ctx, plan.SettingsProfileID.ValueString(), setting, plan.ClusterName.ValueStringPointer())
+	createTimeout, diags := plan.Timeouts.Create(ctx, 1*time.Minute)
+	resp.Diagnostics.Append(diags...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	createdSetting, err := r.client.CreateSetting(ctx, plan.SettingsProfileID.ValueString(), setting, plan.ClusterName.ValueStringPointer(), createTimeout)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse Setting",
@@ -189,9 +201,18 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	if createdSetting == nil {
+		resp.Diagnostics.AddError(
+			"Error Creating ClickHouse Setting",
+			"Created setting returned nil without error",
+		)
+		return
+	}
+
 	state := Setting{
 		ClusterName:       plan.ClusterName,
 		SettingsProfileID: plan.SettingsProfileID,
+		Timeouts:          plan.Timeouts,
 	}
 
 	modelFromApiResponse(&state, *createdSetting)

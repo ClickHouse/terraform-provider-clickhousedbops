@@ -38,5 +38,13 @@ This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `max` (String) Max Value for the setting
 - `min` (String) Min Value for the setting
+- `timeouts` (Attributes) (see [below for nested schema](#nestedatt--timeouts))
 - `value` (String) Value for the setting
 - `writability` (String) Writability attribute for the setting
+
+<a id="nestedatt--timeouts"></a>
+### Nested Schema for `timeouts`
+
+Optional:
+
+- `create` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
