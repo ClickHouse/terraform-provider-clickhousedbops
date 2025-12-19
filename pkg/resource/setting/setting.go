@@ -189,6 +189,14 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	if createdSetting == nil {
+		resp.Diagnostics.AddError(
+			"Error Creating ClickHouse Setting",
+			"Created setting returned nil without error",
+		)
+		return
+	}
+
 	state := Setting{
 		ClusterName:       plan.ClusterName,
 		SettingsProfileID: plan.SettingsProfileID,

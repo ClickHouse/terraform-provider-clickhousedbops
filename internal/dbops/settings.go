@@ -3,6 +3,7 @@ package dbops
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pingcap/errors"
 
@@ -41,7 +42,30 @@ func (i *impl) CreateSetting(ctx context.Context, settingsProfileID string, sett
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.GetSetting(ctx, settingsProfileID, setting.Name, clusterName)
+	// Retry with exponential backoff to handle potential replication lag
+	var createdSetting *Setting
+	maxRetries := 6
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		createdSetting, err = i.GetSetting(ctx, settingsProfileID, setting.Name, clusterName)
+		if err != nil {
+			return nil, errors.WithMessage(err, "error retrieving created setting")
+		}
+
+		if createdSetting != nil {
+			return createdSetting, nil
+		}
+
+		if attempt < maxRetries-1 {
+			backoff := time.Duration(100*(1<<uint(attempt))) * time.Millisecond
+			time.Sleep(backoff)
+		}
+	}
+
+	return nil, fmt.Errorf(
+		"setting %q was created but could not be retrieved after %d retries. "+
+			"The settings profile may have been deleted by another process, or there is high replication lag",
+		setting.Name, maxRetries,
+	)
 }
 
 func (i *impl) GetSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) (*Setting, error) {
