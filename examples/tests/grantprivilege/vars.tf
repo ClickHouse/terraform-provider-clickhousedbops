@@ -1,34 +1,34 @@
 variable "protocol" {
-  type = string
+  type    = string
   default = "native"
 }
 
 variable "host" {
-  type = string
+  type    = string
   default = "localhost"
 }
 
 variable "port" {
-  type = number
+  type    = number
   default = 9000
 }
 
 variable "auth_strategy" {
-  type = string
+  type    = string
   default = "password"
 }
 
 variable "username" {
-  type = string
+  type    = string
   default = "default"
 }
 
 variable "password" {
-  type = string
+  type    = string
   default = null
 }
 
 variable "cluster_name" {
-  type = string
+  type    = string
   default = null
 }

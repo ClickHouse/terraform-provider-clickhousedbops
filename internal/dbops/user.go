@@ -161,6 +161,10 @@ func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *str
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
+	if uuid == "" {
+		return nil, nil
+	}
+
 	return i.GetUser(ctx, uuid, clusterName)
 }
 
