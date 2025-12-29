@@ -13,7 +13,7 @@ jobs:
     name: Shellcheck
     steps:
       - name: Checkout repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Run
         run: |
           for FILE in $(find .github/actions -name '*.sh'); do
