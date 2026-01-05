@@ -19,7 +19,7 @@ jobs:
       version: ${{ steps.check.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -70,7 +70,7 @@ jobs:
     runs-on: k8s-nano
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - id: list
         run: |
           examples="$(find examples/tests/ -name main.tf | xargs -n1 dirname | xargs -n1 basename| jq -cRn '[inputs]')"
@@ -82,7 +82,7 @@ jobs:
     runs-on: k8s-nano
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: ./.github/actions/find-clickhouse-releases
         id: list
 
@@ -92,7 +92,7 @@ jobs:
     runs-on: k8s-nano
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: ./.github/actions/find-github-releases
         id: list
         with:
@@ -106,14 +106,13 @@ jobs:
     runs-on: k8s-nano
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: ./.github/actions/find-github-releases
         id: list
         with:
           repo: 'opentofu/opentofu'
           count: '3'
-          min: '1.11.0-beta1'
-          include-pre-releases: "true"
+          min: '1.11.0'
 
   prepare-matrix:
     outputs:
@@ -122,7 +121,7 @@ jobs:
     needs: ['list-clickhouse-versions', 'list-terraform-versions', 'list-tofu-versions']
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - id: matrix
         uses: ./.github/actions/prepare-matrix
         with:
@@ -134,10 +133,10 @@ jobs:
     runs-on: k8s-medium
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v5
         with:
           go-version-file: 'go.mod'
           cache: true
@@ -151,7 +150,7 @@ jobs:
         run: |
           CGO_ENABLED=0 go build -o $TMPDIR/terraform-provider-clickhousedbops
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: terraform-provider-clickhousedbops
           path: ${{ env.TMPDIR }}
@@ -164,7 +163,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: ${{ github.job }} test
         uses: ./.github/actions/test
@@ -185,7 +184,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: ${{ github.job }} test
         uses: ./.github/actions/test
@@ -206,7 +205,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: ${{ github.job }} test
         uses: ./.github/actions/test
@@ -227,7 +226,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: ${{ github.job }} test
         uses: ./.github/actions/test
@@ -248,7 +247,7 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: ${{ github.job }} test
         uses: ./.github/actions/test
@@ -284,7 +283,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ssh-key: ${{secrets.DEPLOY_SSH_PRIVATE_KEY }}
 
@@ -326,7 +325,7 @@ jobs:
     if: ${{ !(contains(needs.*.result, 'failure')) }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
         ref: "main"
     - name: Create tag
@@ -344,27 +343,27 @@ jobs:
     if: ${{ !(contains(needs.*.result, 'failure')) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: v${{ needs.validate.outputs.version }}
           # Allow goreleaser to access older tag information.
           fetch-depth: 0
 
       - name: Setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v5
         with:
           go-version-file: 'go.mod'
           cache: true
 
       - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@v6
+        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec # v6
         id: import_gpg
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
           args: release --clean
         env:
