@@ -73,7 +73,16 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
+	identifier := grantPrivilege.AccessType
+	if grantPrivilege.GranteeUserName != nil {
+		identifier += " to user " + *grantPrivilege.GranteeUserName
+	} else if grantPrivilege.GranteeRoleName != nil {
+		identifier += " to role " + *grantPrivilege.GranteeRoleName
+	}
+
+	return retryWithBackoff(ctx, "grant privilege", identifier, func() (*GrantPrivilege, error) {
+		return i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
+	})
 }
 
 // Matcher function to handle classic grants: https://clickhouse.com/docs/sql-reference/statements/grant#granting-privilege-syntax
