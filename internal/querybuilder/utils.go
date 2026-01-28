@@ -28,3 +28,23 @@ func quote(s string) string {
 func backslash(s string) string {
 	return strings.ReplaceAll(s, "\\", "\\\\")
 }
+
+// identifierOrPattern returns a token suitable for use as a database/table identifier
+// in GRANT/REVOKE ON clauses.
+//
+// ClickHouse supports wildcard grants using an asterisk (`*`) as a suffix on database/table
+// names (e.g. `db*.*`, `db.table*`). Quoting the pattern (e.g. with backticks) disables
+// wildcard matching by turning the pattern into a literal identifier.
+func identifierOrPattern(s string) string {
+	// Preserve legacy wildcard token.
+	if s == "*" {
+		return s
+	}
+
+	// Only treat a trailing `*` as a wildcard pattern (prefix match), in line with
+	// ClickHouse wildcard grant rules.
+	if strings.HasSuffix(s, "*") && strings.Count(s, "*") == 1 && !strings.HasPrefix(s, "*") {
+		return s
+	}
+	return backtick(s)
+}
