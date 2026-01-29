@@ -23,7 +23,6 @@ func TestRetryWithBackoff_ImmediateSuccess(t *testing.T) {
 		},
 		1*time.Second,
 	)
-
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
@@ -55,7 +54,6 @@ func TestRetryWithBackoff_EventualSuccess(t *testing.T) {
 		},
 		5*time.Second,
 	)
-
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
 	}
