@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pingcap/errors"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
@@ -37,10 +36,6 @@ func (i *impl) CreateSetting(ctx context.Context, settingsProfileID string, sett
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
-
-	tflog.Debug(ctx, "Executing CreateSetting", map[string]any{
-		"sql": sql,
-	})
 
 	err = i.clickhouseClient.Exec(ctx, sql)
 	if err != nil {
@@ -78,10 +73,6 @@ func (i *impl) GetSetting(ctx context.Context, settingsProfileID string, name st
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
-
-	tflog.Debug(ctx, "Executing GetSetting", map[string]any{
-		"sql": sql,
-	})
 
 	var setting *Setting
 
