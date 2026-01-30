@@ -31,7 +31,9 @@ func (i *impl) CreateSettingsProfile(ctx context.Context, profile SettingsProfil
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.FindSettingsProfileByName(ctx, profile.Name, clusterName)
+	return retryWithBackoff(ctx, "settings profile", profile.Name, func() (*SettingsProfile, error) {
+		return i.FindSettingsProfileByName(ctx, profile.Name, clusterName)
+	})
 }
 
 func (i *impl) GetSettingsProfile(ctx context.Context, id string, clusterName *string) (*SettingsProfile, error) {

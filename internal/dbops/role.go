@@ -36,7 +36,9 @@ func (i *impl) CreateRole(ctx context.Context, role Role, clusterName *string) (
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.FindRoleByName(ctx, role.Name, clusterName)
+	return retryWithBackoff(ctx, "role", role.Name, func() (*Role, error) {
+		return i.FindRoleByName(ctx, role.Name, clusterName)
+	})
 }
 
 func (i *impl) GetRole(ctx context.Context, id string, clusterName *string) (*Role, error) { // nolint:dupl
