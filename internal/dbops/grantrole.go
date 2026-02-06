@@ -38,7 +38,16 @@ func (i *impl) GrantRole(ctx context.Context, grantRole GrantRole, clusterName *
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return i.GetGrantRole(ctx, grantRole.RoleName, grantRole.GranteeUserName, grantRole.GranteeRoleName, clusterName)
+	identifier := grantRole.RoleName
+	if grantRole.GranteeUserName != nil {
+		identifier += " to user " + *grantRole.GranteeUserName
+	} else if grantRole.GranteeRoleName != nil {
+		identifier += " to role " + *grantRole.GranteeRoleName
+	}
+
+	return retryWithBackoff(ctx, "grant role", identifier, func() (*GrantRole, error) {
+		return i.GetGrantRole(ctx, grantRole.RoleName, grantRole.GranteeUserName, grantRole.GranteeRoleName, clusterName)
+	})
 }
 
 func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string, clusterName *string) (*GrantRole, error) {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pingcap/errors"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
@@ -43,40 +42,9 @@ func (i *impl) CreateSetting(ctx context.Context, settingsProfileID string, sett
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	// Retry to handle potential replication lag
-	retryCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	backoff := 50 * time.Millisecond
-	for {
-		createdSetting, err := i.GetSetting(retryCtx, settingsProfileID, setting.Name, clusterName)
-		if err != nil {
-			return nil, errors.WithMessage(err, "error retrieving created setting")
-		}
-
-		if createdSetting != nil {
-			return createdSetting, nil
-		}
-
-		tflog.Debug(ctx, "Setting not found, retrying with exponential backoff", map[string]any{
-			"setting_name": setting.Name,
-			"backoff":      backoff.String(),
-		})
-
-		// Context-aware sleep with exponential backoff
-		timer := time.NewTimer(backoff)
-		defer timer.Stop()
-
-		select {
-		case <-retryCtx.Done():
-			return nil, fmt.Errorf(
-				"setting %q was created but could not be retrieved within timeout (%v): %w",
-				setting.Name, timeout, retryCtx.Err(),
-			)
-		case <-timer.C:
-			backoff *= 2
-		}
-	}
+	return retryWithBackoff(ctx, "setting", setting.Name, func() (*Setting, error) {
+		return i.GetSetting(ctx, settingsProfileID, setting.Name, clusterName)
+	}, timeout)
 }
 
 func (i *impl) GetSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) (*Setting, error) {
