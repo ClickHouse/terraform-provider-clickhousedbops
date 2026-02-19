@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"strings"
 
@@ -103,6 +104,11 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 						Optional:    true,
 						Description: "Skip TLS cert verification when using the https protocol. This is insecure!",
 					},
+					"ca_cert": schema.StringAttribute{
+						Optional:    true,
+						Sensitive:   true,
+						Description: "PEM-encoded CA certificate to use for TLS verification. When specified, only this CA will be trusted for server certificate validation.",
+					},
 				},
 				Optional:    true,
 				Description: "TLS configuration options",
@@ -165,11 +171,29 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				}
 			}
 
+			var nativeTLSConfig *tls.Config
+			if data.Protocol.ValueString() == protocolNativeSecure {
+				nativeTLSConfig = &tls.Config{} //nolint:gosec
+				if data.TLSConfig != nil {
+					if !data.TLSConfig.InsecureSkipVerify.IsNull() {
+						nativeTLSConfig.InsecureSkipVerify = data.TLSConfig.InsecureSkipVerify.ValueBool()
+					}
+					if !data.TLSConfig.CACert.IsNull() && data.TLSConfig.CACert.ValueString() != "" {
+						caCertPool := x509.NewCertPool()
+						if !caCertPool.AppendCertsFromPEM([]byte(data.TLSConfig.CACert.ValueString())) {
+							resp.Diagnostics.AddError("invalid configuration", "failed to parse ca_cert as PEM-encoded certificate")
+							return
+						}
+						nativeTLSConfig.RootCAs = caCertPool
+					}
+				}
+			}
+
 			clickhouseClient, err = clickhouseclient.NewNativeClient(clickhouseclient.NativeClientConfig{
 				Host:             data.Host.ValueString(),
 				Port:             port,
 				UserPasswordAuth: auth,
-				EnableTLS:        data.Protocol.ValueString() == protocolNativeSecure,
+				TLSConfig:        nativeTLSConfig,
 			})
 		case protocolHTTP:
 			fallthrough
@@ -212,8 +236,18 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			if data.Protocol.ValueString() == protocolHTTPS {
 				protocol = "https"
 				tlsConfig = &tls.Config{} //nolint:gosec
-				if data.TLSConfig != nil && !data.TLSConfig.InsecureSkipVerify.IsNull() {
-					tlsConfig.InsecureSkipVerify = data.TLSConfig.InsecureSkipVerify.ValueBool()
+				if data.TLSConfig != nil {
+					if !data.TLSConfig.InsecureSkipVerify.IsNull() {
+						tlsConfig.InsecureSkipVerify = data.TLSConfig.InsecureSkipVerify.ValueBool()
+					}
+					if !data.TLSConfig.CACert.IsNull() && data.TLSConfig.CACert.ValueString() != "" {
+						caCertPool := x509.NewCertPool()
+						if !caCertPool.AppendCertsFromPEM([]byte(data.TLSConfig.CACert.ValueString())) {
+							resp.Diagnostics.AddError("invalid configuration", "failed to parse ca_cert as PEM-encoded certificate")
+							return
+						}
+						tlsConfig.RootCAs = caCertPool
+					}
 				}
 			}
 
