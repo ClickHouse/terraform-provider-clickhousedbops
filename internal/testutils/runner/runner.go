@@ -24,6 +24,7 @@ type TestCase struct {
 	Protocol        string
 	ClusterName     *string
 	Resource        string
+	UpdateResource  *string
 	ResourceName    string
 	ResourceAddress string
 
@@ -69,6 +70,32 @@ func RunTests(t *testing.T, tests []TestCase) {
 			}
 
 			t.Run(tc.Name, func(t *testing.T) {
+				// Build test steps: create + optional update
+				steps := []resource.TestStep{
+					{
+						// Combine the provider definition and the resourcePtr definition.
+						Config: fmt.Sprintf("%s\n%s", providerCfg, tc.Resource),
+						ConfigStateChecks: []statecheck.StateCheck{
+							// Compare the state with the actual resource.
+							internalstatecheck.NewGetAttributes(tc.ResourceAddress, func(attrs map[string]interface{}) error {
+								return tc.CheckAttributesFunc(ctx, dbopsClient, tc.ClusterName, attrs)
+							}),
+						},
+					},
+				}
+
+				// Add update step if UpdateResource is provided
+				if tc.UpdateResource != nil {
+					steps = append(steps, resource.TestStep{
+						Config: fmt.Sprintf("%s\n%s", providerCfg, *tc.UpdateResource),
+						ConfigStateChecks: []statecheck.StateCheck{
+							internalstatecheck.NewGetAttributes(tc.ResourceAddress, func(attrs map[string]interface{}) error {
+								return tc.CheckAttributesFunc(ctx, dbopsClient, tc.ClusterName, attrs)
+							}),
+						},
+					})
+				}
+
 				resource.Test(t, resource.TestCase{
 					ProtoV6ProviderFactories: factories.ProviderFactories(),
 					CheckDestroy: func(s *terraform.State) error {
@@ -89,18 +116,7 @@ func RunTests(t *testing.T, tests []TestCase) {
 
 						return fmt.Errorf("root module has no resource %q", tc.ResourceAddress)
 					},
-					Steps: []resource.TestStep{
-						{
-							// Combine the provider definition and the resourcePtr definition.
-							Config: fmt.Sprintf("%s\n%s", providerCfg, tc.Resource),
-							ConfigStateChecks: []statecheck.StateCheck{
-								// Compare the state with the actual resource.
-								internalstatecheck.NewGetAttributes(tc.ResourceAddress, func(attrs map[string]interface{}) error {
-									return tc.CheckAttributesFunc(ctx, dbopsClient, tc.ClusterName, attrs)
-								}),
-							},
-						},
-					},
+					Steps: steps,
 				})
 			})
 		}()
