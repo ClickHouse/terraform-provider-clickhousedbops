@@ -89,6 +89,21 @@ func (r *ResourceBuilder) WithListAttribute(attrName string, data []cty.Value) *
 	return r
 }
 
+func (r *ResourceBuilder) WithListResourceFieldReference(attrName string, resourceType string, resourceName string, fieldName string) *ResourceBuilder {
+	// Create a list with a single resource field reference: [resource.name.field]
+	r.getRootResourceBody().SetAttributeRaw(attrName, hclwrite.Tokens{
+		{Type: hclsyntax.TokenOBrack, Bytes: []byte("[")},
+		{Type: hclsyntax.TokenIdent, Bytes: []byte(resourceType)},
+		{Type: hclsyntax.TokenDot, Bytes: []byte(".")},
+		{Type: hclsyntax.TokenIdent, Bytes: []byte(resourceName)},
+		{Type: hclsyntax.TokenDot, Bytes: []byte(".")},
+		{Type: hclsyntax.TokenIdent, Bytes: []byte(fieldName)},
+		{Type: hclsyntax.TokenCBrack, Bytes: []byte("]")},
+	})
+
+	return r
+}
+
 func (r *ResourceBuilder) AddDependency(resource string) *ResourceBuilder {
 	r.dependencies = append(r.dependencies, resource)
 	return r
