@@ -30,7 +30,7 @@ jobs:
 
       - name: Create PR if grants changed
         run: |
-          if git diff --quiet; then
+          if git diff --quiet pkg/resource/grantprivilege/grants.tsv; then
             echo "No changes detected, skipping PR creation"
             exit 0
           fi
