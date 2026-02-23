@@ -49,8 +49,7 @@ jobs:
             pkg/resource/grantprivilege/grants.tsv
           author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
           commit-message: "chore: update grants from ClickHouse core code"
-          branch: chore/update-grants
-          delete-branch: true
+          branch: ${{ steps.diff.outputs.branch }}
           title: "chore: update grants from ClickHouse core code"
           base: main
           body: |
