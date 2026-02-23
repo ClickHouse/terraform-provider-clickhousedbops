@@ -12,7 +12,7 @@ defaults:
 
 jobs:
   update_grants:
-    runs-on: k8s-nano
+    runs-on: k8s-small
     permissions:
       contents: write
       pull-requests: write
