@@ -88,9 +88,9 @@ func (q *grantPrivilegeQueryBuilder) Build() (string, error) {
 
 		if q.database != nil {
 			if q.table != nil {
-				tokens = append(tokens, fmt.Sprintf("%s.%s", backtick(*q.database), backtick(*q.table)))
+				tokens = append(tokens, fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table)))
 			} else {
-				tokens = append(tokens, fmt.Sprintf("%s.*", backtick(*q.database)))
+				tokens = append(tokens, fmt.Sprintf("%s.*", identifierOrPattern(*q.database)))
 			}
 		} else {
 			tokens = append(tokens, "*.*")

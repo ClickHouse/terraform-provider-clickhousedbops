@@ -2,6 +2,7 @@ package dbops
 
 import (
 	"context"
+	"strings"
 
 	"github.com/pingcap/errors"
 
@@ -87,10 +88,24 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 
 // Matcher function to handle classic grants: https://clickhouse.com/docs/sql-reference/statements/grant#granting-privilege-syntax
 func ClassicGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName *string, i *impl) (bool, error) {
+	// ClickHouse stores wildcard (prefix) grants in system.grants with the
+	// trailing '*' stripped (e.g. GRANT ON dbt_*.* stores database='dbt_').
+	// See: https://github.com/ClickHouse/ClickHouse/issues/92835
+	dbName := priv.DatabaseName
+	if dbName != nil && strings.HasSuffix(*dbName, "*") {
+		stripped := strings.TrimSuffix(*dbName, "*")
+		dbName = &stripped
+	}
+	tblName := priv.TableName
+	if tblName != nil && strings.HasSuffix(*tblName, "*") {
+		stripped := strings.TrimSuffix(*tblName, "*")
+		tblName = &stripped
+	}
+
 	where := []querybuilder.Where{
 		querybuilder.WhereEquals("access_type", priv.AccessType),
-		valOrNullWhere("database", priv.DatabaseName),
-		valOrNullWhere("table", priv.TableName),
+		valOrNullWhere("database", dbName),
+		valOrNullWhere("table", tblName),
 		valOrNullWhere("column", priv.ColumnName),
 	}
 	if priv.GranteeUserName != nil {

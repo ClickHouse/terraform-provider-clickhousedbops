@@ -24,9 +24,21 @@ func Test_revokePrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Select on wildcard database",
+			builder: RevokePrivilege("SELECT", "user1").WithDatabase(strptr("prefix_*")),
+			want:    "REVOKE SELECT ON prefix_*.* FROM `user1`;",
+			wantErr: false,
+		},
+		{
 			name:    "Select on table",
 			builder: RevokePrivilege("SELECT", "user1").WithDatabase(strptr("db1")).WithTable(strptr("tbl1")),
 			want:    "REVOKE SELECT ON `db1`.`tbl1` FROM `user1`;",
+			wantErr: false,
+		},
+		{
+			name:    "Select on wildcard table",
+			builder: RevokePrivilege("SELECT", "user1").WithDatabase(strptr("db1")).WithTable(strptr("tbl_*")),
+			want:    "REVOKE SELECT ON `db1`.tbl_* FROM `user1`;",
 			wantErr: false,
 		},
 		{
