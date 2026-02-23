@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 9 * * 1'
   workflow_dispatch: {}
+  pull_request:
 
 defaults:
   run:
@@ -37,6 +38,7 @@ jobs:
           else
             echo "push_pr=false" >> "$GITHUB_OUTPUT"
           fi
+          echo "branch=chore/update-grants-$(date +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8.1.0
