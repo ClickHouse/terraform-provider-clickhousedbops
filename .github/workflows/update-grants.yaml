@@ -54,7 +54,7 @@ jobs:
         uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8.1.0
         if: steps.diff.outputs.push_pr == 'true'
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.generate-token.outputs.token }}
           add-paths: |
             pkg/resource/grantprivilege/grants.tsv
           author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
