@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 9 * * 1'
   workflow_dispatch: {}
+  pull_request:
 
 defaults:
   run:
@@ -16,8 +17,18 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - name: Generate Token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.WORKFLOW_AUTH_PUBLIC_APP_ID }}
+          private-key: ${{ secrets.WORKFLOW_AUTH_PUBLIC_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
 
       - name: Setup go
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
