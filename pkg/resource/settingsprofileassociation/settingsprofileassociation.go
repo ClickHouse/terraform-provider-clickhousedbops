@@ -163,7 +163,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	}
 
 	// Get settings profile.
-	settingsProfile, err := r.client.GetSettingsProfile(ctx, state.SettingsProfileID.ValueString(), state.ClusterName.ValueStringPointer())
+	settingsProfile, err := dbops.RetryRead(ctx, "settings_profile", state.SettingsProfileID.ValueString(), func() (*dbops.SettingsProfile, error) {
+		return r.client.GetSettingsProfile(ctx, state.SettingsProfileID.ValueString(), state.ClusterName.ValueStringPointer())
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Getting Settings Profile",
@@ -179,7 +181,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	}
 
 	if !state.RoleID.IsUnknown() && !state.RoleID.IsNull() {
-		role, err := r.client.GetRole(ctx, state.RoleID.ValueString(), state.ClusterName.ValueStringPointer())
+		role, err := dbops.RetryRead(ctx, "role", state.RoleID.ValueString(), func() (*dbops.Role, error) {
+			return r.client.GetRole(ctx, state.RoleID.ValueString(), state.ClusterName.ValueStringPointer())
+		})
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error Getting Role",
@@ -194,7 +198,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 			return
 		}
 	} else if !state.UserID.IsUnknown() && !state.UserID.IsNull() {
-		user, err := r.client.GetUser(ctx, state.UserID.ValueString(), state.ClusterName.ValueStringPointer())
+		user, err := dbops.RetryRead(ctx, "user", state.UserID.ValueString(), func() (*dbops.User, error) {
+			return r.client.GetUser(ctx, state.UserID.ValueString(), state.ClusterName.ValueStringPointer())
+		})
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error Getting User",

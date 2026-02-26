@@ -143,7 +143,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	role, err := r.client.GetRole(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
+	role, err := dbops.RetryRead(ctx, "role", state.ID.ValueString(), func() (*dbops.Role, error) {
+		return r.client.GetRole(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse Role",

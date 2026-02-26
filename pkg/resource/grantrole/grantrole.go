@@ -231,7 +231,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	grant, err := r.client.GetGrantRole(ctx, state.RoleName.ValueString(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.ClusterName.ValueStringPointer())
+	grant, err := dbops.RetryRead(ctx, "grant_role", state.RoleName.ValueString(), func() (*dbops.GrantRole, error) {
+		return r.client.GetGrantRole(ctx, state.RoleName.ValueString(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.ClusterName.ValueStringPointer())
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse Role Grant",

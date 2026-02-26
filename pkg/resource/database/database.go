@@ -143,7 +143,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	state, err := r.syncDatabaseState(ctx, plan.UUID.ValueString(), plan.ClusterName.ValueStringPointer())
+	state, err := dbops.RetryRead(ctx, "database", plan.UUID.ValueString(), func() (*Database, error) {
+		return r.syncDatabaseState(ctx, plan.UUID.ValueString(), plan.ClusterName.ValueStringPointer())
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error syncing database",

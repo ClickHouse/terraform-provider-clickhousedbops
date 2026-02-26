@@ -238,7 +238,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	user, err := r.client.GetUser(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
+	user, err := dbops.RetryRead(ctx, "user", state.ID.ValueString(), func() (*dbops.User, error) {
+		return r.client.GetUser(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse User",

@@ -169,7 +169,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	settingsProfile, err := r.client.GetSettingsProfile(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
+	settingsProfile, err := dbops.RetryRead(ctx, "settings_profile", state.ID.ValueString(), func() (*dbops.SettingsProfile, error) {
+		return r.client.GetSettingsProfile(ctx, state.ID.ValueString(), state.ClusterName.ValueStringPointer())
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse SettingsProfile",

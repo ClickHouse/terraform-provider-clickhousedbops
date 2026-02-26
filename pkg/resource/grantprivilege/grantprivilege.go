@@ -364,7 +364,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		GrantOption:     state.GrantOption.ValueBool(),
 	}
 
-	grant, err := r.client.GetGrantPrivilege(ctx, &grantPrivilege, state.ClusterName.ValueStringPointer())
+	grant, err := dbops.RetryRead(ctx, "grant_privilege", state.Privilege.ValueString(), func() (*dbops.GrantPrivilege, error) {
+		return r.client.GetGrantPrivilege(ctx, &grantPrivilege, state.ClusterName.ValueStringPointer())
+	})
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse Privilege Grant",

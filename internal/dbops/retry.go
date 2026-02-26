@@ -8,6 +8,52 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+// RetryRead retries a retrieval function to handle eventual consistency
+// during Read operations. Unlike retryWithBackoff (used after Create), this
+// returns (nil, nil) when retries are exhausted instead of an error, allowing
+// callers to distinguish "genuinely not found" from transient inconsistency.
+func RetryRead[T any](
+	ctx context.Context,
+	resourceType string,
+	resourceIdentifier string,
+	retrievalFunc func() (*T, error),
+) (*T, error) {
+	const timeout = 5 * time.Second
+	const initialBackoff = 200 * time.Millisecond
+
+	retryCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	backoff := initialBackoff
+	for {
+		result, err := retrievalFunc()
+		if err != nil {
+			return nil, err
+		}
+
+		if result != nil {
+			return result, nil
+		}
+
+		tflog.Debug(ctx, fmt.Sprintf("%s not found during read, retrying to handle eventual consistency", resourceType), map[string]any{
+			"resource_identifier": resourceIdentifier,
+			"backoff":             backoff.String(),
+		})
+
+		timer := time.NewTimer(backoff)
+		select {
+		case <-retryCtx.Done():
+			timer.Stop()
+			tflog.Info(ctx, fmt.Sprintf("%s not found after retries, treating as deleted", resourceType), map[string]any{
+				"resource_identifier": resourceIdentifier,
+			})
+			return nil, nil
+		case <-timer.C:
+			backoff *= 2
+		}
+	}
+}
+
 // retryWithBackoff retries a retrieval function that may return nil due to lag.
 // It uses exponential backoff with context-aware cancellation.
 //
