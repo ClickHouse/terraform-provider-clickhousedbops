@@ -24,9 +24,21 @@ func Test_grantPrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Select on wildcard database",
+			builder: GrantPrivilege("SELECT", "user1").WithDatabase(strptr("prefix_*")),
+			want:    "GRANT SELECT ON prefix_*.* TO `user1`;",
+			wantErr: false,
+		},
+		{
 			name:    "Select on table",
 			builder: GrantPrivilege("SELECT", "user1").WithDatabase(strptr("db1")).WithTable(strptr("tbl1")),
 			want:    "GRANT SELECT ON `db1`.`tbl1` TO `user1`;",
+			wantErr: false,
+		},
+		{
+			name:    "Select on wildcard table",
+			builder: GrantPrivilege("SELECT", "user1").WithDatabase(strptr("db1")).WithTable(strptr("tbl_*")),
+			want:    "GRANT SELECT ON `db1`.tbl_* TO `user1`;",
 			wantErr: false,
 		},
 		{

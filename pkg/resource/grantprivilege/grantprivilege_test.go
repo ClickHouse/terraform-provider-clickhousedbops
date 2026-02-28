@@ -230,6 +230,22 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
+		// Single replica, Native, wildcard database
+		{
+			Name:     "Grant privilege on wildcard database to role using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "SELECT").
+				WithStringAttribute("database_name", "test_prefix_*").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
+				AddDependency(granteeRoleResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
 		// Single replica, HTTP
 		{
 			Name:     "Grant privilege on single column to role using HTTP protocol on a single replica",
