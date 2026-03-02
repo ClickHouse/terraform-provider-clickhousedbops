@@ -17,7 +17,7 @@ description: |-
 terraform {
   required_providers {
     clickhousedbops = {
-      version = "1.9.0-alpha1"
+      version = "1.10.0-alpha1"
       source  = "ClickHouse/clickhousedbops"
     }
   }
@@ -69,4 +69,5 @@ Optional:
 
 Optional:
 
+- `ca_cert` (String, Sensitive) PEM-encoded CA certificate to use for TLS verification. When specified, only this CA will be trusted for server certificate validation.
 - `insecure_skip_verify` (Boolean) Skip TLS cert verification when using the https protocol. This is insecure!

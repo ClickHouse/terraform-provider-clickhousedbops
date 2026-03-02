@@ -23,7 +23,7 @@ type NativeClientConfig struct {
 	Host             string
 	Port             uint16
 	UserPasswordAuth *UserPasswordAuth
-	EnableTLS        bool
+	TLSConfig        *tls.Config
 }
 
 func NewNativeClient(config NativeClientConfig) (ClickhouseClient, error) {
@@ -54,8 +54,8 @@ func NewNativeClient(config NativeClientConfig) (ClickhouseClient, error) {
 		options.Auth = auth
 	}
 
-	if config.EnableTLS {
-		options.TLS = &tls.Config{} //nolint:gosec
+	if config.TLSConfig != nil {
+		options.TLS = config.TLSConfig
 	}
 
 	conn, err := clickhouse.Open(&options)
