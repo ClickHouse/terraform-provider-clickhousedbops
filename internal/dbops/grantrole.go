@@ -47,7 +47,7 @@ func (i *impl) GrantRole(ctx context.Context, grantRole GrantRole, clusterName *
 
 	return retryWithBackoff(ctx, "grant role", identifier, func() (*GrantRole, error) {
 		return i.GetGrantRole(ctx, grantRole.RoleName, grantRole.GranteeUserName, grantRole.GranteeRoleName, clusterName)
-	})
+	}, i.readAfterWriteTimeoutArgs()...)
 }
 
 func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string, clusterName *string) (*GrantRole, error) {

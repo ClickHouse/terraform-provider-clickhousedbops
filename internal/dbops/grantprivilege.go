@@ -83,7 +83,7 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 
 	return retryWithBackoff(ctx, "grant privilege", identifier, func() (*GrantPrivilege, error) {
 		return i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
-	})
+	}, i.readAfterWriteTimeoutArgs()...)
 }
 
 // Matcher function to handle classic grants: https://clickhouse.com/docs/sql-reference/statements/grant#granting-privilege-syntax
