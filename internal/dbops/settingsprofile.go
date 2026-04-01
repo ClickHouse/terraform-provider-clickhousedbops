@@ -33,7 +33,7 @@ func (i *impl) CreateSettingsProfile(ctx context.Context, profile SettingsProfil
 
 	return retryWithBackoff(ctx, "settings profile", profile.Name, func() (*SettingsProfile, error) {
 		return i.FindSettingsProfileByName(ctx, profile.Name, clusterName)
-	})
+	}, i.readAfterWriteTimeoutArgs()...)
 }
 
 func (i *impl) GetSettingsProfile(ctx context.Context, id string, clusterName *string) (*SettingsProfile, error) {
