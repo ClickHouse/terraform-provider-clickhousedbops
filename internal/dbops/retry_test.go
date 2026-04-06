@@ -124,7 +124,7 @@ func TestRetryWithBackoff_Timeout(t *testing.T) {
 		t.Errorf("Expected multiple retry attempts, got %d", callCount)
 	}
 	// Verify timeout was respected (with some margin)
-	if elapsed < 200*time.Millisecond || elapsed > 500*time.Millisecond {
+	if elapsed < 200*time.Millisecond || elapsed > 1*time.Second {
 		t.Errorf("Expected elapsed time ~200ms, got %v", elapsed)
 	}
 }

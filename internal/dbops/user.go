@@ -47,7 +47,7 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 
 	return retryWithBackoff(ctx, "user", user.Name, func() (*User, error) {
 		return i.FindUserByName(ctx, user.Name, clusterName)
-	})
+	}, i.readAfterWriteTimeoutArgs()...)
 }
 
 func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*User, error) { // nolint:dupl

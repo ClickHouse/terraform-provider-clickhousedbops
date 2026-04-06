@@ -6,7 +6,9 @@ import (
 	"crypto/x509"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -112,6 +114,13 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 				},
 				Optional:    true,
 				Description: "TLS configuration options",
+			},
+			"read_after_write_timeout": schema.Int64Attribute{
+				Optional:    true,
+				Description: "Timeout in seconds for read-after-write verification of created resources. ClickHouse Cloud services with multiple replicas may need higher values due to replication lag. Defaults to 30.",
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
 			},
 		},
 	}
@@ -268,7 +277,12 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 		return
 	}
 
-	dbopsClient, err := dbops.NewClient(clickhouseClient)
+	var dbopsOpts []dbops.ClientOption
+	if !data.ReadAfterWriteTimeout.IsNull() {
+		dbopsOpts = append(dbopsOpts, dbops.WithReadAfterWriteTimeout(time.Duration(data.ReadAfterWriteTimeout.ValueInt64())*time.Second))
+	}
+
+	dbopsClient, err := dbops.NewClient(clickhouseClient, dbopsOpts...)
 	if err != nil {
 		resp.Diagnostics.AddError("error initializing dbops client", fmt.Sprintf("%+v\n", err))
 		return

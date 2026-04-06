@@ -6,11 +6,12 @@ import (
 
 // Model describes the provider data model.
 type Model struct {
-	Protocol   types.String `tfsdk:"protocol"`
-	Host       types.String `tfsdk:"host"`
-	Port       types.Int32  `tfsdk:"port"`
-	AuthConfig AuthConfig   `tfsdk:"auth_config"`
-	TLSConfig  *TLSConfig   `tfsdk:"tls_config"`
+	Protocol              types.String `tfsdk:"protocol"`
+	Host                  types.String `tfsdk:"host"`
+	Port                  types.Int32  `tfsdk:"port"`
+	AuthConfig            AuthConfig   `tfsdk:"auth_config"`
+	TLSConfig             *TLSConfig   `tfsdk:"tls_config"`
+	ReadAfterWriteTimeout types.Int64  `tfsdk:"read_after_write_timeout"`
 }
 
 type AuthConfig struct {

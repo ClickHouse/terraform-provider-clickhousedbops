@@ -17,7 +17,7 @@ description: |-
 terraform {
   required_providers {
     clickhousedbops = {
-      version = "1.10.0-alpha1"
+      version = "1.10.0-alpha2"
       source  = "ClickHouse/clickhousedbops"
     }
   }
@@ -49,6 +49,7 @@ provider "clickhousedbops" {
 
 ### Optional
 
+- `read_after_write_timeout` (Number) Timeout in seconds for read-after-write verification of created resources. ClickHouse Cloud services with multiple replicas may need higher values due to replication lag. Defaults to 30.
 - `tls_config` (Attributes) TLS configuration options (see [below for nested schema](#nestedatt--tls_config))
 
 <a id="nestedatt--auth_config"></a>
