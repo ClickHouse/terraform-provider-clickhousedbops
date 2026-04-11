@@ -190,7 +190,9 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
-	if r.client != nil {
+	// Only check replicated storage when cluster_name is set, to avoid
+	// unnecessary connections (e.g. during terraform plan -refresh=false).
+	if r.client != nil && !config.ClusterName.IsNull() {
 		isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -200,14 +202,12 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 			return
 		}
 
+		// GrantPrivilege cannot specify 'cluster_name' or apply will fail.
 		if isReplicatedStorage {
-			// GrantPrivilege cannot specify 'cluster_name' or apply will fail.
-			if !config.ClusterName.IsNull() {
-				resp.Diagnostics.AddWarning(
-					"Invalid configuration",
-					"Your ClickHouse cluster is using Replicated storage for grants, please remove the 'cluster_name' attribute from your GrantPrivilege resource definition if you encounter any errors.",
-				)
-			}
+			resp.Diagnostics.AddWarning(
+				"Invalid configuration",
+				"Your ClickHouse cluster is using Replicated storage for grants, please remove the 'cluster_name' attribute from your GrantPrivilege resource definition if you encounter any errors.",
+			)
 		}
 	}
 

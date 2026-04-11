@@ -83,25 +83,27 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	}
 
 	if r.client != nil {
-		isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Checking if service is using replicated storage",
-				fmt.Sprintf("%+v\n", err),
-			)
+		var config SettingsProfile
+		diags := req.Config.Get(ctx, &config)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
 			return
 		}
 
-		if isReplicatedStorage {
-			var config SettingsProfile
-			diags := req.Config.Get(ctx, &config)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
+		// Only check replicated storage when cluster_name is set, to avoid
+		// unnecessary connections (e.g. during terraform plan -refresh=false).
+		if !config.ClusterName.IsNull() {
+			isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"Error Checking if service is using replicated storage",
+					fmt.Sprintf("%+v\n", err),
+				)
 				return
 			}
 
 			// SettingsProfile cannot specify 'cluster_name' or apply will fail.
-			if !config.ClusterName.IsNull() {
+			if isReplicatedStorage {
 				resp.Diagnostics.AddWarning(
 					"Invalid configuration",
 					"Your ClickHouse cluster is using Replicated storage, please remove the 'cluster_name' attribute from your SettingsProfile resource definition if you encounter any errors.",
