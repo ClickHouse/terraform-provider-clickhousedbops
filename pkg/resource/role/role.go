@@ -69,25 +69,27 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	}
 
 	if r.client != nil {
-		isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Checking if service is using replicated storage",
-				fmt.Sprintf("%+v\n", err),
-			)
+		var config Role
+		diags := req.Config.Get(ctx, &config)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
 			return
 		}
 
-		if isReplicatedStorage {
-			var config Role
-			diags := req.Config.Get(ctx, &config)
-			resp.Diagnostics.Append(diags...)
-			if resp.Diagnostics.HasError() {
+		// Only check replicated storage when cluster_name is set, to avoid
+		// unnecessary connections (e.g. during terraform plan -refresh=false).
+		if !config.ClusterName.IsNull() {
+			isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
+			if err != nil {
+				resp.Diagnostics.AddWarning(
+					"Could not check if service is using replicated storage",
+					fmt.Sprintf("Skipping validation. If you are using replicated storage, please remove the 'cluster_name' attribute from your resource definition. Error: %+v", err),
+				)
 				return
 			}
 
 			// Role cannot specify 'cluster_name' or apply will fail.
-			if !config.ClusterName.IsNull() {
+			if isReplicatedStorage {
 				resp.Diagnostics.AddWarning(
 					"Invalid configuration",
 					"Your ClickHouse cluster is using Replicated storage for roles, please remove the 'cluster_name' attribute from your Role resource definition if you encounter any errors.",
