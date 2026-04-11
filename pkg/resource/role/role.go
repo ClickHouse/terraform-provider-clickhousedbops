@@ -81,9 +81,9 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		if !config.ClusterName.IsNull() {
 			isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
 			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error Checking if service is using replicated storage",
-					fmt.Sprintf("%+v\n", err),
+				resp.Diagnostics.AddWarning(
+					"Could not check if service is using replicated storage",
+					fmt.Sprintf("Skipping validation. If you are using replicated storage, please remove the 'cluster_name' attribute from your resource definition. Error: %+v", err),
 				)
 				return
 			}
