@@ -19,8 +19,23 @@ type CreateUserQueryBuilder interface {
 type Identification string
 
 const (
-	IdentificationSHA256Hash Identification = "sha256_hash"
+	IdentificationSHA256Hash        Identification = "sha256_hash"
+	IdentificationSSLCertificate    Identification = "ssl_certificate"
+	IdentificationPlaintextPassword Identification = "plaintext_password"
+	IdentificationBcryptHash        Identification = "bcrypt_hash"
+	IdentificationDoubleSHA1Hash    Identification = "double_sha1_hash"
+	IdentificationNoPassword        Identification = "no_password"
 )
+
+// identificationUseCN returns true for auth types that use CN syntax instead of BY.
+func identificationUseCN(id Identification) bool {
+	return id == IdentificationSSLCertificate
+}
+
+// identificationNoValue returns true for auth types that take no value.
+func identificationNoValue(id Identification) bool {
+	return id == IdentificationNoPassword
+}
 
 type createUserQueryBuilder struct {
 	resourceName    string
@@ -37,7 +52,14 @@ func NewCreateUser(resourceName string) CreateUserQueryBuilder {
 }
 
 func (q *createUserQueryBuilder) Identified(with Identification, by string) CreateUserQueryBuilder {
-	q.identified = fmt.Sprintf("IDENTIFIED WITH %s BY %s", with, quote(by))
+	switch {
+	case identificationNoValue(with):
+		q.identified = fmt.Sprintf("IDENTIFIED WITH %s", with)
+	case identificationUseCN(with):
+		q.identified = fmt.Sprintf("IDENTIFIED WITH %s CN %s", with, quote(by))
+	default:
+		q.identified = fmt.Sprintf("IDENTIFIED WITH %s BY %s", with, quote(by))
+	}
 	return q
 }
 

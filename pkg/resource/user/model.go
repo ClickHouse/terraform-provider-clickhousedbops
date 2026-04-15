@@ -11,5 +11,7 @@ type User struct {
 	PasswordSha256Hash          types.String `tfsdk:"password_sha256_hash"`
 	PasswordSha256HashWO        types.String `tfsdk:"password_sha256_hash_wo"`
 	PasswordSha256HashVersionWO types.Int32  `tfsdk:"password_sha256_hash_wo_version"`
+	AuthType                    types.String `tfsdk:"auth_type"`
+	AuthValue                   types.String `tfsdk:"auth_value"`
 	HostIPs                     types.Set    `tfsdk:"host_ips"`
 }
