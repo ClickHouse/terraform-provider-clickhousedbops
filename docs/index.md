@@ -17,7 +17,7 @@ description: |-
 terraform {
   required_providers {
     clickhousedbops = {
-      version = "1.10.0-alpha3"
+      version = "1.10.0-alpha4"
       source  = "ClickHouse/clickhousedbops"
     }
   }
