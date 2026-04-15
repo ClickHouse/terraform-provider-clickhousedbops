@@ -179,6 +179,81 @@ func TestUser_acceptance(t *testing.T) {
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
+		{
+			Name:        "Create User with ssl_certificate auth using Native protocol on a single replica",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:    "native",
+			ClusterName: nil,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithStringAttribute("auth_type", "ssl_certificate").
+				WithStringAttribute("auth_value", "my_cert_cn").
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:        "Create User with ssl_certificate auth using HTTP protocol on a single replica",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:    "http",
+			ClusterName: nil,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithStringAttribute("auth_type", "ssl_certificate").
+				WithStringAttribute("auth_value", "my_cert_cn").
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:        "Create User with no_password auth using Native protocol on a single replica",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:    "native",
+			ClusterName: nil,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithStringAttribute("auth_type", "no_password").
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:        "Create User with auth_type sha256_hash using Native protocol on a single replica",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:    "native",
+			ClusterName: nil,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithStringAttribute("auth_type", "sha256_hash").
+				WithFunction("auth_value", "sha256", "changeme").
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:        "Create User with ssl_certificate auth on cluster with localfile storage",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
+			Protocol:    "native",
+			ClusterName: &clusterName,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("cluster_name", clusterName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithStringAttribute("auth_type", "ssl_certificate").
+				WithStringAttribute("auth_value", "my_cert_cn").
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
 	}
 
 	runner.RunTests(t, tests)
@@ -226,6 +301,60 @@ func TestUser_validation_acceptance(t *testing.T) {
 				`,
 					PlanOnly:    true,
 					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*password_sha256_hash_wo.*must be specified when.*password_sha256_hash_wo_version.*is specified`),
+				},
+			},
+		},
+		// test ensure you can't use auth_type with password_sha256_hash
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: fmt.Sprintf(`
+					resource "clickhousedbops_user" "test" {
+						name                 = "testuser"
+						auth_type            = "ssl_certificate"
+						auth_value           = "my_cn"
+						password_sha256_hash = "%s"
+					}
+				`, sha256),
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination`),
+				},
+			},
+		},
+		// test ensure you can't use auth_type with password_sha256_hash_wo
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: fmt.Sprintf(`
+					resource "clickhousedbops_user" "test" {
+						name                    = "testuser"
+						auth_type               = "ssl_certificate"
+						auth_value              = "my_cn"
+						password_sha256_hash_wo = "%s"
+						password_sha256_hash_wo_version = 1
+					}
+				`, sha256),
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination`),
+				},
+			},
+		},
+		// test ensure invalid auth_type is rejected
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name       = "testuser"
+						auth_type  = "invalid_type"
+						auth_value = "something"
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Value Match`),
 				},
 			},
 		},
