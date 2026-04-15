@@ -2,6 +2,7 @@ package grantprivilege_test
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"testing"
 
@@ -9,7 +10,11 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/resourcebuilder"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/runner"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/grantprivilege"
 )
+
+//go:embed grants.tsv
+var testGrantsTSV string
 
 const (
 	resourceType = "clickhousedbops_grant_privilege"
@@ -21,6 +26,8 @@ const (
 
 func TestGrantprivilege_acceptance(t *testing.T) {
 	clusterName := "cluster1"
+
+	grantsGroups := grantprivilege.ParseGrantsTSV(testGrantsTSV).Groups
 
 	granteeRoleResource := resourcebuilder.
 		New("clickhousedbops_role", granteeRoleName).
@@ -71,19 +78,20 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 		}
 
 		grantPrivilege := dbops.GrantPrivilege{
-			AccessType:      accessType,
-			DatabaseName:    database,
-			TableName:       table,
-			ColumnName:      column,
-			GranteeUserName: granteeUserName,
-			GranteeRoleName: granteeRoleName,
+			AccessType:          accessType,
+			ExpandedAccessTypes: grantprivilege.AllDescendants(grantsGroups, accessType),
+			DatabaseName:        database,
+			TableName:           table,
+			ColumnName:          column,
+			GranteeUserName:     granteeUserName,
+			GranteeRoleName:     granteeRoleName,
 		}
 
 		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
 		return grantprivilege != nil, err
 	}
 
-	checkAttributesFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
+	checkAttributesFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]any) error {
 		accessType := attrs["privilege_name"].(string)
 		if accessType == "" {
 			return fmt.Errorf("privilege_name attribute was not set")
@@ -129,13 +137,14 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 		}
 
 		grantPrivilege := dbops.GrantPrivilege{
-			AccessType:      accessType,
-			DatabaseName:    database,
-			TableName:       table,
-			ColumnName:      column,
-			GranteeUserName: granteeUserName,
-			GranteeRoleName: granteeRoleName,
-			GrantOption:     grantOption,
+			AccessType:          accessType,
+			ExpandedAccessTypes: grantprivilege.AllDescendants(grantsGroups, accessType),
+			DatabaseName:        database,
+			TableName:           table,
+			ColumnName:          column,
+			GranteeUserName:     granteeUserName,
+			GranteeRoleName:     granteeRoleName,
+			GrantOption:         grantOption,
 		}
 
 		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
@@ -224,6 +233,35 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
 				WithBoolAttribute("grant_option", true).
 				AddDependency(granteeUserResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Grant global parent privilege ACCESS MANAGEMENT to role using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "ACCESS MANAGEMENT").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
+				AddDependency(granteeRoleResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Grant parent privilege CREATE on a database to role using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "CREATE").
+				WithStringAttribute("database_name", "default").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
+				AddDependency(granteeRoleResource.Build()).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
