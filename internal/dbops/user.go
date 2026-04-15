@@ -13,6 +13,8 @@ type User struct {
 	ID                 string   `json:"id"`
 	Name               string   `json:"name"`
 	PasswordSha256Hash string   `json:"-"`
+	AuthType           string   `json:"-"`
+	AuthValue          string   `json:"-"`
 	SettingsProfiles   []string `json:"-"`
 	HostIPs            []string `json:"-"`
 }
@@ -28,7 +30,14 @@ func (u *User) HasSettingProfile(profileName string) bool {
 }
 
 func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
-	builder := querybuilder.NewCreateUser(user.Name).Identified(querybuilder.IdentificationSHA256Hash, user.PasswordSha256Hash)
+	builder := querybuilder.NewCreateUser(user.Name)
+
+	// Use the new auth_type/auth_value fields if set, otherwise fall back to legacy password_sha256_hash
+	if user.AuthType != "" {
+		builder = builder.Identified(querybuilder.Identification(user.AuthType), user.AuthValue)
+	} else if user.PasswordSha256Hash != "" {
+		builder = builder.Identified(querybuilder.IdentificationSHA256Hash, user.PasswordSha256Hash)
+	}
 
 	// Only set host IP restriction if provided
 	if len(user.HostIPs) > 0 {

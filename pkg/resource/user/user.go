@@ -99,6 +99,35 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					int32validator.AlsoRequires(path.MatchRoot("password_sha256_hash_wo")),
 				},
 			},
+			"auth_type": schema.StringAttribute{
+				Optional:    true,
+				Description: "Authentication type for the user. Supported values: sha256_hash, ssl_certificate, plaintext_password, bcrypt_hash, double_sha1_hash, no_password. When set, auth_value must also be provided (except for no_password). Conflicts with password_sha256_hash and password_sha256_hash_wo.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.OneOf(
+						"sha256_hash",
+						"ssl_certificate",
+						"plaintext_password",
+						"bcrypt_hash",
+						"double_sha1_hash",
+						"no_password",
+					),
+					stringvalidator.ConflictsWith(
+						path.MatchRoot("password_sha256_hash"),
+						path.MatchRoot("password_sha256_hash_wo"),
+					),
+				},
+			},
+			"auth_value": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "Authentication value for the user. The meaning depends on auth_type: for sha256_hash it's the hash, for ssl_certificate it's the CN (Common Name), for plaintext_password it's the password, etc. Not required when auth_type is no_password.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
 			"host_ips": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
@@ -176,24 +205,36 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	var passwordHash string
-	switch {
-	case !plan.PasswordSha256Hash.IsNull():
-		// sensitive attribute for TF < 1.11
-		passwordHash = plan.PasswordSha256Hash.ValueString()
-	case !config.PasswordSha256HashWO.IsNull():
-		// sensitive attribute for TF >= 1.11
-		passwordHash = config.PasswordSha256HashWO.ValueString()
-	default:
-		resp.Diagnostics.AddError(
-			"Missing password configuration",
-			"Either password_sha256_hash or password_sha256_hash_wo must be specified",
-		)
+	user := dbops.User{
+		Name: plan.Name.ValueString(),
 	}
 
-	user := dbops.User{
-		Name:               plan.Name.ValueString(),
-		PasswordSha256Hash: passwordHash,
+	switch {
+	case !plan.AuthType.IsNull():
+		// New auth_type/auth_value fields
+		user.AuthType = plan.AuthType.ValueString()
+		if !plan.AuthValue.IsNull() {
+			user.AuthValue = plan.AuthValue.ValueString()
+		}
+		if user.AuthType != "no_password" && user.AuthValue == "" {
+			resp.Diagnostics.AddError(
+				"Missing auth_value",
+				"auth_value must be specified when auth_type is not no_password",
+			)
+			return
+		}
+	case !plan.PasswordSha256Hash.IsNull():
+		// Legacy sensitive attribute for TF < 1.11
+		user.PasswordSha256Hash = plan.PasswordSha256Hash.ValueString()
+	case !config.PasswordSha256HashWO.IsNull():
+		// Legacy sensitive attribute for TF >= 1.11
+		user.PasswordSha256Hash = config.PasswordSha256HashWO.ValueString()
+	default:
+		resp.Diagnostics.AddError(
+			"Missing authentication configuration",
+			"One of auth_type, password_sha256_hash, or password_sha256_hash_wo must be specified",
+		)
+		return
 	}
 
 	// Only set host IPs if provided
@@ -222,6 +263,8 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		Name:                        types.StringValue(createdUser.Name),
 		PasswordSha256Hash:          plan.PasswordSha256Hash,
 		PasswordSha256HashVersionWO: plan.PasswordSha256HashVersionWO,
+		AuthType:                    plan.AuthType,
+		AuthValue:                   plan.AuthValue,
 		HostIPs:                     plan.HostIPs,
 	}
 

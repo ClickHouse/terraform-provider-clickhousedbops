@@ -4,32 +4,51 @@ page_title: "clickhousedbops_user Resource - clickhousedbops"
 subcategory: ""
 description: |-
   You can use the clickhousedbops_user resource to create a user in a ClickHouse instance.
-  Password Field Options
-  This resource supports two approaches for setting passwords:
-  password_sha256_hash_wo and password_sha256_hash_wo_version:  field uses the write-only pattern (not stored in state), so you must bump password_sha256_hash_wo_version to trigger password updates.password_sha256_hash: Use this field for OpenTofu (version < 1.11) compatibility. This field uses the standard Sensitive attribute and is stored in state, so OpenTofu can automatically detect password changes. Any change to this field will trigger resource replacement.
-  You must use either password_sha256_hash_wo/password_sha256_hash_wo_version pair
-  OR password_sha256_hash, but not both.
+  Authentication Options
+  This resource supports two approaches for authenticating users:
+  Option 1: auth_type and auth_value (recommended for new configurations)
+  Use auth_type to specify the ClickHouse authentication method, and auth_value to provide the corresponding credential or identifier.
+  Supported auth_type values:
+  sha256_hash: Authenticate with a SHA256 password hash. auth_value is the hash.ssl_certificate: Authenticate with a TLS client certificate. auth_value is the Common Name (CN) from the certificate.plaintext_password: Authenticate with a plaintext password. auth_value is the password (will be hashed server-side).bcrypt_hash: Authenticate with a bcrypt password hash. auth_value is the hash.double_sha1_hash: Authenticate with a double SHA1 hash. auth_value is the hash.no_password: No authentication required. auth_value should not be set.
+  Option 2: password_sha256_hash or password_sha256_hash_wo (legacy)
+  password_sha256_hash_wo and password_sha256_hash_wo_version: Write-only pattern (not stored in state), so you must bump password_sha256_hash_wo_version to trigger password updates.password_sha256_hash: Use this field for OpenTofu (version < 1.11) compatibility. This field uses the standard Sensitive attribute and is stored in state, so OpenTofu can automatically detect password changes. Any change to this field will trigger resource replacement.
+  You must use either auth_type/auth_value, password_sha256_hash_wo/password_sha256_hash_wo_version,
+  or password_sha256_hash. These options are mutually exclusive.
   Known limitations:
-  Changing the password will cause the database user to be deleted and recreated.Changing password_sha256_hash_wo alone does not trigger an update. You must also bump password_sha256_hash_wo_version.When importing an existing user, the clickhousedbops_user resource will be lacking the password or the password_sha256_hash_wo_version, and thus the subsequent apply will need to recreate the database User in order to set a password.
+  Changing the password or authentication will cause the database user to be deleted and recreated.Changing password_sha256_hash_wo alone does not trigger an update. You must also bump password_sha256_hash_wo_version.When importing an existing user, the clickhousedbops_user resource will be lacking the password or the password_sha256_hash_wo_version, and thus the subsequent apply will need to recreate the database User in order to set a password.
 ---
 
 # clickhousedbops_user (Resource)
 
 You can use the `clickhousedbops_user` resource to create a user in a `ClickHouse` instance.
 
-## Password Field Options
+## Authentication Options
 
-This resource supports two approaches for setting passwords:
+This resource supports two approaches for authenticating users:
 
-- **`password_sha256_hash_wo` and `password_sha256_hash_wo_version`**:  field uses the write-only pattern (not stored in state), so you must bump `password_sha256_hash_wo_version` to trigger password updates.
+### Option 1: `auth_type` and `auth_value` (recommended for new configurations)
+
+Use `auth_type` to specify the ClickHouse authentication method, and `auth_value` to provide the corresponding credential or identifier.
+
+Supported `auth_type` values:
+- **`sha256_hash`**: Authenticate with a SHA256 password hash. `auth_value` is the hash.
+- **`ssl_certificate`**: Authenticate with a TLS client certificate. `auth_value` is the Common Name (CN) from the certificate.
+- **`plaintext_password`**: Authenticate with a plaintext password. `auth_value` is the password (will be hashed server-side).
+- **`bcrypt_hash`**: Authenticate with a bcrypt password hash. `auth_value` is the hash.
+- **`double_sha1_hash`**: Authenticate with a double SHA1 hash. `auth_value` is the hash.
+- **`no_password`**: No authentication required. `auth_value` should not be set.
+
+### Option 2: `password_sha256_hash` or `password_sha256_hash_wo` (legacy)
+
+- **`password_sha256_hash_wo` and `password_sha256_hash_wo_version`**: Write-only pattern (not stored in state), so you must bump `password_sha256_hash_wo_version` to trigger password updates.
 - **`password_sha256_hash`**: Use this field for OpenTofu (version < 1.11) compatibility. This field uses the standard `Sensitive` attribute and is stored in state, so OpenTofu can automatically detect password changes. Any change to this field will trigger resource replacement.
 
-You must use either `password_sha256_hash_wo`/`password_sha256_hash_wo_version` pair
-OR `password_sha256_hash`, but not both.
+You must use either `auth_type`/`auth_value`, `password_sha256_hash_wo`/`password_sha256_hash_wo_version`,
+or `password_sha256_hash`. These options are mutually exclusive.
 
 Known limitations:
 
-- Changing the password will cause the database user to be deleted and recreated.
+- Changing the password or authentication will cause the database user to be deleted and recreated.
 - Changing `password_sha256_hash_wo` alone does not trigger an update. You must also bump `password_sha256_hash_wo_version`.
 - When importing an existing user, the `clickhousedbops_user` resource will be lacking the password or the `password_sha256_hash_wo_version`, and thus the subsequent apply will need to recreate the database User in order to set a password.
 
@@ -52,6 +71,19 @@ resource "clickhousedbops_user" "john" {
   # You'll want to generate the password and feed it here instead of hardcoding.
   password_sha256_hash = sha256("test")
 }
+
+# Example using ssl_certificate authentication (e.g., for Teleport mTLS)
+resource "clickhousedbops_user" "teleport_cert_read" {
+  name       = "teleport_cert_read"
+  auth_type  = "ssl_certificate"
+  auth_value = "teleport_cert_read"
+}
+
+# Example using no_password authentication
+resource "clickhousedbops_user" "readonly" {
+  name      = "readonly"
+  auth_type = "no_password"
+}
 ```
 
 <!-- schema generated by tfplugindocs -->
@@ -65,6 +97,8 @@ resource "clickhousedbops_user" "john" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
+- `auth_type` (String) Authentication type for the user. Supported values: sha256_hash, ssl_certificate, plaintext_password, bcrypt_hash, double_sha1_hash, no_password. When set, auth_value must also be provided (except for no_password). Conflicts with password_sha256_hash and password_sha256_hash_wo.
+- `auth_value` (String, Sensitive) Authentication value for the user. The meaning depends on auth_type: for sha256_hash it's the hash, for ssl_certificate it's the CN (Common Name), for plaintext_password it's the password, etc. Not required when auth_type is no_password.
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
