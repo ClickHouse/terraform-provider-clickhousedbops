@@ -1,6 +1,6 @@
 module github.com/ClickHouse/terraform-provider-clickhousedbops
 
-go 1.25.0
+go 1.25.8
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.45.0
