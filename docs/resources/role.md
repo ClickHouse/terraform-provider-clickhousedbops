@@ -40,6 +40,8 @@ When using a self hosted ClickHouse instance, this field should only be set when
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Roles can be imported by specifying the ID.
 # Find the ID of the role by checking system.roles table.
