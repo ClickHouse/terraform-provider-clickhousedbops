@@ -56,7 +56,7 @@ generate:
 
 TFPLUGINDOCS = /tmp/tfplugindocs
 ensure-tfplugindocs: ## Download tfplugindocs locally if necessary.
-	$(call go-get-tool,$(TFPLUGINDOCS),github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.21.0)
+	$(call go-get-tool,$(TFPLUGINDOCS),github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.25.0)
 
 GOLANGCILINT = $(shell go env GOPATH)/bin/golangci-lint
 # Test if golangci-lint is available in the GOPATH, if not, set to local and download if needed
