@@ -47,6 +47,8 @@ Should be set when hitting a cluster with more than one replica.
 
 Import is supported using the following syntax:
 
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
 ```shell
 # Databases can be imported by specifying the UUID.
 # Find the UUID of the database by checking system.databases table.
