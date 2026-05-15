@@ -15,3 +15,16 @@ resource "clickhousedbops_user" "john" {
   password_sha256_hash = sha256("test")
 }
 
+# Example using ssl_certificate authentication (e.g., for Teleport mTLS)
+resource "clickhousedbops_user" "teleport_cert_read" {
+  name       = "teleport_cert_read"
+  auth_type  = "ssl_certificate"
+  auth_value = "teleport_cert_read"
+}
+
+# Example using no_password authentication
+resource "clickhousedbops_user" "readonly" {
+  name      = "readonly"
+  auth_type = "no_password"
+}
+
