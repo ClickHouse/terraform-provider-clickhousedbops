@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -24,6 +25,7 @@ type NativeClientConfig struct {
 	Port             uint16
 	UserPasswordAuth *UserPasswordAuth
 	TLSConfig        *tls.Config
+	DialTimeout      time.Duration
 }
 
 func NewNativeClient(config NativeClientConfig) (ClickhouseClient, error) {
@@ -39,6 +41,10 @@ func NewNativeClient(config NativeClientConfig) (ClickhouseClient, error) {
 
 	options := clickhouse.Options{
 		Addr: []string{fmt.Sprintf("%s:%d", config.Host, config.Port)},
+	}
+
+	if config.DialTimeout > 0 {
+		options.DialTimeout = config.DialTimeout
 	}
 
 	if config.UserPasswordAuth != nil {
