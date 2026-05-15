@@ -122,6 +122,13 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 					int64validator.AtLeast(1),
 				},
 			},
+			"dial_timeout": schema.Int64Attribute{
+				Optional:    true,
+				Description: "Timeout in seconds for establishing connections to ClickHouse. Only applies to the native and nativesecure protocols. Useful when the ClickHouse instance takes time to start up from an idle state.",
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+			},
 		},
 	}
 }
@@ -198,12 +205,16 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				}
 			}
 
-			clickhouseClient, err = clickhouseclient.NewNativeClient(clickhouseclient.NativeClientConfig{
+			nativeConfig := clickhouseclient.NativeClientConfig{
 				Host:             data.Host.ValueString(),
 				Port:             port,
 				UserPasswordAuth: auth,
 				TLSConfig:        nativeTLSConfig,
-			})
+			}
+			if !data.DialTimeout.IsNull() {
+				nativeConfig.DialTimeout = time.Duration(data.DialTimeout.ValueInt64()) * time.Second
+			}
+			clickhouseClient, err = clickhouseclient.NewNativeClient(nativeConfig)
 		case protocolHTTP:
 			fallthrough
 		case protocolHTTPS:
@@ -260,15 +271,13 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				}
 			}
 
-			config := clickhouseclient.HTTPClientConfig{
+			clickhouseClient, err = clickhouseclient.NewHTTPClient(clickhouseclient.HTTPClientConfig{
 				Protocol:  protocol,
 				Host:      data.Host.ValueString(),
 				Port:      port,
 				BasicAuth: auth,
 				TLSConfig: tlsConfig,
-			}
-
-			clickhouseClient, err = clickhouseclient.NewHTTPClient(config)
+			})
 		}
 	}
 

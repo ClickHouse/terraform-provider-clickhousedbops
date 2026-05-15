@@ -12,6 +12,7 @@ type Model struct {
 	AuthConfig            AuthConfig   `tfsdk:"auth_config"`
 	TLSConfig             *TLSConfig   `tfsdk:"tls_config"`
 	ReadAfterWriteTimeout types.Int64  `tfsdk:"read_after_write_timeout"`
+	DialTimeout           types.Int64  `tfsdk:"dial_timeout"`
 }
 
 type AuthConfig struct {
