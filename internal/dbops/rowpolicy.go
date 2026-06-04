@@ -3,6 +3,7 @@ package dbops
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -10,19 +11,6 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/querybuilder"
 )
-
-// sliceEqual compares two string slices for equality
-func sliceEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
 
 type RowPolicy struct {
 	Name             string
@@ -203,15 +191,15 @@ func (i *impl) UpdateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *s
 	}
 
 	// Check if for operations have changed
-	if !sliceEqual(rp.ForOperations, existing.ForOperations) {
+	if !slices.Equal(rp.ForOperations, existing.ForOperations) {
 		builder = builder.ForOperations(rp.ForOperations)
 	}
 
 	// Check if grantee specification has changed
-	granteeChanged := !sliceEqual(rp.GranteeUserNames, existing.GranteeUserNames) ||
-		!sliceEqual(rp.GranteeRoleNames, existing.GranteeRoleNames) ||
+	granteeChanged := !slices.Equal(rp.GranteeUserNames, existing.GranteeUserNames) ||
+		!slices.Equal(rp.GranteeRoleNames, existing.GranteeRoleNames) ||
 		rp.GranteeAll != existing.GranteeAll ||
-		!sliceEqual(rp.GranteeAllExcept, existing.GranteeAllExcept)
+		!slices.Equal(rp.GranteeAllExcept, existing.GranteeAllExcept)
 
 	if granteeChanged {
 		builder = builder.GranteeUserNames(rp.GranteeUserNames)
