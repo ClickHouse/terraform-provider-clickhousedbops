@@ -81,13 +81,13 @@ func (a *AlterRowPolicy) GranteeAllExcept(except []string) *AlterRowPolicy {
 func (a *AlterRowPolicy) Build() (string, error) {
 	var sb strings.Builder
 
-	fmt.Fprintf(&sb, "ALTER ROW POLICY `%s`", a.name)
+	fmt.Fprintf(&sb, "ALTER ROW POLICY %s", backtick(a.name))
 
 	if a.clusterName != nil && *a.clusterName != "" {
-		fmt.Fprintf(&sb, " ON CLUSTER `%s`", *a.clusterName)
+		fmt.Fprintf(&sb, " ON CLUSTER %s", backtick(*a.clusterName))
 	}
 
-	fmt.Fprintf(&sb, " ON `%s`.`%s`", a.database, a.table)
+	fmt.Fprintf(&sb, " ON %s.%s", backtick(a.database), backtick(a.table))
 
 	// At least one modification is required
 	hasChanges := false
@@ -102,10 +102,6 @@ func (a *AlterRowPolicy) Build() (string, error) {
 
 	// Handle AS PERMISSIVE/RESTRICTIVE and USING clauses (independent of FOR operations)
 	if a.selectFilter != nil || a.isRestrictive != nil {
-		// Only add FOR SELECT if no FOR operations were already added and we're modifying SELECT-related clauses
-		if len(a.forOperations) == 0 && (a.selectFilter != nil || a.isRestrictive != nil) {
-			// Don't add FOR SELECT - let user specify it explicitly if needed
-		}
 		hasChanges = true
 
 		if a.isRestrictive != nil {
@@ -141,21 +137,13 @@ func (a *AlterRowPolicy) Build() (string, error) {
 func (a *AlterRowPolicy) buildGranteeClause() string {
 	if a.granteeAll != nil && *a.granteeAll {
 		if len(a.granteeAllExcept) > 0 {
-			var except []string
-			for _, name := range a.granteeAllExcept {
-				except = append(except, fmt.Sprintf("`%s`", name))
-			}
-			return fmt.Sprintf("ALL EXCEPT %s", strings.Join(except, ", "))
+			return fmt.Sprintf("ALL EXCEPT %s", strings.Join(backtickAll(a.granteeAllExcept), ", "))
 		}
 		return "ALL"
 	}
 
-	var names []string
-	for _, name := range a.granteeUserNames {
-		names = append(names, fmt.Sprintf("`%s`", name))
-	}
-	for _, name := range a.granteeRoleNames {
-		names = append(names, fmt.Sprintf("`%s`", name))
-	}
+	names := make([]string, 0, len(a.granteeUserNames)+len(a.granteeRoleNames))
+	names = append(names, backtickAll(a.granteeUserNames)...)
+	names = append(names, backtickAll(a.granteeRoleNames)...)
 	return strings.Join(names, ", ")
 }
