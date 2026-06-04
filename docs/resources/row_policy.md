@@ -83,10 +83,10 @@ resource "clickhousedbops_row_policy" "admin_full_access" {
 
 ### Required
 
-- `database_name` (String) The database of the table to apply the row policy to.
+- `database_name` (String) The database of the table to apply the row policy to. Must be a concrete name; wildcards (`*`) are not supported.
 - `name` (String) The name of the row policy.
 - `select_filter` (String) The filter expression used in the USING clause. For example: `tenant_id = 'abc'`.
-- `table_name` (String) The table to apply the row policy to.
+- `table_name` (String) The table to apply the row policy to. Must be a concrete name; wildcards (`*`) are not supported.
 
 ### Optional
 
