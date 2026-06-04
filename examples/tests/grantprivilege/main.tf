@@ -60,3 +60,10 @@ resource "clickhousedbops_grant_privilege" "grant_sources2" {
   grantee_user_name = clickhousedbops_user.john.name
   grant_option      = false
 }
+
+resource "clickhousedbops_grant_privilege" "grant_current_grants_to_role" {
+  cluster_name      = var.cluster_name
+  privilege_name    = "SELECT"
+  grantee_role_name = clickhousedbops_role.reader.name
+  current_grants    = true
+}
