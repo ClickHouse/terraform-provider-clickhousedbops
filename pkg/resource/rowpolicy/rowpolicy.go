@@ -27,8 +27,9 @@ import (
 var rowPolicyDescription string
 
 var (
-	_ resource.Resource              = &Resource{}
-	_ resource.ResourceWithConfigure = &Resource{}
+	_ resource.Resource                = &Resource{}
+	_ resource.ResourceWithConfigure   = &Resource{}
+	_ resource.ResourceWithImportState = &Resource{}
 )
 
 func NewResource() resource.Resource {
@@ -97,7 +98,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 			"database_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The database of the table to apply the row policy to.",
+				Description: "The database of the table to apply the row policy to. Must be a concrete name; wildcards (`*`) are not supported.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -107,7 +108,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 			"table_name": schema.StringAttribute{
 				Required:    true,
-				Description: "The table to apply the row policy to.",
+				Description: "The table to apply the row policy to. Must be a concrete name; wildcards (`*`) are not supported.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -281,24 +282,20 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 
 	created, err := r.client.CreateRowPolicy(ctx, rp, plan.ClusterName.ValueStringPointer())
 	if err != nil {
-		// If the row policy already exists, try to read it instead
-		// This allows terraform apply to be idempotent
+		// Don't silently adopt a pre-existing policy: that diverges from the other
+		// resources in this provider. Surface the error and point at `terraform import`.
 		if strings.Contains(err.Error(), "already exists") {
-			created, err = r.client.GetRowPolicy(ctx, &rp, plan.ClusterName.ValueStringPointer())
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Error Reading ClickHouse Row Policy",
-					"Row policy already exists but could not be read: "+err.Error(),
-				)
-				return
-			}
-		} else {
 			resp.Diagnostics.AddError(
-				"Error Creating ClickHouse Row Policy",
-				"Could not create row policy, unexpected error: "+err.Error(),
+				"ClickHouse Row Policy already exists",
+				fmt.Sprintf("A row policy %q already exists on %s.%s. Import it with `terraform import <resource> %s.%s.%s` instead of recreating it.", rp.Name, rp.Database, rp.Table, rp.Database, rp.Table, rp.Name),
 			)
 			return
 		}
+		resp.Diagnostics.AddError(
+			"Error Creating ClickHouse Row Policy",
+			"Could not create row policy, unexpected error: "+err.Error(),
+		)
+		return
 	}
 
 	if created == nil {
@@ -579,4 +576,21 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		)
 		return
 	}
+}
+
+// ImportState imports a row policy from an ID of the form "database.table.name".
+// Read then fills select_filter and is_restrictive from system.row_policies; grantees
+// and for_operations must be set in config (they are not read back).
+func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	parts := strings.SplitN(req.ID, ".", 3)
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		resp.Diagnostics.AddError(
+			"Invalid import ID",
+			fmt.Sprintf("Expected import ID in the form \"database.table.name\", got %q", req.ID),
+		)
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("database_name"), parts[0])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("table_name"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[2])...)
 }
