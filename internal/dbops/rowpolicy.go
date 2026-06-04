@@ -96,6 +96,7 @@ func (i *impl) buildGranteeClause(rp RowPolicy) string {
 
 	return ""
 }
+
 func (i *impl) GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *string) (*RowPolicy, error) {
 	where := []querybuilder.Where{
 		querybuilder.WhereEquals("short_name", rp.Name),
