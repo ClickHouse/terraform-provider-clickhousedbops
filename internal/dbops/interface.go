@@ -47,6 +47,11 @@ type Client interface {
 	AssociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error
 	DisassociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error
 
+	CreateMaskingPolicy(ctx context.Context, maskingPolicy MaskingPolicy) (*MaskingPolicy, error)
+	GetMaskingPolicy(ctx context.Context, maskingPolicy *MaskingPolicy) (*MaskingPolicy, error)
+	UpdateMaskingPolicy(ctx context.Context, maskingPolicy MaskingPolicy) (*MaskingPolicy, error)
+	DeleteMaskingPolicy(ctx context.Context, name string, database string, table string) error
+
 	CreateSetting(ctx context.Context, settingsProfileID string, setting Setting, clusterName *string, timeout time.Duration) (*Setting, error)
 	GetSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) (*Setting, error)
 	DeleteSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) error
