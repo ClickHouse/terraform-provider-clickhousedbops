@@ -52,10 +52,11 @@ func TestRowpolicy_acceptance(t *testing.T) {
 		var granteeAll bool
 		var granteeAllExcept []string
 
-		if granteeUser := attrs["grantee_user_names"]; granteeUser != "" {
+		// Terraform flattens list attributes in state as `<attr>.0`, `<attr>.1`, ...
+		if granteeUser := attrs["grantee_user_names.0"]; granteeUser != "" {
 			userNames = []string{granteeUser}
 		}
-		if granteeRole := attrs["grantee_role_names"]; granteeRole != "" {
+		if granteeRole := attrs["grantee_role_names.0"]; granteeRole != "" {
 			roleNames = []string{granteeRole}
 		}
 
