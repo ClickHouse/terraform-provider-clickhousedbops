@@ -122,10 +122,16 @@ func (i *impl) GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *str
 			return errors.WithMessage(err, "error scanning query result, missing 'short_name' field")
 		}
 
-		selectFilter, err := data.GetString("select_filter")
+		// system.row_policies.select_filter is Nullable(String): it is NULL for a policy
+		// created without a USING clause (e.g. a purely restrictive policy), so read it as
+		// nullable and treat NULL as an empty filter.
+		selectFilterPtr, err := data.GetNullableString("select_filter")
 		if err != nil {
-			// Try to handle cases where select_filter might be nullable or of a different type
-			selectFilter = ""
+			return errors.WithMessage(err, "error scanning query result, missing 'select_filter' field")
+		}
+		selectFilter := ""
+		if selectFilterPtr != nil {
+			selectFilter = *selectFilterPtr
 		}
 
 		isRestrictive, err := data.GetBool("is_restrictive")
