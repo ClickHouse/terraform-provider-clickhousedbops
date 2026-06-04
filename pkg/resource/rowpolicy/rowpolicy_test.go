@@ -47,7 +47,6 @@ func TestRowpolicy_acceptance(t *testing.T) {
 			return false, fmt.Errorf("table_name attribute was not set")
 		}
 
-		// Handle both old single-name fields and new list fields for backward compatibility
 		var userNames []string
 		var roleNames []string
 		var granteeAll bool
@@ -57,13 +56,6 @@ func TestRowpolicy_acceptance(t *testing.T) {
 			userNames = []string{granteeUser}
 		}
 		if granteeRole := attrs["grantee_role_names"]; granteeRole != "" {
-			roleNames = []string{granteeRole}
-		}
-		// Also support old field names for existing tests
-		if granteeUser := attrs["grantee_user_name"]; granteeUser != "" && len(userNames) == 0 {
-			userNames = []string{granteeUser}
-		}
-		if granteeRole := attrs["grantee_role_name"]; granteeRole != "" && len(roleNames) == 0 {
 			roleNames = []string{granteeRole}
 		}
 
