@@ -229,9 +229,9 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		case "GLOBAL":
 			if !plan.Database.IsNull() {
 				resp.Diagnostics.AddAttributeError(
-					path.Root("database"),
+					path.Root("database_name"),
 					"Invalid Grant Privilege",
-					fmt.Sprintf("'database' must be null when 'privilege_name' is %q", plan.Privilege.ValueString()),
+					fmt.Sprintf("'database_name' must be null when 'privilege_name' is %q", plan.Privilege.ValueString()),
 				)
 				return
 			}
@@ -241,12 +241,28 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 			fallthrough
 		case "VIEW":
 			if plan.Database.IsNull() {
-				resp.Diagnostics.AddAttributeError(
-					path.Root("database"),
-					"Invalid Grant Privilege",
-					fmt.Sprintf("'database' must be set when privilege_name is %q", plan.Privilege.ValueString()),
+				if !plan.Column.IsNull() {
+					resp.Diagnostics.AddAttributeError(
+						path.Root("column_name"),
+						"Invalid Grant Privilege",
+						fmt.Sprintf("'column_name' cannot be set when 'database_name' is null for privilege_name %q: the privilege is granted on all databases (*.*), which has no specific column.", plan.Privilege.ValueString()),
+					)
+					return
+				}
+				if !plan.Table.IsNull() {
+					resp.Diagnostics.AddAttributeError(
+						path.Root("table_name"),
+						"Invalid Grant Privilege",
+						fmt.Sprintf("'table_name' cannot be set when 'database_name' is null for privilege_name %q: the privilege is granted on all databases (*.*), which has no specific table.", plan.Privilege.ValueString()),
+					)
+					return
+				}
+
+				resp.Diagnostics.AddAttributeWarning(
+					path.Root("database_name"),
+					"Granting on all databases",
+					fmt.Sprintf("'database_name' is not set for privilege_name %q, so the privilege will be granted on all databases (*.*). Set 'database_name' to restrict the grant to specific databases (a database name or a wildcard pattern).", plan.Privilege.ValueString()),
 				)
-				return
 			}
 		case "NAMED_COLLECTION":
 			fallthrough
