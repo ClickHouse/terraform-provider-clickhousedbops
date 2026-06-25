@@ -54,6 +54,18 @@ func Test_grantPrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Access management CREATE USER on all",
+			builder: GrantPrivilege("CREATE USER", "admin"),
+			want:    "GRANT CREATE USER ON *.* TO `admin`;",
+			wantErr: false,
+		},
+		{
+			name:    "Access management ALTER ROLE with grant option",
+			builder: GrantPrivilege("ALTER ROLE", "admin").WithGrantOption(true),
+			want:    "GRANT ALTER ROLE ON *.* TO `admin` WITH GRANT OPTION;",
+			wantErr: false,
+		},
+		{
 			name:    "Missing access type",
 			builder: GrantPrivilege("", "user1"),
 			want:    "",
