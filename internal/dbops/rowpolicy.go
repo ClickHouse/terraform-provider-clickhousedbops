@@ -3,7 +3,6 @@ package dbops
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/pingcap/errors"
 
@@ -126,50 +125,26 @@ func (i *impl) GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *str
 }
 
 func (i *impl) UpdateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error) {
-	// Retrieve current row policy
-	existing, err := i.GetRowPolicy(ctx, &rp, clusterName)
-	if err != nil {
-		return nil, errors.WithMessage(err, "Unable to get existing row policy")
-	}
-
-	if existing == nil {
-		return nil, errors.New("row policy not found")
-	}
-
+	// select_filter and is_restrictive force replacement (see the resource schema), so an Update
+	// only ever changes grantees or for_operations. GetRowPolicy doesn't read those back from the
+	// DB (it echoes the request), so instead of diffing we set the desired grantees and operations
+	// on the policy directly. ALTER ROW POLICY ... TO ... replaces the grantee set.
 	builder := querybuilder.NewAlterRowPolicy(rp.Name, rp.Database, rp.Table)
 
 	if clusterName != nil && *clusterName != "" {
 		builder = builder.WithCluster(clusterName)
 	}
 
-	// Only include changes in the ALTER statement
-	if rp.SelectFilter != existing.SelectFilter {
-		builder = builder.SelectFilter(rp.SelectFilter)
-	}
-
-	if rp.IsRestrictive != existing.IsRestrictive {
-		builder = builder.IsRestrictive(rp.IsRestrictive)
-	}
-
-	// Check if for operations have changed
-	if !slices.Equal(rp.ForOperations, existing.ForOperations) {
+	if len(rp.ForOperations) > 0 {
 		builder = builder.ForOperations(rp.ForOperations)
 	}
 
-	// Check if grantee specification has changed
-	granteeChanged := !slices.Equal(rp.GranteeUserNames, existing.GranteeUserNames) ||
-		!slices.Equal(rp.GranteeRoleNames, existing.GranteeRoleNames) ||
-		rp.GranteeAll != existing.GranteeAll ||
-		!slices.Equal(rp.GranteeAllExcept, existing.GranteeAllExcept)
-
-	if granteeChanged {
-		builder = builder.GranteeUserNames(rp.GranteeUserNames)
-		builder = builder.GranteeRoleNames(rp.GranteeRoleNames)
-		if rp.GranteeAll {
-			builder = builder.GranteeAll(true)
-		}
-		builder = builder.GranteeAllExcept(rp.GranteeAllExcept)
+	builder = builder.GranteeUserNames(rp.GranteeUserNames)
+	builder = builder.GranteeRoleNames(rp.GranteeRoleNames)
+	if rp.GranteeAll {
+		builder = builder.GranteeAll(true)
 	}
+	builder = builder.GranteeAllExcept(rp.GranteeAllExcept)
 
 	sql, err := builder.Build()
 	if err != nil {
