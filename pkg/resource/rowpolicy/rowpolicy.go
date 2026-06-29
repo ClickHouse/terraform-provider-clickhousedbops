@@ -337,12 +337,15 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	state := RowPolicy{
-		ClusterName:      plan.ClusterName,
-		Name:             types.StringValue(created.Name),
-		Database:         types.StringValue(created.Database),
-		Table:            types.StringValue(created.Table),
-		ForOperations:    forOperationsList,
-		SelectFilter:     types.StringValue(created.SelectFilter),
+		ClusterName:   plan.ClusterName,
+		Name:          types.StringValue(created.Name),
+		Database:      types.StringValue(created.Database),
+		Table:         types.StringValue(created.Table),
+		ForOperations: forOperationsList,
+		// Keep the config filter, not created.SelectFilter: ClickHouse normalizes the stored
+		// expression (spacing, parentheses), so echoing the DB value back would trip Terraform's
+		// "inconsistent result after apply" check for any non-canonical filter.
+		SelectFilter:     plan.SelectFilter,
 		IsRestrictive:    types.BoolValue(created.IsRestrictive),
 		GranteeUserNames: userNamesList,
 		GranteeRoleNames: roleNamesList,
@@ -438,9 +441,15 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		state.Table = types.StringValue(result.Table)
 		state.ForOperations = forOperationsList
 		// is_restrictive is a plain bool in system.row_policies, so reconcile it to catch
-		// out-of-band permissive/restrictive flips. select_filter is preserved from state:
-		// ClickHouse normalizes the stored expression, so reading it back would drift.
+		// out-of-band permissive/restrictive flips.
 		state.IsRestrictive = types.BoolValue(result.IsRestrictive)
+		// select_filter is normally preserved from state: ClickHouse normalizes the stored
+		// expression, so reconciling it would drift against the config. The exception is import,
+		// where state has no filter yet: fill it from the DB (its canonical, ClickHouse-formatted
+		// form) so the imported resource is usable. Align config to the value shown after import.
+		if state.SelectFilter.IsNull() || state.SelectFilter.ValueString() == "" {
+			state.SelectFilter = types.StringValue(result.SelectFilter)
+		}
 		state.GranteeUserNames = userNamesList
 		state.GranteeRoleNames = roleNamesList
 		// Preserve GranteeAll from state - only set if it was explicitly specified in the original plan
@@ -545,11 +554,19 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		state.Database = types.StringValue(updated.Database)
 		state.Table = types.StringValue(updated.Table)
 		state.ForOperations = forOperationsList
-		state.SelectFilter = types.StringValue(updated.SelectFilter)
+		// Keep the config filter, not updated.SelectFilter: ClickHouse normalizes the stored
+		// expression, so echoing the DB value back would trip the inconsistent-result check.
+		state.SelectFilter = plan.SelectFilter
 		state.IsRestrictive = types.BoolValue(updated.IsRestrictive)
 		state.GranteeUserNames = userNamesList
 		state.GranteeRoleNames = roleNamesList
-		state.GranteeAll = types.BoolValue(updated.GranteeAll)
+		// Preserve grantee_all null vs false: setting it to false when config left it null would
+		// trip Terraform's inconsistent-result check (matches the Create path).
+		if !plan.GranteeAll.IsNull() {
+			state.GranteeAll = types.BoolValue(updated.GranteeAll)
+		} else {
+			state.GranteeAll = types.BoolNull()
+		}
 		state.GranteeAllExcept = allExceptList
 
 		diags = resp.State.Set(ctx, &state)
@@ -581,8 +598,9 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 // ImportState imports a row policy from an ID of the form "database.table.name".
-// Read fills is_restrictive from system.row_policies; select_filter, grantees and
-// for_operations are not read back and must be set in config to match the policy.
+// Read fills is_restrictive and select_filter (in its canonical ClickHouse-formatted form)
+// from system.row_policies; grantees and for_operations are not read back and must be set in
+// config to match the policy.
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.SplitN(req.ID, ".", 3)
 	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
