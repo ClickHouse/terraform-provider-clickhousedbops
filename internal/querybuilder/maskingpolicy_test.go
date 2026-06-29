@@ -34,7 +34,7 @@ func Test_createmaskingpolicy(t *testing.T) {
 					WithGrantees(nil, []string{"clickstate_sql_access_readonly"}, false, nil)
 			},
 			// columns sorted: clientIp before logMessage
-			want: "CREATE MASKING POLICY OR REPLACE `pii` ON `logs_production`.`logs_unified_v4` UPDATE `clientIp` = concat(splitByChar('.', clientIp)[1], '.x.x'), `logMessage` = '** redacted **' WHERE ownerId NOT IN ('team_a', 'team_b') TO `clickstate_sql_access_readonly`;",
+			want: "CREATE OR REPLACE MASKING POLICY `pii` ON `logs_production`.`logs_unified_v4` UPDATE `clientIp` = concat(splitByChar('.', clientIp)[1], '.x.x'), `logMessage` = '** redacted **' WHERE ownerId NOT IN ('team_a', 'team_b') TO `clickstate_sql_access_readonly`;",
 		},
 		{
 			name: "if not exists with priority and TO ALL EXCEPT",
