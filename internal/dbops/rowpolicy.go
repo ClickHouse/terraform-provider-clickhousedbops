@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/pingcap/errors"
 
@@ -26,37 +25,21 @@ type RowPolicy struct {
 }
 
 func (i *impl) CreateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error) {
-	toClause := i.buildGranteeClause(rp)
-	if toClause == "" {
-		return nil, errors.New("must specify at least one grantee: user, role, ALL, or ALL EXCEPT")
+	sql, err := querybuilder.NewCreateRowPolicy(rp.Name, rp.Database, rp.Table).
+		WithCluster(clusterName).
+		ForOperations(rp.ForOperations).
+		SelectFilter(rp.SelectFilter).
+		IsRestrictive(rp.IsRestrictive).
+		GranteeUserNames(rp.GranteeUserNames).
+		GranteeRoleNames(rp.GranteeRoleNames).
+		GranteeAll(rp.GranteeAll).
+		GranteeAllExcept(rp.GranteeAllExcept).
+		Build()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building query")
 	}
 
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "CREATE ROW POLICY `%s`", rp.Name)
-
-	if clusterName != nil && *clusterName != "" {
-		fmt.Fprintf(&sb, " ON CLUSTER `%s`", *clusterName)
-	}
-
-	fmt.Fprintf(&sb, " ON `%s`.`%s`", rp.Database, rp.Table)
-
-	// Only add FOR clause if operations are explicitly specified
-	if len(rp.ForOperations) > 0 {
-		for _, op := range rp.ForOperations {
-			fmt.Fprintf(&sb, " FOR %s", op)
-		}
-	}
-	fmt.Fprintf(&sb, " USING %s", rp.SelectFilter)
-
-	if rp.IsRestrictive {
-		sb.WriteString(" AS RESTRICTIVE")
-	} else {
-		sb.WriteString(" AS PERMISSIVE")
-	}
-
-	fmt.Fprintf(&sb, " TO %s", toClause)
-
-	err := i.clickhouseClient.Exec(ctx, sb.String())
+	err = i.clickhouseClient.Exec(ctx, sql)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}
@@ -66,35 +49,6 @@ func (i *impl) CreateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *s
 	return retryWithBackoff(ctx, "row policy", identifier, func() (*RowPolicy, error) {
 		return i.GetRowPolicy(ctx, &rp, clusterName)
 	})
-}
-
-func (i *impl) buildGranteeClause(rp RowPolicy) string {
-	if rp.GranteeAll {
-		if len(rp.GranteeAllExcept) > 0 {
-			var except []string
-			for _, name := range rp.GranteeAllExcept {
-				except = append(except, fmt.Sprintf("`%s`", name))
-			}
-			return fmt.Sprintf("ALL EXCEPT %s", strings.Join(except, ", "))
-		}
-		return "ALL"
-	}
-
-	var grantees []string
-
-	for _, user := range rp.GranteeUserNames {
-		grantees = append(grantees, fmt.Sprintf("`%s`", user))
-	}
-
-	for _, role := range rp.GranteeRoleNames {
-		grantees = append(grantees, fmt.Sprintf("`%s`", role))
-	}
-
-	if len(grantees) > 0 {
-		return strings.Join(grantees, ", ")
-	}
-
-	return ""
 }
 
 func (i *impl) GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *string) (*RowPolicy, error) {
@@ -235,16 +189,15 @@ func (i *impl) UpdateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *s
 }
 
 func (i *impl) DeleteRowPolicy(ctx context.Context, name string, database string, table string, clusterName *string) error {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "DROP ROW POLICY IF EXISTS `%s`", name)
-
-	if clusterName != nil && *clusterName != "" {
-		fmt.Fprintf(&sb, " ON CLUSTER `%s`", *clusterName)
+	sql, err := querybuilder.NewDropRowPolicy(name, database, table).
+		WithCluster(clusterName).
+		IfExists(true).
+		Build()
+	if err != nil {
+		return errors.WithMessage(err, "error building query")
 	}
 
-	fmt.Fprintf(&sb, " ON `%s`.`%s`", database, table)
-
-	err := i.clickhouseClient.Exec(ctx, sb.String())
+	err = i.clickhouseClient.Exec(ctx, sql)
 	if err != nil {
 		return errors.WithMessage(err, "error running query")
 	}
