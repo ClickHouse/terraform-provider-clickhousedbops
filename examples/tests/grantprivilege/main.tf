@@ -60,3 +60,11 @@ resource "clickhousedbops_grant_privilege" "grant_sources2" {
   grantee_user_name = clickhousedbops_user.john.name
   grant_option      = false
 }
+
+resource "clickhousedbops_grant_privilege" "grant_user_admin_to_role" {
+  for_each          = toset(["CREATE USER", "DROP USER", "ALTER USER", "CREATE ROLE"])
+  cluster_name      = var.cluster_name
+  privilege_name    = each.key
+  grantee_role_name = clickhousedbops_role.reader.name
+  grant_option      = true
+}

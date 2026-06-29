@@ -239,9 +239,18 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 				)
 				return
 			}
-		case "NAMED_COLLECTION":
-			fallthrough
 		case "USER_NAME":
+			// USER_NAME-scoped privileges (CREATE/ALTER/DROP USER and ROLE, IMPERSONATE)
+			// are granted globally as `ON *.*`; they are not database-scoped. See #201.
+			if !plan.Database.IsNull() {
+				resp.Diagnostics.AddAttributeError(
+					path.Root("database_name"),
+					"Invalid Grant Privilege",
+					fmt.Sprintf("'database_name' must be null when 'privilege_name' is %q (it is granted on *.*)", plan.Privilege.ValueString()),
+				)
+				return
+			}
+		case "NAMED_COLLECTION":
 			fallthrough
 		case "TABLE ENGINE":
 			resp.Diagnostics.AddAttributeError(
