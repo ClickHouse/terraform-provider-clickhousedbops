@@ -101,6 +101,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 					stringvalidator.NoneOf("*"),
+					stringvalidator.AlsoRequires(path.MatchRoot("database_name")),
 				},
 			},
 			"column_name": schema.StringAttribute{
@@ -111,7 +112,10 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				},
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
-					stringvalidator.AlsoRequires(path.Expressions{path.MatchRoot("table_name")}...),
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("database_name"),
+						path.MatchRoot("table_name"),
+					),
 				},
 			},
 			"grantee_user_name": schema.StringAttribute{
@@ -234,35 +238,6 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 					fmt.Sprintf("'database_name' must be null when 'privilege_name' is %q", plan.Privilege.ValueString()),
 				)
 				return
-			}
-		case "COLUMN":
-			fallthrough
-		case "DICTIONARY":
-			fallthrough
-		case "VIEW":
-			if plan.Database.IsNull() {
-				if !plan.Column.IsNull() {
-					resp.Diagnostics.AddAttributeError(
-						path.Root("column_name"),
-						"Invalid Grant Privilege",
-						fmt.Sprintf("'column_name' cannot be set when 'database_name' is null for privilege_name %q: the privilege is granted on all databases (*.*), which has no specific column.", plan.Privilege.ValueString()),
-					)
-					return
-				}
-				if !plan.Table.IsNull() {
-					resp.Diagnostics.AddAttributeError(
-						path.Root("table_name"),
-						"Invalid Grant Privilege",
-						fmt.Sprintf("'table_name' cannot be set when 'database_name' is null for privilege_name %q: the privilege is granted on all databases (*.*), which has no specific table.", plan.Privilege.ValueString()),
-					)
-					return
-				}
-
-				resp.Diagnostics.AddAttributeWarning(
-					path.Root("database_name"),
-					"Granting on all databases",
-					fmt.Sprintf("'database_name' is not set for privilege_name %q, so the privilege will be granted on all databases (*.*). Set 'database_name' to restrict the grant to specific databases (a database name or a wildcard pattern).", plan.Privilege.ValueString()),
-				)
 			}
 		case "NAMED_COLLECTION":
 			fallthrough
