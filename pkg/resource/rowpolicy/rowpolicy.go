@@ -437,8 +437,10 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		state.Database = types.StringValue(result.Database)
 		state.Table = types.StringValue(result.Table)
 		state.ForOperations = forOperationsList
-		// Preserve SelectFilter and IsRestrictive from state since they can't be reliably read from system table
-		// state.SelectFilter and state.IsRestrictive already have values from the state
+		// is_restrictive is a plain bool in system.row_policies, so reconcile it to catch
+		// out-of-band permissive/restrictive flips. select_filter is preserved from state:
+		// ClickHouse normalizes the stored expression, so reading it back would drift.
+		state.IsRestrictive = types.BoolValue(result.IsRestrictive)
 		state.GranteeUserNames = userNamesList
 		state.GranteeRoleNames = roleNamesList
 		// Preserve GranteeAll from state - only set if it was explicitly specified in the original plan
@@ -579,8 +581,8 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 // ImportState imports a row policy from an ID of the form "database.table.name".
-// Read then fills select_filter and is_restrictive from system.row_policies; grantees
-// and for_operations must be set in config (they are not read back).
+// Read fills is_restrictive from system.row_policies; select_filter, grantees and
+// for_operations are not read back and must be set in config to match the policy.
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.SplitN(req.ID, ".", 3)
 	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
