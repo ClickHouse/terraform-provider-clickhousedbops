@@ -101,6 +101,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 					stringvalidator.NoneOf("*"),
+					stringvalidator.AlsoRequires(path.MatchRoot("database_name")),
 				},
 			},
 			"column_name": schema.StringAttribute{
@@ -111,7 +112,10 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				},
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
-					stringvalidator.AlsoRequires(path.Expressions{path.MatchRoot("table_name")}...),
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("database_name"),
+						path.MatchRoot("table_name"),
+					),
 				},
 			},
 			"grantee_user_name": schema.StringAttribute{
@@ -229,22 +233,9 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		case "GLOBAL":
 			if !plan.Database.IsNull() {
 				resp.Diagnostics.AddAttributeError(
-					path.Root("database"),
+					path.Root("database_name"),
 					"Invalid Grant Privilege",
-					fmt.Sprintf("'database' must be null when 'privilege_name' is %q", plan.Privilege.ValueString()),
-				)
-				return
-			}
-		case "COLUMN":
-			fallthrough
-		case "DICTIONARY":
-			fallthrough
-		case "VIEW":
-			if plan.Database.IsNull() {
-				resp.Diagnostics.AddAttributeError(
-					path.Root("database"),
-					"Invalid Grant Privilege",
-					fmt.Sprintf("'database' must be set when privilege_name is %q", plan.Privilege.ValueString()),
+					fmt.Sprintf("'database_name' must be null when 'privilege_name' is %q", plan.Privilege.ValueString()),
 				)
 				return
 			}
