@@ -2,124 +2,40 @@ package grantprivilege
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 )
 
 func overlaps(current GrantPrivilege, existing dbops.GrantPrivilege) bool {
-	// AccessType
-	{
-		if current.Privilege.ValueString() != existing.AccessType {
-			// Check if existing privilege is a group containing current one.
-
-			groups := parseGrants().Groups
-
-			if members := groups[existing.AccessType]; members != nil {
-				found := false
-				for _, m := range members {
-					if m == current.Privilege.ValueString() {
-						found = true
-						break
-					}
-				}
-
-				if !found {
-					// Existing is a group, but current is not a member of the group
-					return false
-				}
-			} else {
-				// existing is not a group
-				return false
-			}
-		}
+	// AccessType: existing must be the same privilege, or a group that contains current.
+	if !slices.Contains(AllDescendants(parsedGrants().Groups, existing.AccessType), current.Privilege.ValueString()) {
+		return false
 	}
 
-	// DatabaseName
-	{
-		if !current.Database.IsNull() && existing.DatabaseName != nil && current.Database.ValueString() != *existing.DatabaseName {
-			// DatabaseName is different, but it can still be overlapping if using wildcards.
-			if strings.HasSuffix(current.Database.ValueString(), "*") {
-				if strings.HasSuffix(*existing.DatabaseName, "*") {
-					// Both DatabaseNames end with a wildcard.
-					if !strings.HasPrefix(current.Database.ValueString(), strings.TrimSuffix(*existing.DatabaseName, "*")) {
-						return false
-					}
-				} else {
-					// Current ends with a wildcard, existing does not.
-					return false
-				}
-			} else {
-				if strings.HasSuffix(*existing.DatabaseName, "*") {
-				} else {
-					// Both DatabaseNames do not have wildcard and are different.
-					return false
-				}
-			}
-		} else if current.Database.IsNull() && existing.DatabaseName != nil {
-			return false
-		}
+	// A grant that needs grant option is not covered by one lacking it.
+	if current.GrantOption.ValueBool() && !existing.GrantOption {
+		return false
 	}
 
-	// TableName
-	{
-		if !current.Table.IsNull() && existing.TableName != nil && current.Table.ValueString() != *existing.TableName {
-			// TableName is different, but it can still be overlapping if using wildcards.
-			if strings.HasSuffix(current.Table.ValueString(), "*") {
-				if strings.HasSuffix(*existing.TableName, "*") {
-					// Both TableNames end with a wildcard.
-					if !strings.HasPrefix(current.Table.ValueString(), strings.TrimSuffix(*existing.TableName, "*")) {
-						return false
-					}
-				} else {
-					// Current ends with a wildcard, existing does not.
-					return false
-				}
-			} else {
-				if strings.HasSuffix(*existing.TableName, "*") {
-				} else {
-					// Both TableNames do not have wildcard and are different.
-					return false
-				}
-			}
-		} else if current.Table.IsNull() && existing.TableName != nil {
-			return false
-		}
+	attrs, _, ok := scopeAttributesFor(current.Privilege.ValueString())
+	if !ok {
+		return false
 	}
 
-	// ColumnName
-	{
-		if !current.Column.IsNull() && existing.ColumnName != nil {
-			if current.Column.ValueString() != *existing.ColumnName {
-				return false
-			}
-		} else if current.Column.IsNull() && existing.ColumnName != nil {
-			// current is for all columns, existing if for specific column
-			return false
-		}
+	if attrs.database && !checkWildcardOverlaps(current.Database, existing.DatabaseName) {
+		return false
+	}
+	if attrs.table && !checkWildcardOverlaps(current.Table, existing.TableName) {
+		return false
+	}
+	if attrs.column && !checkWildcardOverlaps(current.Column, existing.ColumnName) {
+		return false
 	}
 
-	// GranteeUserName
-	{
-		if !current.GranteeUserName.IsNull() && existing.GranteeUserName != nil && current.GranteeUserName.ValueString() != *existing.GranteeUserName {
-			return false
-		} else if !current.GranteeUserName.IsNull() && existing.GranteeUserName == nil {
-			return false
-		} else if current.GranteeUserName.IsNull() && existing.GranteeUserName != nil {
-			return false
-		}
-	}
-
-	// GranteeRoleName
-	{
-		if !current.GranteeRoleName.IsNull() && existing.GranteeRoleName != nil && current.GranteeRoleName.ValueString() != *existing.GranteeRoleName {
-			return false
-		} else if !current.GranteeRoleName.IsNull() && existing.GranteeRoleName == nil {
-			return false
-		} else if current.GranteeRoleName.IsNull() && existing.GranteeRoleName != nil {
-			return false
-		}
-	}
 	return true
 }
 
@@ -132,14 +48,16 @@ func explainOverlap(current GrantPrivilege, existing dbops.GrantPrivilege) strin
 		row = fmt.Sprintf("- Privilege %q is already granted", existing.AccessType)
 	}
 
-	if existing.TableName != nil {
-		row = fmt.Sprintf("%s on table %q", row, *existing.TableName)
-	} else {
-		row = fmt.Sprintf("%s on all tables", row)
-	}
-
-	if existing.DatabaseName != nil {
-		row = fmt.Sprintf("%s in the %q database", row, *existing.DatabaseName)
+	// The target description depends on the grant's scope dimension.
+	switch {
+	case existing.ColumnName != nil:
+		row = fmt.Sprintf("%s on column %q of table %q in the %q database", row, *existing.ColumnName, *existing.TableName, *existing.DatabaseName)
+	case existing.TableName != nil:
+		row = fmt.Sprintf("%s on table %q in the %q database", row, *existing.TableName, *existing.DatabaseName)
+	case existing.DatabaseName != nil:
+		row = fmt.Sprintf("%s on all tables in the %q database", row, *existing.DatabaseName)
+	default:
+		row = fmt.Sprintf("%s on all", row)
 	}
 
 	if existing.GranteeUserName != nil {
@@ -159,4 +77,24 @@ func explainOverlap(current GrantPrivilege, existing dbops.GrantPrivilege) strin
 	}
 
 	return row
+}
+
+func checkWildcardOverlaps(current types.String, existing *string) bool {
+	// existing is unrestricted on this level: it covers anything (incl. current = all).
+	if existing == nil {
+		return true
+	}
+	// existing is specific but current is unrestricted (all): not covered.
+	if current.IsNull() {
+		return false
+	}
+	if current.ValueString() == *existing {
+		return true
+	}
+	// existing is a prefix wildcard: it covers current when current starts with the prefix.
+	if strings.HasSuffix(*existing, "*") {
+		return strings.HasPrefix(current.ValueString(), strings.TrimSuffix(*existing, "*"))
+	}
+	// existing is an exact value different from current.
+	return false
 }
