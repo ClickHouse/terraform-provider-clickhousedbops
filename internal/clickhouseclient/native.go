@@ -92,6 +92,10 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 
 	// Scan each row of the result.
 	for i := 0; rows.Next(); i++ {
+		if err := rows.Err(); err != nil {
+			return errors.WithMessage(rows.Err(), "error iterating over rows")
+		}
+
 		// Read the columns using the dynamically created variables.
 		if err := rows.Scan(vars...); err != nil {
 			return errors.WithMessage(err, "error scanning row")

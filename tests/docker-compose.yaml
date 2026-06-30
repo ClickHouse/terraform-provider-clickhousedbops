@@ -1,9 +1,16 @@
 services:
-  zookeeper:
-    image: zookeeper:3.4.9
-    environment:
-      - TZ=Europe/Rome
-      - ZOO_MY_ID=1
+  keeper:
+    image: 'clickhouse/clickhouse-keeper:${CLICKHOUSE_VERSION:-latest}'
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "echo \"ruok\" | nc  127.0.0.1 9181 | grep imok" ]
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+      start_interval: 5s
+    volumes:
+      - type: 'bind'
+        source: './keeper_config.d/listen.xml'
+        target: '/etc/clickhouse-keeper/keeper_config.d/listen.xml'
 
   clickhouse:
     image: 'clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}'
@@ -19,7 +26,8 @@ services:
       start_period: 5s
       start_interval: 5s
     depends_on:
-      - zookeeper
+      keeper:
+        condition: service_healthy
     environment:
       - CLICKHOUSE_SKIP_USER_SETUP=1
     volumes:
