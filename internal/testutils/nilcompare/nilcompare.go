@@ -10,11 +10,11 @@ func NilCompare(a interface{}, b interface{}) bool {
 	aVal := reflect.ValueOf(a)
 	bVal := reflect.ValueOf(b)
 
-	if aVal.Kind() == reflect.Ptr && aVal.IsNil() {
+	if aVal.Kind() == reflect.Pointer && aVal.IsNil() {
 		a = nil
 	}
 
-	if bVal.Kind() == reflect.Ptr && bVal.IsNil() {
+	if bVal.Kind() == reflect.Pointer && bVal.IsNil() {
 		b = nil
 	}
 
@@ -29,7 +29,7 @@ func NilCompare(a interface{}, b interface{}) bool {
 	}
 
 	// Check if both are pointers
-	if aVal.Kind() == reflect.Ptr && bVal.Kind() == reflect.Ptr {
+	if aVal.Kind() == reflect.Pointer && bVal.Kind() == reflect.Pointer {
 		// Both are pointers - compare if both are nil or both are non-nil
 		if aVal.IsNil() && bVal.IsNil() {
 			return true
@@ -42,12 +42,12 @@ func NilCompare(a interface{}, b interface{}) bool {
 	}
 
 	// Check if one is pointer, one is scalar
-	if aVal.Kind() == reflect.Ptr && bVal.Kind() != reflect.Ptr {
+	if aVal.Kind() == reflect.Pointer && bVal.Kind() != reflect.Pointer {
 		// Compare dereferenced pointer value with scalar
 		return reflect.DeepEqual(aVal.Elem().Interface(), b)
 	}
 
-	if aVal.Kind() != reflect.Ptr && bVal.Kind() == reflect.Ptr {
+	if aVal.Kind() != reflect.Pointer && bVal.Kind() == reflect.Pointer {
 		// Compare scalar with dereferenced pointer value
 		return reflect.DeepEqual(a, bVal.Elem().Interface())
 	}
