@@ -71,6 +71,55 @@ func Test_createuser(t *testing.T) {
 			want:         "CREATE USER `mira` HOST IP '127.0.0.1' HOST IP '192.168.1.1' HOST IP '10.0.0.1';",
 			wantErr:      false,
 		},
+		{
+			name:           "Create user with ssl_certificate auth",
+			resourceName:   "teleport_cert_read",
+			identifiedWith: IdentificationSSLCertificate,
+			identifiedBy:   "teleport_cert_read",
+			want:           "CREATE USER `teleport_cert_read` IDENTIFIED WITH ssl_certificate CN 'teleport_cert_read';",
+			wantErr:        false,
+		},
+		{
+			name:           "Create user with ssl_certificate and host IP",
+			resourceName:   "cert_user",
+			identifiedWith: IdentificationSSLCertificate,
+			identifiedBy:   "cert_user_cn",
+			hostIPs:        []string{"10.0.0.1"},
+			want:           "CREATE USER `cert_user` HOST IP '10.0.0.1' IDENTIFIED WITH ssl_certificate CN 'cert_user_cn';",
+			wantErr:        false,
+		},
+		{
+			name:           "Create user with plaintext_password auth",
+			resourceName:   "plain_user",
+			identifiedWith: IdentificationPlaintextPassword,
+			identifiedBy:   "mypassword",
+			want:           "CREATE USER `plain_user` IDENTIFIED WITH plaintext_password BY 'mypassword';",
+			wantErr:        false,
+		},
+		{
+			name:           "Create user with bcrypt_hash auth",
+			resourceName:   "bcrypt_user",
+			identifiedWith: IdentificationBcryptHash,
+			identifiedBy:   "$2a$10$abc123",
+			want:           "CREATE USER `bcrypt_user` IDENTIFIED WITH bcrypt_hash BY '$2a$10$abc123';",
+			wantErr:        false,
+		},
+		{
+			name:           "Create user with double_sha1_hash auth",
+			resourceName:   "sha1_user",
+			identifiedWith: IdentificationDoubleSHA1Hash,
+			identifiedBy:   "abcdef1234567890",
+			want:           "CREATE USER `sha1_user` IDENTIFIED WITH double_sha1_hash BY 'abcdef1234567890';",
+			wantErr:        false,
+		},
+		{
+			name:           "Create user with no_password auth",
+			resourceName:   "nopass_user",
+			identifiedWith: IdentificationNoPassword,
+			identifiedBy:   "",
+			want:           "CREATE USER `nopass_user` IDENTIFIED WITH no_password;",
+			wantErr:        false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -83,7 +132,7 @@ func Test_createuser(t *testing.T) {
 				q = q.HostIPs(tt.hostIPs)
 			}
 
-			if tt.identifiedWith != "" && tt.identifiedBy != "" {
+			if tt.identifiedWith != "" {
 				q = q.Identified(tt.identifiedWith, tt.identifiedBy)
 			}
 
