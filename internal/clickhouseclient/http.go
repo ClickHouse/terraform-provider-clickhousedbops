@@ -121,7 +121,9 @@ func (i *httpClient) runQuery(ctx context.Context, qry string) (string, error) {
 		return "", errors.WithMessage(err, "error executing query")
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", errors.WithMessage(err, "error reading response")
