@@ -64,7 +64,7 @@ ifneq ($(shell test -f $(GOLANGCILINT) && echo -n yes),yes)
 GOLANGCILINT = /tmp/golangci-lint
 endif
 ensure-golangci-lint: ## Download golangci-lint locally if necessary.
-	$(call go-get-tool,$(GOLANGCILINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.0)
+	$(call go-get-tool,$(GOLANGCILINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2)
 
 # go-get-tool will 'go get' any package $2 and install it to $1.
 define go-get-tool
@@ -79,4 +79,3 @@ GOBIN=$$gobin go install $(2) ;\
 rm -rf $$TMP_DIR ;\
 }
 endef
-

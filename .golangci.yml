@@ -1,26 +1,34 @@
+version: "2"
 linters:
+  default: none
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
     - gosec
     - unconvert
     - goconst
-    - goimports
     - copyloopvar
+    - clickhouselint
+  settings:
+    goconst:
+      ignore-tests: true
+      ignore-string-values:
+        - "[A-Z]+"
+    gosec:
+      excludes:
+        - G204
+formatters:
+  enable:
+    - gofmt
+    - goimports
     - gofumpt
-
-linters-settings:
-  goimports:
-    # Put imports beginning with prefix after 3rd-party packages.
-    # It's a comma-separated list of prefixes.
-    autofix: true
-    local-prefixes: github.com/ClickHouse/terraform-provider-clickhousedbops
+  settings:
+    goimports:
+      # Put imports beginning with prefix after 3rd-party packages.
+      local-prefixes:
+        - github.com/ClickHouse/terraform-provider-clickhousedbops
 
 run:
   timeout: 10m
-  skip-dirs:
-  skip-dirs-default: true
