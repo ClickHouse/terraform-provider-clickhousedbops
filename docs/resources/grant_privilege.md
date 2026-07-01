@@ -62,4 +62,4 @@ When using a self hosted ClickHouse instance, this field should only be set when
 - `grant_option` (Boolean) If true, the grantee will be able to grant the same privileges to others.
 - `grantee_role_name` (String) Name of the `role` to grant privileges to.
 - `grantee_user_name` (String) Name of the `user` to grant privileges to.
-- `table_name` (String) The name of the table to grant privilege on.
+- `table_name` (String) The name of the table to grant privilege on. Defaults to all tables if left null.
