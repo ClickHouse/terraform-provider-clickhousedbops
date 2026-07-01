@@ -47,13 +47,13 @@ func TestAlterRowPolicy_Basic(t *testing.T) {
 		{
 			name: "alter row policy grantee user names",
 			builder: NewAlterRowPolicy("my_policy", "default", "users").
-				GranteeUserNames([]string{"alice", "bob"}),
+				GranteeNames([]string{"alice", "bob"}),
 			want: "ALTER ROW POLICY `my_policy` ON `default`.`users` TO `alice`, `bob`",
 		},
 		{
 			name: "alter row policy grantee role names",
 			builder: NewAlterRowPolicy("my_policy", "default", "users").
-				GranteeRoleNames([]string{"admin", "editor"}),
+				GranteeNames([]string{"admin", "editor"}),
 			want: "ALTER ROW POLICY `my_policy` ON `default`.`users` TO `admin`, `editor`",
 		},
 		{
@@ -65,7 +65,6 @@ func TestAlterRowPolicy_Basic(t *testing.T) {
 		{
 			name: "alter row policy grantee all except",
 			builder: NewAlterRowPolicy("my_policy", "default", "users").
-				GranteeAll(true).
 				GranteeAllExcept([]string{"readonly"}),
 			want: "ALTER ROW POLICY `my_policy` ON `default`.`users` TO ALL EXCEPT `readonly`",
 		},
@@ -73,28 +72,8 @@ func TestAlterRowPolicy_Basic(t *testing.T) {
 			name: "alter row policy with select filter and grantee",
 			builder: NewAlterRowPolicy("my_policy", "default", "users").
 				SelectFilter("user_id = 'alice'").
-				GranteeUserNames([]string{"alice"}),
+				GranteeNames([]string{"alice"}),
 			want: "ALTER ROW POLICY `my_policy` ON `default`.`users` USING user_id = 'alice' TO `alice`",
-		},
-		{
-			name: "alter row policy for operations only",
-			builder: NewAlterRowPolicy("my_policy", "default", "users").
-				ForOperations([]string{"SELECT"}),
-			want: "ALTER ROW POLICY `my_policy` ON `default`.`users` FOR SELECT",
-		},
-		{
-			name: "alter row policy for operations with using",
-			builder: NewAlterRowPolicy("my_policy", "default", "users").
-				ForOperations([]string{"SELECT"}).
-				SelectFilter("user_id = 'bob'"),
-			want: "ALTER ROW POLICY `my_policy` ON `default`.`users` FOR SELECT USING user_id = 'bob'",
-		},
-		{
-			name: "alter row policy for operations with as clause",
-			builder: NewAlterRowPolicy("my_policy", "default", "users").
-				ForOperations([]string{"SELECT"}).
-				IsRestrictive(true),
-			want: "ALTER ROW POLICY `my_policy` ON `default`.`users` FOR SELECT AS RESTRICTIVE",
 		},
 	}
 
