@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -28,6 +29,7 @@ type TestCase struct {
 	ResourceName    string
 	ResourceAddress string
 
+	ExpectError         *regexp.Regexp
 	CheckNotExistsFunc  func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error)
 	CheckAttributesFunc func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error
 }
@@ -81,6 +83,7 @@ func RunTests(t *testing.T, tests []TestCase) {
 								return tc.CheckAttributesFunc(ctx, dbopsClient, tc.ClusterName, attrs)
 							}),
 						},
+						ExpectError: tc.ExpectError,
 					},
 				}
 
@@ -99,6 +102,9 @@ func RunTests(t *testing.T, tests []TestCase) {
 				resource.Test(t, resource.TestCase{
 					ProtoV6ProviderFactories: factories.ProviderFactories(),
 					CheckDestroy: func(s *terraform.State) error {
+						if tc.ExpectError != nil {
+							return nil
+						}
 						for address, r := range s.RootModule().Resources {
 							if tc.ResourceAddress == address {
 								exists, err := tc.CheckNotExistsFunc(ctx, dbopsClient, tc.ClusterName, r.Primary.Attributes)

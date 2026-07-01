@@ -12,11 +12,9 @@ type CreateRowPolicy struct {
 	database         string
 	table            string
 	clusterName      *string
-	forOperations    []string
 	selectFilter     string
 	isRestrictive    bool
-	granteeUserNames []string
-	granteeRoleNames []string
+	granteeNames     []string
 	granteeAll       bool
 	granteeAllExcept []string
 }
@@ -36,12 +34,6 @@ func (c *CreateRowPolicy) WithCluster(clusterName *string) *CreateRowPolicy {
 	return c
 }
 
-// ForOperations sets the operations for the row policy (e.g. "SELECT").
-func (c *CreateRowPolicy) ForOperations(operations []string) *CreateRowPolicy {
-	c.forOperations = operations
-	return c
-}
-
 // SelectFilter sets the USING filter for the row policy.
 func (c *CreateRowPolicy) SelectFilter(filter string) *CreateRowPolicy {
 	c.selectFilter = filter
@@ -54,15 +46,9 @@ func (c *CreateRowPolicy) IsRestrictive(restrictive bool) *CreateRowPolicy {
 	return c
 }
 
-// GranteeUserNames sets the user names for the TO clause.
-func (c *CreateRowPolicy) GranteeUserNames(users []string) *CreateRowPolicy {
-	c.granteeUserNames = users
-	return c
-}
-
-// GranteeRoleNames sets the role names for the TO clause.
-func (c *CreateRowPolicy) GranteeRoleNames(roles []string) *CreateRowPolicy {
-	c.granteeRoleNames = roles
+// GranteeNames sets the user and role names for the TO clause.
+func (c *CreateRowPolicy) GranteeNames(users []string) *CreateRowPolicy {
+	c.granteeNames = users
 	return c
 }
 
@@ -104,10 +90,6 @@ func (c *CreateRowPolicy) Build() (string, error) {
 	}
 
 	fmt.Fprintf(&sb, " ON %s.%s", backtick(c.database), backtick(c.table))
-
-	for _, op := range c.forOperations {
-		fmt.Fprintf(&sb, " FOR %s", op)
-	}
 
 	fmt.Fprintf(&sb, " USING %s", c.selectFilter)
 
@@ -181,17 +163,16 @@ func (d *DropRowPolicy) Build() (string, error) {
 // buildGranteeClause builds the TO clause for grantee specification.
 func (c *CreateRowPolicy) buildGranteeClause() string {
 	if c.granteeAll {
-		if len(c.granteeAllExcept) > 0 {
-			return fmt.Sprintf("ALL EXCEPT %s", strings.Join(backtickAll(c.granteeAllExcept), ", "))
-		}
 		return "ALL"
 	}
 
-	names := make([]string, 0, len(c.granteeUserNames)+len(c.granteeRoleNames))
-	names = append(names, backtickAll(c.granteeUserNames)...)
-	names = append(names, backtickAll(c.granteeRoleNames)...)
-	if len(names) == 0 {
+	if len(c.granteeAllExcept) > 0 {
+		return fmt.Sprintf("ALL EXCEPT %s", strings.Join(backtickAll(c.granteeAllExcept), ", "))
+	}
+
+	if len(c.granteeNames) == 0 {
 		return ""
 	}
-	return strings.Join(names, ", ")
+
+	return strings.Join(backtickAll(c.granteeNames), ", ")
 }
