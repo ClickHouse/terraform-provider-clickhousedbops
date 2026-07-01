@@ -41,6 +41,10 @@ type GrantPrivilege struct {
 	GranteeUserName *string `json:"user_name"`
 	GranteeRoleName *string `json:"role_name"`
 	GrantOption     bool    `json:"grant_option"`
+	// IsPartialRevoke is true for a system.grants row that represents a partial
+	// REVOKE carved out of a broader grant. Such a row removes access rather than
+	// granting it, so coverage/overlap checks must ignore it.
+	IsPartialRevoke bool `json:"-"`
 	// ExpandedAccessTypes includes AccessType and all its descendants.
 	// ClickHouse may expand a parent privilege (e.g. CREATE, ACCESS MANAGEMENT)
 	// into its children in system.grants instead of storing a single parent row.
@@ -86,9 +90,80 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		identifier += " to role " + *grantPrivilege.GranteeRoleName
 	}
 
+	// The grant succeeded. If a matching row is already visible we're done.
+	found, err := i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	if found != nil {
+		return found, nil
+	}
+
+	// No matching row yet. If a broader grant already covers this one, ClickHouse
+	// folded it into that grant and no row will ever appear, so retrying would only
+	// hit the read-after-write timeout. Return nil now and let the caller report the
+	// overlap. Otherwise the row may just be lagging (multi-replica), so keep retrying.
+	covered, err := i.grantIsCovered(ctx, &grantPrivilege, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	if covered {
+		return nil, nil
+	}
+
 	return retryWithBackoff(ctx, "grant privilege", identifier, func() (*GrantPrivilege, error) {
 		return i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
 	}, i.readAfterWriteTimeoutArgs()...)
+}
+
+// grantIsCovered reports whether an existing grant to the same grantee already
+// conveys at least `grantPrivilege`, which is what makes ClickHouse fold the new
+// grant away and drop its system.grants row.
+func (i *impl) grantIsCovered(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string) (bool, error) {
+	existing, err := i.GetAllGrantsForGrantee(ctx, grantPrivilege.GranteeUserName, grantPrivilege.GranteeRoleName, clusterName)
+	if err != nil {
+		return false, err
+	}
+
+	for idx := range existing {
+		if grantCovers(existing[idx], *grantPrivilege) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// grantCovers reports whether `broader` (a row read from system.grants) already
+// conveys at least `narrower`. Both are assumed to target the same grantee.
+func grantCovers(broader, narrower GrantPrivilege) bool {
+	// A partial revoke carves access out of a broader grant, so it grants nothing
+	// and can never cover another grant.
+	if broader.IsPartialRevoke {
+		return false
+	}
+	if broader.AccessType != narrower.AccessType {
+		return false
+	}
+	// A grant that needs WITH GRANT OPTION is not covered by one that lacks it.
+	if narrower.GrantOption && !broader.GrantOption {
+		return false
+	}
+	return objectCovers(broader.DatabaseName, narrower.DatabaseName) &&
+		objectCovers(broader.TableName, narrower.TableName) &&
+		objectCovers(broader.ColumnName, narrower.ColumnName)
+}
+
+// objectCovers reports whether a broader object scope covers a narrower one for a
+// single dimension (database, table or column). A nil value means "all" in that
+// dimension, so it covers anything; a set value only covers the same set value.
+func objectCovers(broader, narrower *string) bool {
+	if broader == nil {
+		return true
+	}
+	if narrower == nil {
+		return false
+	}
+	return *broader == *narrower
 }
 
 // Matcher function to handle classic grants: https://clickhouse.com/docs/sql-reference/statements/grant#granting-privilege-syntax
@@ -314,6 +389,7 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		querybuilder.NewField("user_name"),
 		querybuilder.NewField("role_name"),
 		querybuilder.NewField("grant_option"),
+		querybuilder.NewField("is_partial_revoke"),
 	}, "system.grants").WithCluster(clusterName).Where(to).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
@@ -350,6 +426,10 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'grant_option' field")
 		}
+		isPartialRevoke, err := data.GetBool("is_partial_revoke")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'is_partial_revoke' field")
+		}
 
 		ret = append(ret, GrantPrivilege{
 			AccessType:      accessType,
@@ -359,6 +439,7 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 			GranteeUserName: granteeUserName,
 			GranteeRoleName: granteeRoleName,
 			GrantOption:     grantOption,
+			IsPartialRevoke: isPartialRevoke,
 		})
 
 		return nil
