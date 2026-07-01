@@ -4,17 +4,18 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/boolvalidator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -36,24 +37,24 @@ func NewResource() resource.Resource {
 	return &Resource{}
 }
 
-// listToStringSlice converts a types.List to []string
-func listToStringSlice(ctx context.Context, tfList types.List) ([]string, error) {
-	if tfList.IsNull() || tfList.IsUnknown() {
+// setToStringSlice converts a types.Set to []string
+func setToStringSlice(ctx context.Context, tfSet types.Set) ([]string, diag.Diagnostics) {
+	if tfSet.IsNull() || tfSet.IsUnknown() {
 		return []string{}, nil
 	}
 
 	var result []string
-	diags := tfList.ElementsAs(ctx, &result, false)
+	diags := tfSet.ElementsAs(ctx, &result, false)
 	if diags.HasError() {
-		return nil, fmt.Errorf("failed to convert list to string slice")
+		return nil, diags
 	}
-	return result, nil
+	return result, diags
 }
 
-// stringSliceToList converts []string to types.List
-func stringSliceToList(ctx context.Context, strings []string) (types.List, error) {
+// stringSliceToSet converts []string to types.Set
+func stringSliceToSet(ctx context.Context, strings []string) (types.Set, diag.Diagnostics) {
 	if len(strings) == 0 {
-		return types.ListNull(types.StringType), nil
+		return types.SetNull(types.StringType), nil
 	}
 
 	elements := make([]attr.Value, len(strings))
@@ -61,11 +62,11 @@ func stringSliceToList(ctx context.Context, strings []string) (types.List, error
 		elements[i] = types.StringValue(s)
 	}
 
-	listVal, diags := types.ListValue(types.StringType, elements)
+	setVal, diags := types.SetValue(types.StringType, elements)
 	if diags.HasError() {
-		return types.ListNull(types.StringType), fmt.Errorf("failed to convert string slice to list")
+		return types.SetNull(types.StringType), diags
 	}
-	return listVal, nil
+	return setVal, diags
 }
 
 type Resource struct {
@@ -116,22 +117,9 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					stringvalidator.LengthAtLeast(1),
 				},
 			},
-			"for_operations": schema.ListAttribute{
-				ElementType: types.StringType,
-				Optional:    true,
-				Description: "List of operations the row policy applies to (e.g. 'SELECT'). If not specified, defaults to SELECT. Currently only SELECT is supported; this field is designed to support INSERT, UPDATE, DELETE in future ClickHouse versions.",
-				Validators: []validator.List{
-					listvalidator.ValueStringsAre(
-						stringvalidator.OneOf("SELECT"),
-					),
-				},
-			},
 			"select_filter": schema.StringAttribute{
 				Required:    true,
 				Description: "The filter expression used in the USING clause. For example: `tenant_id = 'abc'`.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 				},
@@ -141,28 +129,25 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 				Description: "If true, the policy is restrictive (AND logic). If false (default), the policy is permissive (OR logic).",
-				PlanModifiers: []planmodifier.Bool{
-					boolplanmodifier.RequiresReplace(),
-				},
 			},
-			"grantee_user_names": schema.ListAttribute{
+			"grantee_user_names": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "List of user names to apply the row policy to.",
-				Validators: []validator.List{
-					listvalidator.ConflictsWith(
+				Description: "Set of user names to apply the row policy to.",
+				Validators: []validator.Set{
+					setvalidator.ConflictsWith(
 						path.MatchRoot("grantee_role_names"),
 						path.MatchRoot("grantee_all"),
 						path.MatchRoot("grantee_all_except"),
 					),
 				},
 			},
-			"grantee_role_names": schema.ListAttribute{
+			"grantee_role_names": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "List of role names to apply the row policy to.",
-				Validators: []validator.List{
-					listvalidator.ConflictsWith(
+				Description: "Set of role names to apply the row policy to.",
+				Validators: []validator.Set{
+					setvalidator.ConflictsWith(
 						path.MatchRoot("grantee_user_names"),
 						path.MatchRoot("grantee_all"),
 						path.MatchRoot("grantee_all_except"),
@@ -180,12 +165,12 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					),
 				},
 			},
-			"grantee_all_except": schema.ListAttribute{
+			"grantee_all_except": schema.SetAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
 				Description: "Apply the row policy to all users and roles except those listed.",
-				Validators: []validator.List{
-					listvalidator.ConflictsWith(
+				Validators: []validator.Set{
+					setvalidator.ConflictsWith(
 						path.MatchRoot("grantee_user_names"),
 						path.MatchRoot("grantee_role_names"),
 						path.MatchRoot("grantee_all"),
@@ -216,20 +201,22 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
-	if r.client != nil {
+	// Only check replicated storage when cluster_name is set, to avoid an unnecessary
+	// connection during plan (e.g. terraform plan -refresh=false with no reachable server).
+	if r.client != nil && !config.ClusterName.IsNull() {
 		isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
 		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Checking if service is using replicated storage",
-				fmt.Sprintf("%+v\n", err),
+			resp.Diagnostics.AddWarning(
+				"Could not check if service is using replicated storage",
+				fmt.Sprintf("Skipping validation. If you are using replicated storage, please remove the 'cluster_name' attribute from your resource definition. Error: %+v", err),
 			)
 			return
 		}
 
-		if isReplicatedStorage && !config.ClusterName.IsNull() {
+		if isReplicatedStorage {
 			resp.Diagnostics.AddWarning(
 				"Invalid configuration",
-				"Your ClickHouse cluster is using Replicated storage for grants, please remove the 'cluster_name' attribute from your RowPolicy resource definition if you encounter any errors.",
+				"Your ClickHouse cluster is using Replicated storage for access objects, please remove the 'cluster_name' attribute from your RowPolicy resource definition if you encounter any errors.",
 			)
 		}
 	}
@@ -243,27 +230,21 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	userNames, err := listToStringSlice(ctx, plan.GranteeUserNames)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid grantee_user_names", err.Error())
+	userNames, diags := setToStringSlice(ctx, plan.GranteeUserNames)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	roleNames, err := listToStringSlice(ctx, plan.GranteeRoleNames)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid grantee_role_names", err.Error())
+	roleNames, diags := setToStringSlice(ctx, plan.GranteeRoleNames)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	allExcept, err := listToStringSlice(ctx, plan.GranteeAllExcept)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid grantee_all_except", err.Error())
-		return
-	}
-
-	forOperations, err := listToStringSlice(ctx, plan.ForOperations)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid for_operations", err.Error())
+	allExcept, diags := setToStringSlice(ctx, plan.GranteeAllExcept)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -271,19 +252,15 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		Name:             plan.Name.ValueString(),
 		Database:         plan.Database.ValueString(),
 		Table:            plan.Table.ValueString(),
-		ForOperations:    forOperations,
 		SelectFilter:     plan.SelectFilter.ValueString(),
 		IsRestrictive:    plan.IsRestrictive.ValueBool(),
-		GranteeUserNames: userNames,
-		GranteeRoleNames: roleNames,
+		GranteeNames:     append(slices.Clone(userNames), roleNames...),
 		GranteeAll:       plan.GranteeAll.ValueBool(),
 		GranteeAllExcept: allExcept,
 	}
 
 	created, err := r.client.CreateRowPolicy(ctx, rp, plan.ClusterName.ValueStringPointer())
 	if err != nil {
-		// Don't silently adopt a pre-existing policy: that diverges from the other
-		// resources in this provider. Surface the error and point at `terraform import`.
 		if strings.Contains(err.Error(), "already exists") {
 			resp.Diagnostics.AddError(
 				"ClickHouse Row Policy already exists",
@@ -291,6 +268,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 			)
 			return
 		}
+
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse Row Policy",
 			"Could not create row policy, unexpected error: "+err.Error(),
@@ -306,51 +284,17 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	userNamesList, err := stringSliceToList(ctx, created.GranteeUserNames)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to convert user names to list", err.Error())
-		return
-	}
-
-	roleNamesList, err := stringSliceToList(ctx, created.GranteeRoleNames)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to convert role names to list", err.Error())
-		return
-	}
-
-	allExceptList, err := stringSliceToList(ctx, created.GranteeAllExcept)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to convert all except to list", err.Error())
-		return
-	}
-
-	forOperationsList, err := stringSliceToList(ctx, created.ForOperations)
-	if err != nil {
-		resp.Diagnostics.AddError("Failed to convert for_operations to list", err.Error())
-		return
-	}
-
-	// Preserve grantee fields from plan - only set if they were explicitly specified
-	granteeAll := types.BoolNull()
-	if !plan.GranteeAll.IsNull() {
-		granteeAll = types.BoolValue(created.GranteeAll)
-	}
-
 	state := RowPolicy{
-		ClusterName:   plan.ClusterName,
-		Name:          types.StringValue(created.Name),
-		Database:      types.StringValue(created.Database),
-		Table:         types.StringValue(created.Table),
-		ForOperations: forOperationsList,
-		// Keep the config filter, not created.SelectFilter: ClickHouse normalizes the stored
-		// expression (spacing, parentheses), so echoing the DB value back would trip Terraform's
-		// "inconsistent result after apply" check for any non-canonical filter.
+		ClusterName:      plan.ClusterName,
+		Name:             types.StringValue(created.Name),
+		Database:         types.StringValue(created.Database),
+		Table:            types.StringValue(created.Table),
 		SelectFilter:     plan.SelectFilter,
 		IsRestrictive:    types.BoolValue(created.IsRestrictive),
-		GranteeUserNames: userNamesList,
-		GranteeRoleNames: roleNamesList,
-		GranteeAll:       granteeAll,
-		GranteeAllExcept: allExceptList,
+		GranteeUserNames: plan.GranteeUserNames,
+		GranteeRoleNames: plan.GranteeRoleNames,
+		GranteeAll:       plan.GranteeAll,
+		GranteeAllExcept: plan.GranteeAllExcept,
 	}
 
 	diags = resp.State.Set(ctx, state)
@@ -365,41 +309,10 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	userNames, err := listToStringSlice(ctx, state.GranteeUserNames)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid grantee_user_names", err.Error())
-		return
-	}
-
-	roleNames, err := listToStringSlice(ctx, state.GranteeRoleNames)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid grantee_role_names", err.Error())
-		return
-	}
-
-	allExcept, err := listToStringSlice(ctx, state.GranteeAllExcept)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid grantee_all_except", err.Error())
-		return
-	}
-
-	forOperations, err := listToStringSlice(ctx, state.ForOperations)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid for_operations", err.Error())
-		return
-	}
-
 	rp := dbops.RowPolicy{
-		Name:             state.Name.ValueString(),
-		Database:         state.Database.ValueString(),
-		Table:            state.Table.ValueString(),
-		ForOperations:    forOperations,
-		SelectFilter:     state.SelectFilter.ValueString(),
-		IsRestrictive:    state.IsRestrictive.ValueBool(),
-		GranteeUserNames: userNames,
-		GranteeRoleNames: roleNames,
-		GranteeAll:       state.GranteeAll.ValueBool(),
-		GranteeAllExcept: allExcept,
+		Name:     state.Name.ValueString(),
+		Database: state.Database.ValueString(),
+		Table:    state.Table.ValueString(),
 	}
 
 	result, err := r.client.GetRowPolicy(ctx, &rp, state.ClusterName.ValueStringPointer())
@@ -411,58 +324,103 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	if result != nil {
-		userNamesList, err := stringSliceToList(ctx, result.GranteeUserNames)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to convert user names to list", err.Error())
-			return
-		}
+	if result == nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
 
-		roleNamesList, err := stringSliceToList(ctx, result.GranteeRoleNames)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to convert role names to list", err.Error())
-			return
-		}
+	stateUsers, diags := setToStringSlice(ctx, state.GranteeUserNames)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-		allExceptList, err := stringSliceToList(ctx, result.GranteeAllExcept)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to convert all except to list", err.Error())
-			return
-		}
+	stateRoles, diags := setToStringSlice(ctx, state.GranteeRoleNames)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-		forOperationsList, err := stringSliceToList(ctx, result.ForOperations)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to convert for_operations to list", err.Error())
-			return
+	// ClickHouse stores row-policy grantees as one untyped list (apply_to_list), so the read can't
+	// tell users from roles. Preserve each grantee's configured type for names still present, and
+	// treat a name added out of band as a user, which surfaces the drift for the user to reclassify.
+	inDB := make(map[string]bool, len(result.GranteeNames))
+	for _, n := range result.GranteeNames {
+		inDB[n] = true
+	}
+	known := make(map[string]bool, len(stateUsers)+len(stateRoles))
+	userNames := make([]string, 0, len(stateUsers))
+	roleNames := make([]string, 0, len(stateRoles))
+	for _, u := range stateUsers {
+		known[u] = true
+		if inDB[u] {
+			userNames = append(userNames, u)
 		}
+	}
+	for _, ro := range stateRoles {
+		known[ro] = true
+		if inDB[ro] {
+			roleNames = append(roleNames, ro)
+		}
+	}
+	for _, n := range result.GranteeNames {
+		if !known[n] {
+			userNames = append(userNames, n)
+		}
+	}
 
-		state.Name = types.StringValue(result.Name)
-		state.Database = types.StringValue(result.Database)
-		state.Table = types.StringValue(result.Table)
-		state.ForOperations = forOperationsList
-		// is_restrictive is a plain bool in system.row_policies, so reconcile it to catch
-		// out-of-band permissive/restrictive flips.
-		state.IsRestrictive = types.BoolValue(result.IsRestrictive)
-		// select_filter is normally preserved from state: ClickHouse normalizes the stored
-		// expression, so reconciling it would drift against the config. The exception is import,
-		// where state has no filter yet: fill it from the DB (its canonical, ClickHouse-formatted
-		// form) so the imported resource is usable. Align config to the value shown after import.
-		if state.SelectFilter.IsNull() || state.SelectFilter.ValueString() == "" {
+	userNamesSet, diags := stringSliceToSet(ctx, userNames)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	roleNamesSet, diags := stringSliceToSet(ctx, roleNames)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	allExceptSet, diags := stringSliceToSet(ctx, result.GranteeAllExcept)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	state.Name = types.StringValue(result.Name)
+	state.Database = types.StringValue(result.Database)
+	state.Table = types.StringValue(result.Table)
+	// is_restrictive is a plain bool in system.row_policies, so reconcile it to catch out-of-band
+	// permissive/restrictive flips.
+	state.IsRestrictive = types.BoolValue(result.IsRestrictive)
+
+	// Reconcile select_filter. ClickHouse stores it in a normalized form, so comparing the raw
+	// strings would drift against the config on whitespace/parenthesization alone. Normalize the
+	// configured filter to the same canonical form and only surface the DB value when it genuinely
+	// differs (real drift). On import (no filter in state yet) adopt the DB value directly.
+	if state.SelectFilter.IsNull() || state.SelectFilter.ValueString() == "" {
+		state.SelectFilter = types.StringValue(result.SelectFilter)
+	} else {
+		normalized, err := r.client.NormalizeRowPolicyFilter(ctx, state.SelectFilter.ValueString(), state.ClusterName.ValueStringPointer())
+		if err == nil && normalized != result.SelectFilter {
 			state.SelectFilter = types.StringValue(result.SelectFilter)
 		}
-		state.GranteeUserNames = userNamesList
-		state.GranteeRoleNames = roleNamesList
-		// Preserve GranteeAll from state - only set if it was explicitly specified in the original plan
-		if !state.GranteeAll.IsNull() {
-			state.GranteeAll = types.BoolValue(result.GranteeAll)
-		}
-		state.GranteeAllExcept = allExceptList
-
-		diags = resp.State.Set(ctx, &state)
-		resp.Diagnostics.Append(diags...)
-	} else {
-		resp.State.RemoveResource(ctx)
 	}
+
+	// Reconcile grantees from the DB to surface out-of-band changes. apply_to_all is 1 for both
+	// `TO ALL` and `TO ALL EXCEPT …`; only the former maps to grantee_all, so an except list keeps
+	// grantee_all null (avoiding the ConflictsWith). false also maps to null (an unset optional).
+	state.GranteeUserNames = userNamesSet
+	state.GranteeRoleNames = roleNamesSet
+	state.GranteeAllExcept = allExceptSet
+	if result.GranteeAll && len(result.GranteeAllExcept) == 0 {
+		state.GranteeAll = types.BoolValue(true)
+	} else {
+		state.GranteeAll = types.BoolNull()
+	}
+
+	diags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(diags...)
 }
 
 func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -479,27 +437,21 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
-	userNames, err := listToStringSlice(ctx, plan.GranteeUserNames)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid grantee_user_names", err.Error())
+	userNames, diags := setToStringSlice(ctx, plan.GranteeUserNames)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	roleNames, err := listToStringSlice(ctx, plan.GranteeRoleNames)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid grantee_role_names", err.Error())
+	roleNames, diags := setToStringSlice(ctx, plan.GranteeRoleNames)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	allExcept, err := listToStringSlice(ctx, plan.GranteeAllExcept)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid grantee_all_except", err.Error())
-		return
-	}
-
-	forOperations, err := listToStringSlice(ctx, plan.ForOperations)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid for_operations", err.Error())
+	allExcept, diags := setToStringSlice(ctx, plan.GranteeAllExcept)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -507,11 +459,9 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		Name:             plan.Name.ValueString(),
 		Database:         plan.Database.ValueString(),
 		Table:            plan.Table.ValueString(),
-		ForOperations:    forOperations,
 		SelectFilter:     plan.SelectFilter.ValueString(),
 		IsRestrictive:    plan.IsRestrictive.ValueBool(),
-		GranteeUserNames: userNames,
-		GranteeRoleNames: roleNames,
+		GranteeNames:     append(slices.Clone(userNames), roleNames...),
 		GranteeAll:       plan.GranteeAll.ValueBool(),
 		GranteeAllExcept: allExcept,
 	}
@@ -526,48 +476,15 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	}
 
 	if updated != nil {
-		userNamesList, err := stringSliceToList(ctx, updated.GranteeUserNames)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to convert user names to list", err.Error())
-			return
-		}
-
-		roleNamesList, err := stringSliceToList(ctx, updated.GranteeRoleNames)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to convert role names to list", err.Error())
-			return
-		}
-
-		allExceptList, err := stringSliceToList(ctx, updated.GranteeAllExcept)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to convert all except to list", err.Error())
-			return
-		}
-
-		forOperationsList, err := stringSliceToList(ctx, updated.ForOperations)
-		if err != nil {
-			resp.Diagnostics.AddError("Failed to convert for_operations to list", err.Error())
-			return
-		}
-
 		state.Name = types.StringValue(updated.Name)
 		state.Database = types.StringValue(updated.Database)
 		state.Table = types.StringValue(updated.Table)
-		state.ForOperations = forOperationsList
-		// Keep the config filter, not updated.SelectFilter: ClickHouse normalizes the stored
-		// expression, so echoing the DB value back would trip the inconsistent-result check.
 		state.SelectFilter = plan.SelectFilter
 		state.IsRestrictive = types.BoolValue(updated.IsRestrictive)
-		state.GranteeUserNames = userNamesList
-		state.GranteeRoleNames = roleNamesList
-		// Preserve grantee_all null vs false: setting it to false when config left it null would
-		// trip Terraform's inconsistent-result check (matches the Create path).
-		if !plan.GranteeAll.IsNull() {
-			state.GranteeAll = types.BoolValue(updated.GranteeAll)
-		} else {
-			state.GranteeAll = types.BoolNull()
-		}
-		state.GranteeAllExcept = allExceptList
+		state.GranteeUserNames = plan.GranteeUserNames
+		state.GranteeRoleNames = plan.GranteeRoleNames
+		state.GranteeAll = plan.GranteeAll
+		state.GranteeAllExcept = plan.GranteeAllExcept
 
 		diags = resp.State.Set(ctx, &state)
 		resp.Diagnostics.Append(diags...)
@@ -598,9 +515,6 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 }
 
 // ImportState imports a row policy from an ID of the form "database.table.name".
-// Read fills is_restrictive and select_filter (in its canonical ClickHouse-formatted form)
-// from system.row_policies; grantees and for_operations are not read back and must be set in
-// config to match the policy.
 func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.SplitN(req.ID, ".", 3)
 	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
@@ -610,7 +524,43 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 		)
 		return
 	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("database_name"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("table_name"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[2])...)
+
+	rp := dbops.RowPolicy{
+		Database: parts[0],
+		Table:    parts[1],
+		Name:     parts[2],
+	}
+
+	result, err := r.client.GetRowPolicy(ctx, &rp, nil)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading ClickHouse Row Policy",
+			"Could not read row policy, unexpected error: "+err.Error(),
+		)
+		return
+	}
+	if result == nil {
+		resp.Diagnostics.AddError("Row Policy Not Found", fmt.Sprintf("Row policy %q not found", req.ID))
+		return
+	}
+
+	granteeNames, diag := stringSliceToSet(ctx, result.GranteeNames)
+	resp.Diagnostics.Append(diag...)
+
+	granteeAllExcept, diag := stringSliceToSet(ctx, result.GranteeAllExcept)
+	resp.Diagnostics.Append(diag...)
+
+	state := RowPolicy{
+		Database:      types.StringValue(rp.Database),
+		Table:         types.StringValue(rp.Table),
+		Name:          types.StringValue(rp.Name),
+		SelectFilter:  types.StringValue(result.SelectFilter),
+		IsRestrictive: types.BoolValue(result.IsRestrictive),
+		// ClickHouse returns union of users and roles, so we can't distinguish it here
+		GranteeUserNames: granteeNames,
+		GranteeAll:       types.BoolValue(result.GranteeAll),
+		GranteeAllExcept: granteeAllExcept,
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }

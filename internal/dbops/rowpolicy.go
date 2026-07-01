@@ -3,6 +3,7 @@ package dbops
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/pingcap/errors"
 
@@ -14,11 +15,9 @@ type RowPolicy struct {
 	Name             string
 	Database         string
 	Table            string
-	ForOperations    []string // list of operations (e.g. "SELECT"). If empty, defaults to ["SELECT"]
 	SelectFilter     string
 	IsRestrictive    bool
-	GranteeUserNames []string // list of user names
-	GranteeRoleNames []string // list of role names
+	GranteeNames     []string // list of usernames and roles
 	GranteeAll       bool     // if true, applies to all
 	GranteeAllExcept []string // list of roles/users to exclude from ALL
 }
@@ -26,11 +25,9 @@ type RowPolicy struct {
 func (i *impl) CreateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error) {
 	sql, err := querybuilder.NewCreateRowPolicy(rp.Name, rp.Database, rp.Table).
 		WithCluster(clusterName).
-		ForOperations(rp.ForOperations).
 		SelectFilter(rp.SelectFilter).
 		IsRestrictive(rp.IsRestrictive).
-		GranteeUserNames(rp.GranteeUserNames).
-		GranteeRoleNames(rp.GranteeRoleNames).
+		GranteeNames(rp.GranteeNames).
 		GranteeAll(rp.GranteeAll).
 		GranteeAllExcept(rp.GranteeAllExcept).
 		Build()
@@ -62,6 +59,12 @@ func (i *impl) GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *str
 			querybuilder.NewField("short_name"),
 			querybuilder.NewField("select_filter"),
 			querybuilder.NewField("is_restrictive"),
+			querybuilder.NewField("apply_to_all"),
+			// apply_to_list/apply_to_except are Array(String); flatten to a newline-joined scalar so
+			// they read back as a plain String on both the native and http transports (the http
+			// JSONCompactStrings parser has no Array(String) case).
+			querybuilder.NewRawField("arrayStringConcat(apply_to_list, '\\n')", "apply_to_list"),
+			querybuilder.NewRawField("arrayStringConcat(apply_to_except, '\\n')", "apply_to_except"),
 		},
 		"system.row_policies",
 	).WithCluster(clusterName).Where(where...).Build()
@@ -93,26 +96,30 @@ func (i *impl) GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *str
 			return errors.WithMessage(err, "error scanning query result, missing 'is_restrictive' field")
 		}
 
-		result = &RowPolicy{
-			Name:          name,
-			Database:      rp.Database,
-			Table:         rp.Table,
-			SelectFilter:  selectFilter,
-			IsRestrictive: isRestrictive,
+		applyToAll, err := data.GetBool("apply_to_all")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'apply_to_all' field")
 		}
 
-		// Populate grantees from input (they are write-once, so we keep them from the request)
-		result.GranteeUserNames = rp.GranteeUserNames
-		result.GranteeRoleNames = rp.GranteeRoleNames
-		result.GranteeAll = rp.GranteeAll
-		result.GranteeAllExcept = rp.GranteeAllExcept
+		applyToList, err := data.GetString("apply_to_list")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'apply_to_list' field")
+		}
 
-		// Populate ForOperations from input (they are write-once, so we keep them from the request)
-		result.ForOperations = rp.ForOperations
+		applyToExcept, err := data.GetString("apply_to_except")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'apply_to_except' field")
+		}
 
-		// If SelectFilter is empty (couldn't be read), preserve the input value
-		if result.SelectFilter == "" && rp.SelectFilter != "" {
-			result.SelectFilter = rp.SelectFilter
+		result = &RowPolicy{
+			Name:             name,
+			Database:         rp.Database,
+			Table:            rp.Table,
+			SelectFilter:     selectFilter,
+			IsRestrictive:    isRestrictive,
+			GranteeAll:       applyToAll,
+			GranteeNames:     splitNonEmpty(applyToList),
+			GranteeAllExcept: splitNonEmpty(applyToExcept),
 		}
 
 		return nil
@@ -124,27 +131,61 @@ func (i *impl) GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *str
 	return result, nil
 }
 
+func (i *impl) NormalizeRowPolicyFilter(ctx context.Context, filter string, clusterName *string) (string, error) {
+	const prefix = "SELECT 1 WHERE "
+	sql := fmt.Sprintf("SELECT formatQuerySingleLine(concat('%s', %s)) AS formatted", prefix, chStringLiteral(filter))
+
+	var formatted string
+	found := false
+	err := i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+		v, err := data.GetString("formatted")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'formatted' field")
+		}
+		formatted = v
+		found = true
+		return nil
+	})
+	if err != nil {
+		return filter, errors.WithMessage(err, "error running query")
+	}
+	if !found || !strings.HasPrefix(formatted, prefix) {
+		return filter, nil
+	}
+	return strings.TrimPrefix(formatted, prefix), nil
+}
+
+// chStringLiteral renders s as a single-quoted ClickHouse string literal with backslash escaping.
+func chStringLiteral(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "'", "\\'")
+	return "'" + s + "'"
+}
+
+// splitNonEmpty splits a newline-joined string into its parts, returning nil for the empty string
+// (so an empty grantee list maps to a null Terraform set rather than [""]).
+func splitNonEmpty(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, "\n")
+}
+
+// UpdateRowPolicy re-asserts the full desired policy (filter, restrictiveness and grantees) in a single ALTER ROW POLICY.
 func (i *impl) UpdateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error) {
-	// select_filter and is_restrictive force replacement (see the resource schema), so an Update
-	// only ever changes grantees or for_operations. GetRowPolicy doesn't read those back from the
-	// DB (it echoes the request), so instead of diffing we set the desired grantees and operations
-	// on the policy directly. ALTER ROW POLICY ... TO ... replaces the grantee set.
-	builder := querybuilder.NewAlterRowPolicy(rp.Name, rp.Database, rp.Table)
+	builder := querybuilder.NewAlterRowPolicy(rp.Name, rp.Database, rp.Table).
+		SelectFilter(rp.SelectFilter).
+		IsRestrictive(rp.IsRestrictive).
+		GranteeNames(rp.GranteeNames).
+		GranteeAllExcept(rp.GranteeAllExcept)
 
 	if clusterName != nil && *clusterName != "" {
 		builder = builder.WithCluster(clusterName)
 	}
 
-	if len(rp.ForOperations) > 0 {
-		builder = builder.ForOperations(rp.ForOperations)
-	}
-
-	builder = builder.GranteeUserNames(rp.GranteeUserNames)
-	builder = builder.GranteeRoleNames(rp.GranteeRoleNames)
 	if rp.GranteeAll {
 		builder = builder.GranteeAll(true)
 	}
-	builder = builder.GranteeAllExcept(rp.GranteeAllExcept)
 
 	sql, err := builder.Build()
 	if err != nil {

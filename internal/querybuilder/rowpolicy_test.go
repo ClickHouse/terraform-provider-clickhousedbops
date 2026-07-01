@@ -17,7 +17,7 @@ func TestCreateRowPolicy_Build(t *testing.T) {
 			name: "permissive to role",
 			builder: NewCreateRowPolicy("reader_rows", "default", "tbl1").
 				SelectFilter("1 = 1").
-				GranteeRoleNames([]string{"reader"}),
+				GranteeNames([]string{"reader"}),
 			want: "CREATE ROW POLICY `reader_rows` ON `default`.`tbl1` USING 1 = 1 AS PERMISSIVE TO `reader`",
 		},
 		{
@@ -26,22 +26,20 @@ func TestCreateRowPolicy_Build(t *testing.T) {
 				WithCluster(stringPtr("cluster1")).
 				SelectFilter("owner_id = 'john'").
 				IsRestrictive(true).
-				GranteeUserNames([]string{"john"}),
+				GranteeNames([]string{"john"}),
 			want: "CREATE ROW POLICY `john_rows` ON CLUSTER `cluster1` ON `default`.`tbl1` USING owner_id = 'john' AS RESTRICTIVE TO `john`",
 		},
 		{
-			name: "for select to all",
+			name: "to all",
 			builder: NewCreateRowPolicy("p", "default", "t").
-				ForOperations([]string{"SELECT"}).
 				SelectFilter("1").
 				GranteeAll(true),
-			want: "CREATE ROW POLICY `p` ON `default`.`t` FOR SELECT USING 1 AS PERMISSIVE TO ALL",
+			want: "CREATE ROW POLICY `p` ON `default`.`t` USING 1 AS PERMISSIVE TO ALL",
 		},
 		{
 			name: "to all except",
 			builder: NewCreateRowPolicy("p", "default", "t").
 				SelectFilter("1").
-				GranteeAll(true).
 				GranteeAllExcept([]string{"admin"}),
 			want: "CREATE ROW POLICY `p` ON `default`.`t` USING 1 AS PERMISSIVE TO ALL EXCEPT `admin`",
 		},

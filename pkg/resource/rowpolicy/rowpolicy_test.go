@@ -3,6 +3,7 @@ package rowpolicy_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -47,31 +48,11 @@ func TestRowpolicy_acceptance(t *testing.T) {
 			return false, fmt.Errorf("table_name attribute was not set")
 		}
 
-		var userNames []string
-		var roleNames []string
-		var granteeAll bool
-		var granteeAllExcept []string
-
-		// Terraform flattens list attributes in state as `<attr>.0`, `<attr>.1`, ...
-		if granteeUser := attrs["grantee_user_names.0"]; granteeUser != "" {
-			userNames = []string{granteeUser}
-		}
-		if granteeRole := attrs["grantee_role_names.0"]; granteeRole != "" {
-			roleNames = []string{granteeRole}
-		}
-
-		if len(userNames) == 0 && len(roleNames) == 0 && !granteeAll && len(granteeAllExcept) == 0 {
-			return false, fmt.Errorf("no grantee specification provided")
-		}
-
+		// GetRowPolicy looks the policy up by name/database/table; grantees are not needed.
 		rowPolicy := dbops.RowPolicy{
-			Name:             name,
-			Database:         database,
-			Table:            table,
-			GranteeUserNames: userNames,
-			GranteeRoleNames: roleNames,
-			GranteeAll:       granteeAll,
-			GranteeAllExcept: granteeAllExcept,
+			Name:     name,
+			Database: database,
+			Table:    table,
 		}
 
 		rp, err := dbopsClient.GetRowPolicy(ctx, &rowPolicy, clusterName)
@@ -151,12 +132,12 @@ func TestRowpolicy_acceptance(t *testing.T) {
 			isRestrictive = attrs["is_restrictive"].(bool)
 		}
 
+		expectedGrantees := append(append([]string{}, userNames...), roleNames...)
 		rowPolicy := dbops.RowPolicy{
 			Name:             name,
 			Database:         database,
 			Table:            table,
-			GranteeUserNames: userNames,
-			GranteeRoleNames: roleNames,
+			GranteeNames:     expectedGrantees,
 			GranteeAll:       granteeAll,
 			GranteeAllExcept: granteeAllExcept,
 		}
@@ -186,27 +167,25 @@ func TestRowpolicy_acceptance(t *testing.T) {
 			return fmt.Errorf("wrong value for cluster_name attribute")
 		}
 
-		// Validate grantee specification
-		if len(rp.GranteeUserNames) != len(userNames) {
-			return fmt.Errorf("expected %d user names, got %d", len(userNames), len(rp.GranteeUserNames))
+		// ClickHouse stores row-policy grantees as one untyped list, so validate the combined set.
+		if len(rp.GranteeNames) != len(expectedGrantees) {
+			return fmt.Errorf("expected %d grantees, got %d", len(expectedGrantees), len(rp.GranteeNames))
 		}
-		for i, expected := range userNames {
-			if i >= len(rp.GranteeUserNames) || rp.GranteeUserNames[i] != expected {
-				return fmt.Errorf("expected user name %q at position %d, got %q", expected, i, rp.GranteeUserNames[i])
+		gotGrantees := make(map[string]bool, len(rp.GranteeNames))
+		for _, g := range rp.GranteeNames {
+			gotGrantees[g] = true
+		}
+		for _, expected := range expectedGrantees {
+			if !gotGrantees[expected] {
+				return fmt.Errorf("expected grantee %q to be present, got %v", expected, rp.GranteeNames)
 			}
 		}
 
-		if len(rp.GranteeRoleNames) != len(roleNames) {
-			return fmt.Errorf("expected %d role names, got %d", len(roleNames), len(rp.GranteeRoleNames))
-		}
-		for i, expected := range roleNames {
-			if i >= len(rp.GranteeRoleNames) || rp.GranteeRoleNames[i] != expected {
-				return fmt.Errorf("expected role name %q at position %d, got %q", expected, i, rp.GranteeRoleNames[i])
-			}
-		}
-
-		if rp.GranteeAll != granteeAll {
-			return fmt.Errorf("expected grantee_all to be %v, was %v", granteeAll, rp.GranteeAll)
+		// ClickHouse stores both `TO ALL` and `TO ALL EXCEPT …` with apply_to_all=1, so an except
+		// list also reads back as grantee_all true at the dbops layer.
+		expectedGranteeAll := granteeAll || len(granteeAllExcept) > 0
+		if rp.GranteeAll != expectedGranteeAll {
+			return fmt.Errorf("expected grantee_all to be %v, was %v", expectedGranteeAll, rp.GranteeAll)
 		}
 
 		if len(rp.GranteeAllExcept) != len(granteeAllExcept) {
@@ -269,6 +248,74 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithBoolAttribute("is_restrictive", true).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Create row policy for all users except one using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", "test_policy").
+				WithStringAttribute("database_name", "system").
+				WithStringAttribute("table_name", "databases").
+				WithStringAttribute("select_filter", "1").
+				WithListResourceFieldReference("grantee_all_except", "clickhousedbops_user", granteeUserName, "name").
+				AddDependency(granteeUserResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Create duplicate row policy reports already exists with import hint using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: fmt.Sprintf("%s\n%s",
+				resourcebuilder.New(resourceType, resourceName).
+					WithStringAttribute("name", "dup_policy").
+					WithStringAttribute("database_name", "system").
+					WithStringAttribute("table_name", "databases").
+					WithStringAttribute("select_filter", "1").
+					WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+					AddDependency(granteeUserResource.Build()).
+					Build(),
+				resourcebuilder.New(resourceType, "bar").
+					WithResourceFieldReference("name", resourceType, resourceName, "name").
+					WithStringAttribute("database_name", "system").
+					WithStringAttribute("table_name", "databases").
+					WithStringAttribute("select_filter", "1").
+					WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+					Build(),
+			),
+			ResourceName:    resourceName,
+			ResourceAddress: fmt.Sprintf("%s.%s", resourceType, resourceName),
+			ExpectError:     regexp.MustCompile("Import it with"),
+		},
+		{
+			Name:     "Update row policy filter and restrictiveness in place using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", "test_policy").
+				WithStringAttribute("database_name", "system").
+				WithStringAttribute("table_name", "databases").
+				WithStringAttribute("select_filter", "name = 'default'").
+				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				AddDependency(granteeUserResource.Build()).
+				Build(),
+			UpdateResource: ptr(resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", "test_policy").
+				WithStringAttribute("database_name", "system").
+				WithStringAttribute("table_name", "databases").
+				WithStringAttribute("select_filter", "name != 'system'").
+				WithBoolAttribute("is_restrictive", true).
+				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				AddDependency(granteeUserResource.Build()).
+				Build()),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
@@ -554,4 +601,8 @@ func TestRowpolicy_acceptance(t *testing.T) {
 	}
 
 	runner.RunTests(t, tests)
+}
+
+func ptr(s string) *string {
+	return &s
 }
