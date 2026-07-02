@@ -63,12 +63,9 @@ func (i *impl) CreateMaskingPolicy(ctx context.Context, mp MaskingPolicy) (*Mask
 	}, i.readAfterWriteTimeoutArgs()...)
 }
 
-// GetMaskingPolicy confirms the policy exists by looking it up in system.masking_policies on
-// (short_name, database, table), the same key the row-policy resource uses against system.row_policies.
-// SHOW MASKING POLICIES only exposes a compound `name ON db.table`, so matching by name prefix could
-// pick the wrong policy when the same short name is reused across tables; the system table keys on
-// the full tuple. Masking expressions are not introspectable back into the config shape, so the
-// definition fields stay authoritative from state and only existence is verified here.
+// GetMaskingPolicy verifies existence via system.masking_policies keyed on (short_name, database,
+// table). SHOW MASKING POLICIES exposes only a compound `name ON db.table`, so prefix matching could
+// misattribute a policy when its short name is reused across tables.
 func (i *impl) GetMaskingPolicy(ctx context.Context, mp *MaskingPolicy) (*MaskingPolicy, error) {
 	where := []querybuilder.Where{
 		querybuilder.WhereEquals("short_name", mp.Name),
