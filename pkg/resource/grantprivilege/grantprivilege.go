@@ -236,12 +236,25 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
+	scope := upstrGrts.Scopes[plan.Privilege.ValueString()]
+
+	// Unsupported privileges are blocked regardless of current_grants: the check is cheap
+	// and forces the user to write correct resource attributes.
+	switch scope {
+	case "NAMED_COLLECTION", "TABLE ENGINE":
+		resp.Diagnostics.AddAttributeError(
+			path.Root("privilege_name"),
+			"Unsupported Privilege",
+			fmt.Sprintf("%q privilege_name is currently unsupported", plan.Privilege.ValueString()),
+		)
+		return
+	}
+
 	// Check required fields which depend on the grant's scope.
-	// CURRENT GRANTS targets the grantor's own privileges, so the usual scope-based field
-	// requirements (e.g. column-scoped SELECT needing a database) and the unsupported-scope
-	// block do not apply: the target can legitimately be *.* for any privilege.
+	// CURRENT GRANTS targets the grantor's own privileges, so these scope-based field
+	// requirements (e.g. column-scoped SELECT needing a database) do not apply: the target
+	// can legitimately be *.* for any privilege.
 	if !plan.CurrentGrants.ValueBool() {
-		scope := upstrGrts.Scopes[plan.Privilege.ValueString()]
 		switch scope {
 		case "GLOBAL":
 			if !plan.Database.IsNull() {
@@ -263,15 +276,6 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 				)
 				return
 			}
-		case "NAMED_COLLECTION":
-			fallthrough
-		case "TABLE ENGINE":
-			resp.Diagnostics.AddAttributeError(
-				path.Root("privilege_name"),
-				"Unsupported Privilege",
-				fmt.Sprintf("%q privilege_name is currently unsupported", plan.Privilege.ValueString()),
-			)
-			return
 		}
 	}
 }
