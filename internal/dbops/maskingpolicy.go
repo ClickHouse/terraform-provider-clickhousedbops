@@ -63,22 +63,29 @@ func (i *impl) CreateMaskingPolicy(ctx context.Context, mp MaskingPolicy) (*Mask
 	}, i.readAfterWriteTimeoutArgs()...)
 }
 
-// GetMaskingPolicy confirms the policy exists via SHOW MASKING POLICIES and preserves the desired
-// definition: masking expressions are not introspectable, so (like the row-policy resource) the
-// config is authoritative for them and drift in the expression is not detected.
+// GetMaskingPolicy confirms the policy exists by looking it up in system.masking_policies on
+// (short_name, database, table), the same key the row-policy resource uses against system.row_policies.
+// SHOW MASKING POLICIES only exposes a compound `name ON db.table`, so matching by name prefix could
+// pick the wrong policy when the same short name is reused across tables; the system table keys on
+// the full tuple. Masking expressions are not introspectable back into the config shape, so the
+// definition fields stay authoritative from state and only existence is verified here.
 func (i *impl) GetMaskingPolicy(ctx context.Context, mp *MaskingPolicy) (*MaskingPolicy, error) {
-	target := mp.identifier()
-	found := false
+	where := []querybuilder.Where{
+		querybuilder.WhereEquals("short_name", mp.Name),
+		querybuilder.WhereEquals("database", mp.Database),
+		querybuilder.WhereEquals("table", mp.Table),
+	}
+	sql, err := querybuilder.NewSelect(
+		[]querybuilder.Field{querybuilder.NewField("short_name")},
+		"system.masking_policies",
+	).Where(where...).Build()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building query")
+	}
 
-	err := i.clickhouseClient.Select(ctx, "SHOW MASKING POLICIES", func(data clickhouseclient.Row) error {
-		name, err := data.GetString("name")
-		if err != nil {
-			// Unexpected column shape: skip rather than fail the whole read.
-			return nil
-		}
-		if name == mp.Name || name == target || strings.HasPrefix(name, mp.Name+" ON ") {
-			found = true
-		}
+	found := false
+	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+		found = true
 		return nil
 	})
 	if err != nil {

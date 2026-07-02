@@ -3,12 +3,12 @@ package maskingpolicy
 import (
 	"context"
 	_ "embed"
-	"fmt"
 	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -36,31 +36,33 @@ type Resource struct {
 	client dbops.Client
 }
 
-func listToStringSlice(ctx context.Context, l types.List) ([]string, error) {
+func listToStringSlice(ctx context.Context, l types.List) ([]string, diag.Diagnostics) {
 	if l.IsNull() || l.IsUnknown() {
 		return nil, nil
 	}
 	var out []string
-	if diags := l.ElementsAs(ctx, &out, false); diags.HasError() {
-		return nil, fmt.Errorf("failed to convert list to string slice")
+	diags := l.ElementsAs(ctx, &out, false)
+	if diags.HasError() {
+		return nil, diags
 	}
-	return out, nil
+	return out, diags
 }
 
-func mapToColumnMasks(ctx context.Context, m types.Map) ([]dbops.ColumnMask, error) {
+func mapToColumnMasks(ctx context.Context, m types.Map) ([]dbops.ColumnMask, diag.Diagnostics) {
 	if m.IsNull() || m.IsUnknown() {
 		return nil, nil
 	}
 	var raw map[string]string
-	if diags := m.ElementsAs(ctx, &raw, false); diags.HasError() {
-		return nil, fmt.Errorf("failed to convert masks map")
+	diags := m.ElementsAs(ctx, &raw, false)
+	if diags.HasError() {
+		return nil, diags
 	}
 	masks := make([]dbops.ColumnMask, 0, len(raw))
 	for col, expr := range raw {
 		masks = append(masks, dbops.ColumnMask{Column: col, Expression: expr})
 	}
 	sort.Slice(masks, func(i, j int) bool { return masks[i].Column < masks[j].Column })
-	return masks, nil
+	return masks, diags
 }
 
 func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -121,6 +123,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 						path.MatchRoot("grantee_all"),
 						path.MatchRoot("grantee_all_except"),
 					),
+					listvalidator.SizeAtLeast(1),
 				},
 			},
 			"grantee_role_names": schema.ListAttribute{
@@ -132,6 +135,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 						path.MatchRoot("grantee_all"),
 						path.MatchRoot("grantee_all_except"),
 					),
+					listvalidator.SizeAtLeast(1),
 				},
 			},
 			"grantee_all": schema.BoolAttribute{
@@ -147,6 +151,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 						path.MatchRoot("grantee_user_names"),
 						path.MatchRoot("grantee_role_names"),
 					),
+					listvalidator.SizeAtLeast(1),
 				},
 			},
 			"priority": schema.Int64Attribute{
@@ -165,22 +170,56 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, _
 	r.client = req.ProviderData.(dbops.Client)
 }
 
-func (r *Resource) modelToDBOps(ctx context.Context, m MaskingPolicy) (dbops.MaskingPolicy, error) {
-	masks, err := mapToColumnMasks(ctx, m.Masks)
-	if err != nil {
-		return dbops.MaskingPolicy{}, err
+// ValidateConfig enforces cross-attribute constraints that per-attribute validators can't express.
+// A masking policy must apply to someone, so at least one grantee method must be set, and
+// grantee_all_except (which only produces `ALL EXCEPT ...`) is not a grantee on its own.
+func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config MaskingPolicy
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	users, err := listToStringSlice(ctx, m.GranteeUserNames)
-	if err != nil {
-		return dbops.MaskingPolicy{}, err
+
+	// Defer when any grantee attribute is still unknown (e.g. derived from another resource).
+	if config.GranteeUserNames.IsUnknown() || config.GranteeRoleNames.IsUnknown() ||
+		config.GranteeAll.IsUnknown() || config.GranteeAllExcept.IsUnknown() {
+		return
 	}
-	roles, err := listToStringSlice(ctx, m.GranteeRoleNames)
-	if err != nil {
-		return dbops.MaskingPolicy{}, err
+
+	hasUsers := !config.GranteeUserNames.IsNull() && len(config.GranteeUserNames.Elements()) > 0
+	hasRoles := !config.GranteeRoleNames.IsNull() && len(config.GranteeRoleNames.Elements()) > 0
+	hasAll := !config.GranteeAll.IsNull() && config.GranteeAll.ValueBool()
+	hasAllExcept := !config.GranteeAllExcept.IsNull() && len(config.GranteeAllExcept.Elements()) > 0
+
+	if !hasUsers && !hasRoles && !hasAll && !hasAllExcept {
+		resp.Diagnostics.AddError(
+			"Missing grantee for masking policy",
+			"At least one grantee method must be set: grantee_user_names, grantee_role_names, grantee_all, or grantee_all_except.",
+		)
+		return
 	}
-	allExcept, err := listToStringSlice(ctx, m.GranteeAllExcept)
-	if err != nil {
-		return dbops.MaskingPolicy{}, err
+
+	if hasAllExcept && !hasAll {
+		resp.Diagnostics.AddError(
+			"Invalid grantee configuration",
+			"grantee_all_except can only be used together with grantee_all (it produces `ALL EXCEPT ...`).",
+		)
+	}
+}
+
+func (r *Resource) modelToDBOps(ctx context.Context, m MaskingPolicy) (dbops.MaskingPolicy, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	masks, masksDiags := mapToColumnMasks(ctx, m.Masks)
+	diags.Append(masksDiags...)
+	users, usersDiags := listToStringSlice(ctx, m.GranteeUserNames)
+	diags.Append(usersDiags...)
+	roles, rolesDiags := listToStringSlice(ctx, m.GranteeRoleNames)
+	diags.Append(rolesDiags...)
+	allExcept, allExceptDiags := listToStringSlice(ctx, m.GranteeAllExcept)
+	diags.Append(allExceptDiags...)
+	if diags.HasError() {
+		return dbops.MaskingPolicy{}, diags
 	}
 
 	return dbops.MaskingPolicy{
@@ -194,7 +233,7 @@ func (r *Resource) modelToDBOps(ctx context.Context, m MaskingPolicy) (dbops.Mas
 		GranteeAll:       m.GranteeAll.ValueBool(),
 		GranteeAllExcept: allExcept,
 		Priority:         m.Priority.ValueInt64Pointer(),
-	}, nil
+	}, diags
 }
 
 func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -204,19 +243,14 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	mp, err := r.modelToDBOps(ctx, plan)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid masking policy configuration", err.Error())
+	mp, diags := r.modelToDBOps(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	created, err := r.client.CreateMaskingPolicy(ctx, mp)
-	if err != nil {
+	if _, err := r.client.CreateMaskingPolicy(ctx, mp); err != nil {
 		resp.Diagnostics.AddError("Error Creating ClickHouse Masking Policy", "Could not create masking policy, unexpected error: "+err.Error())
-		return
-	}
-	if created == nil {
-		resp.Diagnostics.AddError("Error Creating ClickHouse Masking Policy", "The masking policy was created but could not be found via SHOW MASKING POLICIES.")
 		return
 	}
 
@@ -230,9 +264,9 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	mp, err := r.modelToDBOps(ctx, state)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid masking policy state", err.Error())
+	mp, diags := r.modelToDBOps(ctx, state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -258,9 +292,9 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
-	mp, err := r.modelToDBOps(ctx, plan)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid masking policy configuration", err.Error())
+	mp, diags := r.modelToDBOps(ctx, plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
