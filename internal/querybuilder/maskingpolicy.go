@@ -98,10 +98,13 @@ func (q *createMaskingPolicyQueryBuilder) Build() (string, error) {
 		return "", err
 	}
 
-	tokens := []string{"CREATE", "MASKING", "POLICY"}
+	// OR REPLACE goes between CREATE and the object type (CREATE OR REPLACE MASKING POLICY),
+	// while IF NOT EXISTS goes after it (CREATE MASKING POLICY IF NOT EXISTS), matching ClickHouse.
+	tokens := []string{"CREATE"}
 	if q.orReplace {
 		tokens = append(tokens, "OR", "REPLACE")
 	}
+	tokens = append(tokens, "MASKING", "POLICY")
 	if q.ifNotExists {
 		tokens = append(tokens, "IF", "NOT", "EXISTS")
 	}
