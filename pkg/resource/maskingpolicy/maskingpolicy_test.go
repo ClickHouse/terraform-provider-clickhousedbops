@@ -16,9 +16,9 @@ func Test_mapToColumnMasks_sortsByColumn(t *testing.T) {
 		"a":          types.StringValue("'z'"),
 	})
 
-	masks, err := mapToColumnMasks(ctx, m)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	masks, diags := mapToColumnMasks(ctx, m)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
 	if len(masks) != 3 {
 		t.Fatalf("expected 3 masks, got %d", len(masks))
@@ -35,9 +35,9 @@ func Test_mapToColumnMasks_sortsByColumn(t *testing.T) {
 }
 
 func Test_mapToColumnMasks_nilMap(t *testing.T) {
-	masks, err := mapToColumnMasks(context.Background(), types.MapNull(types.StringType))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	masks, diags := mapToColumnMasks(context.Background(), types.MapNull(types.StringType))
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
 	if masks != nil {
 		t.Errorf("expected nil masks for null map, got %v", masks)
