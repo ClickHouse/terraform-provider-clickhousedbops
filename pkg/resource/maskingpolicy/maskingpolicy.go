@@ -170,9 +170,8 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, _
 	r.client = req.ProviderData.(dbops.Client)
 }
 
-// ValidateConfig enforces cross-attribute constraints that per-attribute validators can't express.
-// A masking policy must apply to someone, so at least one grantee method must be set, and
-// grantee_all_except (which only produces `ALL EXCEPT ...`) is not a grantee on its own.
+// ValidateConfig enforces cross-attribute grantee constraints the per-attribute validators can't:
+// at least one grantee method, and grantee_all_except only alongside grantee_all (ALL EXCEPT).
 func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	var config MaskingPolicy
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
