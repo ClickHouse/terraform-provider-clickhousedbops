@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -154,6 +155,15 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					boolplanmodifier.RequiresReplace(),
 				},
 			},
+			"current_grants": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "If true, emit `GRANT CURRENT GRANTS(...)` so the privilege is copied from the grantor's own grants instead of granted directly. Required on ClickHouse Cloud for broad privileges (e.g. `ALL`, or `SELECT` on `*.*`) that the admin user holds but cannot transfer directly. Note: the effective grants depend on what the grantor holds at apply time, so drift on a `current_grants` grant is not reconciled.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
+			},
 		},
 		MarkdownDescription: grantPrivilegeDescription,
 	}
@@ -226,9 +236,25 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
+	scope := upstrGrts.Scopes[plan.Privilege.ValueString()]
+
+	// Unsupported privileges are blocked regardless of current_grants: the check is cheap
+	// and forces the user to write correct resource attributes.
+	switch scope {
+	case "NAMED_COLLECTION", "TABLE ENGINE":
+		resp.Diagnostics.AddAttributeError(
+			path.Root("privilege_name"),
+			"Unsupported Privilege",
+			fmt.Sprintf("%q privilege_name is currently unsupported", plan.Privilege.ValueString()),
+		)
+		return
+	}
+
 	// Check required fields which depend on the grant's scope.
-	{
-		scope := upstrGrts.Scopes[plan.Privilege.ValueString()]
+	// CURRENT GRANTS targets the grantor's own privileges, so these scope-based field
+	// requirements (e.g. column-scoped SELECT needing a database) do not apply: the target
+	// can legitimately be *.* for any privilege.
+	if !plan.CurrentGrants.ValueBool() {
 		switch scope {
 		case "GLOBAL":
 			if !plan.Database.IsNull() {
@@ -250,15 +276,6 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 				)
 				return
 			}
-		case "NAMED_COLLECTION":
-			fallthrough
-		case "TABLE ENGINE":
-			resp.Diagnostics.AddAttributeError(
-				path.Root("privilege_name"),
-				"Unsupported Privilege",
-				fmt.Sprintf("%q privilege_name is currently unsupported", plan.Privilege.ValueString()),
-			)
-			return
 		}
 	}
 }
@@ -281,6 +298,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		GranteeUserName:     plan.GranteeUserName.ValueStringPointer(),
 		GranteeRoleName:     plan.GranteeRoleName.ValueStringPointer(),
 		GrantOption:         plan.GrantOption.ValueBool(),
+		CurrentGrants:       plan.CurrentGrants.ValueBool(),
 	}
 
 	createdGrant, err := r.client.GrantPrivilege(ctx, grant, plan.ClusterName.ValueStringPointer())
@@ -339,6 +357,7 @@ This is a configuration error that prevents further actions. Please note that th
 		GranteeUserName: types.StringPointerValue(createdGrant.GranteeUserName),
 		GranteeRoleName: types.StringPointerValue(createdGrant.GranteeRoleName),
 		GrantOption:     types.BoolValue(createdGrant.GrantOption),
+		CurrentGrants:   plan.CurrentGrants,
 	}
 
 	diags = resp.State.Set(ctx, state)
@@ -366,6 +385,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		GranteeUserName:     state.GranteeUserName.ValueStringPointer(),
 		GranteeRoleName:     state.GranteeRoleName.ValueStringPointer(),
 		GrantOption:         state.GrantOption.ValueBool(),
+		CurrentGrants:       state.CurrentGrants.ValueBool(),
 	}
 
 	grant, err := r.client.GetGrantPrivilege(ctx, &grantPrivilege, state.ClusterName.ValueStringPointer())

@@ -13,4 +13,5 @@ type GrantPrivilege struct {
 	GranteeUserName types.String `tfsdk:"grantee_user_name"`
 	GranteeRoleName types.String `tfsdk:"grantee_role_name"`
 	GrantOption     types.Bool   `tfsdk:"grant_option"`
+	CurrentGrants   types.Bool   `tfsdk:"current_grants"`
 }

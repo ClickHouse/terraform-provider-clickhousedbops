@@ -46,6 +46,10 @@ type GrantPrivilege struct {
 	// into its children in system.grants instead of storing a single parent row.
 	// Setting this field allows the matcher to find the grant in either case.
 	ExpandedAccessTypes []string `json:"-"`
+	// CurrentGrants emits `GRANT CURRENT GRANTS(... ON ...)`, copying the grantor's own
+	// privileges. Needed on ClickHouse Cloud for broad grants the default admin holds but
+	// cannot transfer directly (see #190).
+	CurrentGrants bool `json:"-"`
 }
 
 // Defines the signature for a function that checks if privileges are granted.
@@ -69,6 +73,7 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		WithColumn(grantPrivilege.ColumnName).
 		WithGrantOption(grantPrivilege.GrantOption).
 		WithCluster(clusterName).
+		WithCurrentGrants(grantPrivilege.CurrentGrants).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")

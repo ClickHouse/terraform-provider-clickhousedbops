@@ -61,6 +61,13 @@ resource "clickhousedbops_grant_privilege" "grant_sources2" {
   grant_option      = false
 }
 
+resource "clickhousedbops_grant_privilege" "grant_current_grants_to_role" {
+  cluster_name      = var.cluster_name
+  privilege_name    = "SELECT"
+  grantee_role_name = clickhousedbops_role.reader.name
+  current_grants    = true
+}
+
 resource "clickhousedbops_grant_privilege" "grant_user_admin_to_role" {
   for_each          = toset(["CREATE USER", "DROP USER", "ALTER USER", "CREATE ROLE"])
   cluster_name      = var.cluster_name

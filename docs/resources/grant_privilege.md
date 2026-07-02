@@ -36,6 +36,23 @@ resource "clickhousedbops_grant_privilege" "grant" {
   grant_option      = true
 }
 
+# On ClickHouse Cloud, broad grants the default admin holds but cannot transfer
+# directly (e.g. SELECT on every database) must be copied with CURRENT GRANTS.
+resource "clickhousedbops_grant_privilege" "read_everything" {
+  privilege_name    = "SELECT"
+  grantee_user_name = "my_monitoring_user"
+  current_grants    = true
+}
+
+# Granting ALL on a database directly fails on ClickHouse Cloud with error 497;
+# current_grants copies it from the admin instead.
+resource "clickhousedbops_grant_privilege" "full_db_access" {
+  privilege_name    = "ALL"
+  database_name     = "mydb"
+  grantee_role_name = "my_role"
+  current_grants    = true
+}
+
 # Access-management privileges (CREATE/ALTER/DROP USER and ROLE) are granted
 # globally, so database_name and table_name are left null (granted on *.*).
 resource "clickhousedbops_grant_privilege" "user_admin" {
@@ -58,6 +75,7 @@ resource "clickhousedbops_grant_privilege" "user_admin" {
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `column_name` (String) The name of the column in `table_name` to grant privilege on.
+- `current_grants` (Boolean) If true, emit `GRANT CURRENT GRANTS(...)` so the privilege is copied from the grantor's own grants instead of granted directly. Required on ClickHouse Cloud for broad privileges (e.g. `ALL`, or `SELECT` on `*.*`) that the admin user holds but cannot transfer directly. Note: the effective grants depend on what the grantor holds at apply time, so drift on a `current_grants` grant is not reconciled.
 - `database_name` (String) The name of the database to grant privilege on. Defaults to all databases if left null
 - `grant_option` (Boolean) If true, the grantee will be able to grant the same privileges to others.
 - `grantee_role_name` (String) Name of the `role` to grant privileges to.

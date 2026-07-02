@@ -54,6 +54,30 @@ func Test_grantPrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Current grants ALL on all",
+			builder: GrantPrivilege("ALL", "user1").WithCurrentGrants(true),
+			want:    "GRANT CURRENT GRANTS(ALL ON *.*) TO `user1`;",
+			wantErr: false,
+		},
+		{
+			name:    "Current grants SELECT on all",
+			builder: GrantPrivilege("SELECT", "user1").WithCurrentGrants(true),
+			want:    "GRANT CURRENT GRANTS(SELECT ON *.*) TO `user1`;",
+			wantErr: false,
+		},
+		{
+			name:    "Current grants on database with grant option",
+			builder: GrantPrivilege("SELECT", "role1").WithCurrentGrants(true).WithDatabase(strptr("db1")).WithGrantOption(true),
+			want:    "GRANT CURRENT GRANTS(SELECT ON `db1`.*) TO `role1` WITH GRANT OPTION;",
+			wantErr: false,
+		},
+		{
+			name:    "Current grants false is unchanged",
+			builder: GrantPrivilege("SELECT", "user1").WithCurrentGrants(false),
+			want:    "GRANT SELECT ON *.* TO `user1`;",
+			wantErr: false,
+		},
+		{
 			name:    "Access management CREATE USER on all",
 			builder: GrantPrivilege("CREATE USER", "admin"),
 			want:    "GRANT CREATE USER ON *.* TO `admin`;",
