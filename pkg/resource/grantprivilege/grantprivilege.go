@@ -102,6 +102,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 					stringvalidator.NoneOf("*"),
+					stringvalidator.AlsoRequires(path.MatchRoot("database_name")),
 				},
 			},
 			"column_name": schema.StringAttribute{
@@ -112,7 +113,10 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				},
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
-					stringvalidator.AlsoRequires(path.Expressions{path.MatchRoot("table_name")}...),
+					stringvalidator.AlsoRequires(
+						path.MatchRoot("database_name"),
+						path.MatchRoot("table_name"),
+					),
 				},
 			},
 			"grantee_user_name": schema.StringAttribute{
@@ -242,28 +246,24 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		case "GLOBAL":
 			if !plan.Database.IsNull() {
 				resp.Diagnostics.AddAttributeError(
-					path.Root("database"),
+					path.Root("database_name"),
 					"Invalid Grant Privilege",
-					fmt.Sprintf("'database' must be null when 'privilege_name' is %q", plan.Privilege.ValueString()),
+					fmt.Sprintf("'database_name' must be null when 'privilege_name' is %q", plan.Privilege.ValueString()),
 				)
 				return
 			}
-		case "COLUMN":
-			fallthrough
-		case "DICTIONARY":
-			fallthrough
-		case "VIEW":
-			if plan.Database.IsNull() {
+		case "USER_NAME":
+			// USER_NAME-scoped privileges (CREATE/ALTER/DROP USER and ROLE, IMPERSONATE)
+			// are granted globally as `ON *.*`; they are not database-scoped. See #201.
+			if !plan.Database.IsNull() {
 				resp.Diagnostics.AddAttributeError(
-					path.Root("database"),
+					path.Root("database_name"),
 					"Invalid Grant Privilege",
-					fmt.Sprintf("'database' must be set when privilege_name is %q", plan.Privilege.ValueString()),
+					fmt.Sprintf("'database_name' must be null when 'privilege_name' is %q (it is granted on *.*)", plan.Privilege.ValueString()),
 				)
 				return
 			}
 		case "NAMED_COLLECTION":
-			fallthrough
-		case "USER_NAME":
 			fallthrough
 		case "TABLE ENGINE":
 			resp.Diagnostics.AddAttributeError(

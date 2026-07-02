@@ -46,7 +46,6 @@ func (j jsonCompatStrings) Rows() []Row {
 				if err != nil {
 					// Failed parsing as number, return value as-is.
 					data.Set(colNames[i], field)
-					break
 				} else {
 					data.Set(colNames[i], uint8(val))
 				}
@@ -55,7 +54,6 @@ func (j jsonCompatStrings) Rows() []Row {
 				if err != nil {
 					// Failed parsing as number, return value as-is.
 					data.Set(colNames[i], field)
-					break
 				} else {
 					data.Set(colNames[i], val)
 				}
