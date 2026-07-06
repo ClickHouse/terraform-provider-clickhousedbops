@@ -12,6 +12,7 @@ import (
 )
 
 type RowPolicy struct {
+	ID               string
 	Name             string
 	Database         string
 	Table            string
@@ -48,15 +49,26 @@ func (i *impl) CreateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *s
 }
 
 func (i *impl) GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *string) (*RowPolicy, error) {
-	where := []querybuilder.Where{
+	return i.getRowPolicyWhere(ctx, []querybuilder.Where{
 		querybuilder.WhereEquals("short_name", rp.Name),
 		querybuilder.WhereEquals("database", rp.Database),
 		querybuilder.WhereEquals("table", rp.Table),
-	}
+	}, clusterName)
+}
 
+func (i *impl) GetRowPolicyByID(ctx context.Context, id string, clusterName *string) (*RowPolicy, error) {
+	return i.getRowPolicyWhere(ctx, []querybuilder.Where{
+		querybuilder.WhereEquals("id", id),
+	}, clusterName)
+}
+
+func (i *impl) getRowPolicyWhere(ctx context.Context, where []querybuilder.Where, clusterName *string) (*RowPolicy, error) {
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{
+			querybuilder.NewField("id").ToString(),
 			querybuilder.NewField("short_name"),
+			querybuilder.NewField("database"),
+			querybuilder.NewField("table"),
 			querybuilder.NewField("select_filter"),
 			querybuilder.NewField("is_restrictive"),
 			querybuilder.NewField("apply_to_all"),
@@ -74,9 +86,24 @@ func (i *impl) GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *str
 
 	var result *RowPolicy
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+		id, err := data.GetString("id")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'id' field")
+		}
+
 		name, err := data.GetString("short_name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'short_name' field")
+		}
+
+		database, err := data.GetString("database")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'database' field")
+		}
+
+		table, err := data.GetString("table")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'table' field")
 		}
 
 		// system.row_policies.select_filter is Nullable(String): it is NULL for a policy
@@ -112,9 +139,10 @@ func (i *impl) GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *str
 		}
 
 		result = &RowPolicy{
+			ID:               id,
 			Name:             name,
-			Database:         rp.Database,
-			Table:            rp.Table,
+			Database:         database,
+			Table:            table,
 			SelectFilter:     selectFilter,
 			IsRestrictive:    isRestrictive,
 			GranteeAll:       applyToAll,
@@ -171,9 +199,18 @@ func splitNonEmpty(s string) []string {
 	return strings.Split(s, "\n")
 }
 
-// UpdateRowPolicy re-asserts the full desired policy (filter, restrictiveness and grantees) in a single ALTER ROW POLICY.
+// UpdateRowPolicy re-asserts the full desired policy (name, filter, restrictiveness and grantees) in a single ALTER ROW POLICY.
 func (i *impl) UpdateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error) {
-	builder := querybuilder.NewAlterRowPolicy(rp.Name, rp.Database, rp.Table).
+	existing, err := i.GetRowPolicyByID(ctx, rp.ID, clusterName)
+	if err != nil {
+		return nil, errors.WithMessage(err, "unable to get existing row policy")
+	}
+	if existing == nil {
+		return nil, errors.Errorf("row policy with id %q not found", rp.ID)
+	}
+
+	builder := querybuilder.NewAlterRowPolicy(existing.Name, existing.Database, existing.Table).
+		RenameTo(rp.Name).
 		SelectFilter(rp.SelectFilter).
 		IsRestrictive(rp.IsRestrictive).
 		GranteeNames(rp.GranteeNames).
@@ -197,15 +234,23 @@ func (i *impl) UpdateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *s
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	identifier := fmt.Sprintf("%s ON %s.%s", rp.Name, rp.Database, rp.Table)
-
-	return retryWithBackoff(ctx, "row policy", identifier, func() (*RowPolicy, error) {
-		return i.GetRowPolicy(ctx, &rp, clusterName)
+	return retryWithBackoff(ctx, "row policy", rp.ID, func() (*RowPolicy, error) {
+		return i.GetRowPolicyByID(ctx, rp.ID, clusterName)
 	})
 }
 
-func (i *impl) DeleteRowPolicy(ctx context.Context, name string, database string, table string, clusterName *string) error {
-	sql, err := querybuilder.NewDropRowPolicy(name, database, table).
+func (i *impl) DeleteRowPolicy(ctx context.Context, id string, clusterName *string) error {
+	rp, err := i.GetRowPolicyByID(ctx, id, clusterName)
+	if err != nil {
+		return errors.WithMessage(err, "error getting row policy")
+	}
+
+	if rp == nil {
+		// Already gone, nothing to do.
+		return nil
+	}
+
+	sql, err := querybuilder.NewDropRowPolicy(rp.Name, rp.Database, rp.Table).
 		WithCluster(clusterName).
 		IfExists(true).
 		Build()

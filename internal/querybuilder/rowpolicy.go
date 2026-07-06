@@ -162,12 +162,12 @@ func (d *DropRowPolicy) Build() (string, error) {
 
 // buildGranteeClause builds the TO clause for grantee specification.
 func (c *CreateRowPolicy) buildGranteeClause() string {
-	if c.granteeAll {
-		return "ALL"
-	}
-
 	if len(c.granteeAllExcept) > 0 {
 		return fmt.Sprintf("ALL EXCEPT %s", strings.Join(backtickAll(c.granteeAllExcept), ", "))
+	}
+
+	if c.granteeAll {
+		return "ALL"
 	}
 
 	if len(c.granteeNames) == 0 {

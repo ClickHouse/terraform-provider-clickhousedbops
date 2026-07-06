@@ -71,19 +71,6 @@ func (r *Row) GetUInt64(fieldName string) (uint64, error) {
 	return val.(uint64), nil
 }
 
-func (r *Row) GetArrayString(fieldName string) ([]string, error) {
-	val, ok := r.data[fieldName]
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("field %s was not found in row", fieldName))
-	}
-
-	if t := reflect.TypeOf(val); t.Kind() != reflect.Slice && t.Elem().Name() != "string" {
-		return nil, errors.New(fmt.Sprintf("field %s is not a []string", fieldName))
-	}
-
-	return val.([]string), nil
-}
-
 func (r *Row) Set(fieldName string, val interface{}) {
 	if r.data == nil {
 		r.data = make(map[string]interface{})

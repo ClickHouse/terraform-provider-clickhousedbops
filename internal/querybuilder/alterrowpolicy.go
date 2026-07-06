@@ -11,6 +11,7 @@ type AlterRowPolicy struct {
 	database         string
 	table            string
 	clusterName      *string
+	renameTo         *string
 	selectFilter     *string
 	isRestrictive    *bool
 	granteeNames     []string
@@ -32,6 +33,13 @@ func NewAlterRowPolicy(name string, database string, table string) *AlterRowPoli
 // WithCluster sets the cluster name for the ALTER statement.
 func (a *AlterRowPolicy) WithCluster(clusterName *string) *AlterRowPolicy {
 	a.clusterName = clusterName
+	return a
+}
+
+// RenameTo renames the row policy. The rename is emitted only when the new name differs from the current one.
+func (a *AlterRowPolicy) RenameTo(newName string) *AlterRowPolicy {
+	a.renameTo = &newName
+	a.hasChanges = true
 	return a
 }
 
@@ -86,6 +94,10 @@ func (a *AlterRowPolicy) Build() (string, error) {
 
 	fmt.Fprintf(&sb, " ON %s.%s", backtick(a.database), backtick(a.table))
 
+	if a.renameTo != nil && *a.renameTo != a.name {
+		fmt.Fprintf(&sb, " RENAME TO %s", backtick(*a.renameTo))
+	}
+
 	if a.isRestrictive != nil {
 		if *a.isRestrictive {
 			sb.WriteString(" AS RESTRICTIVE")
@@ -111,12 +123,12 @@ func (a *AlterRowPolicy) Build() (string, error) {
 
 // buildGranteeClause builds the TO clause for grantee specification.
 func (a *AlterRowPolicy) buildGranteeClause() string {
-	if a.granteeAll != nil && *a.granteeAll {
-		return "ALL"
-	}
-
 	if len(a.granteeAllExcept) > 0 {
 		return fmt.Sprintf("ALL EXCEPT %s", strings.Join(backtickAll(a.granteeAllExcept), ", "))
+	}
+
+	if a.granteeAll != nil && *a.granteeAll {
+		return "ALL"
 	}
 
 	return strings.Join(backtickAll(a.granteeNames), ", ")

@@ -60,6 +60,11 @@ func TestRowpolicy_acceptance(t *testing.T) {
 	}
 
 	checkAttributesFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
+		id := attrs["id"].(string)
+		if id == "" {
+			return fmt.Errorf("id attribute was not set")
+		}
+
 		name := attrs["name"].(string)
 		if name == "" {
 			return fmt.Errorf("name attribute was not set")
@@ -75,49 +80,23 @@ func TestRowpolicy_acceptance(t *testing.T) {
 			return fmt.Errorf("table_name attribute was not set")
 		}
 
-		// Handle both old single-name fields and new list fields for backward compatibility
-		var userNames []string
-		var roleNames []string
-		var granteeAll bool
+		var granteeNames []string
 		var granteeAllExcept []string
 
-		// Try new list fields first
-		if userNamesAttr, ok := attrs["grantee_user_names"]; ok && userNamesAttr != nil {
-			if userNamesList, ok := userNamesAttr.([]interface{}); ok {
-				for _, u := range userNamesList {
-					if uStr, ok := u.(string); ok {
-						userNames = append(userNames, uStr)
-					}
-				}
-			}
-		}
-		if roleNamesAttr, ok := attrs["grantee_role_names"]; ok && roleNamesAttr != nil {
-			if roleNamesList, ok := roleNamesAttr.([]interface{}); ok {
-				for _, r := range roleNamesList {
-					if rStr, ok := r.(string); ok {
-						roleNames = append(roleNames, rStr)
+		if granteeNamesAttr, ok := attrs["grantee_names"]; ok && granteeNamesAttr != nil {
+			if granteeNamesList, ok := granteeNamesAttr.([]interface{}); ok {
+				for _, g := range granteeNamesList {
+					if gStr, ok := g.(string); ok {
+						granteeNames = append(granteeNames, gStr)
 					}
 				}
 			}
 		}
 
-		// Support old field names for backward compatibility
-		if granteeUserAttr, ok := attrs["grantee_user_name"]; ok && granteeUserAttr != nil && len(userNames) == 0 {
-			if userStr, ok := granteeUserAttr.(string); ok && userStr != "" {
-				userNames = []string{userStr}
-			}
-		}
-		if granteeRoleAttr, ok := attrs["grantee_role_name"]; ok && granteeRoleAttr != nil && len(roleNames) == 0 {
-			if roleStr, ok := granteeRoleAttr.(string); ok && roleStr != "" {
-				roleNames = []string{roleStr}
-			}
-		}
-
-		if granteeAllAttr, ok := attrs["grantee_all"]; ok && granteeAllAttr != nil {
-			granteeAll = granteeAllAttr.(bool)
-		}
-
-		if granteeAllExceptAttr, ok := attrs["grantee_all_except"]; ok && granteeAllExceptAttr != nil {
+		// A present grantee_all_except (even empty) means "apply to all"; absent means named grantees.
+		granteeAllExceptAttr, granteeAll := attrs["grantee_all_except"]
+		granteeAll = granteeAll && granteeAllExceptAttr != nil
+		if granteeAll {
 			if granteeAllExceptList, ok := granteeAllExceptAttr.([]interface{}); ok {
 				for _, e := range granteeAllExceptList {
 					if eStr, ok := e.(string); ok {
@@ -132,17 +111,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 			isRestrictive = attrs["is_restrictive"].(bool)
 		}
 
-		expectedGrantees := append(append([]string{}, userNames...), roleNames...)
-		rowPolicy := dbops.RowPolicy{
-			Name:             name,
-			Database:         database,
-			Table:            table,
-			GranteeNames:     expectedGrantees,
-			GranteeAll:       granteeAll,
-			GranteeAllExcept: granteeAllExcept,
-		}
-
-		rp, err := dbopsClient.GetRowPolicy(ctx, &rowPolicy, clusterName)
+		rp, err := dbopsClient.GetRowPolicyByID(ctx, id, clusterName)
 		if err != nil {
 			return err
 		}
@@ -167,25 +136,22 @@ func TestRowpolicy_acceptance(t *testing.T) {
 			return fmt.Errorf("wrong value for cluster_name attribute")
 		}
 
-		// ClickHouse stores row-policy grantees as one untyped list, so validate the combined set.
-		if len(rp.GranteeNames) != len(expectedGrantees) {
-			return fmt.Errorf("expected %d grantees, got %d", len(expectedGrantees), len(rp.GranteeNames))
+		if len(rp.GranteeNames) != len(granteeNames) {
+			return fmt.Errorf("expected %d grantees, got %d", len(granteeNames), len(rp.GranteeNames))
 		}
 		gotGrantees := make(map[string]bool, len(rp.GranteeNames))
 		for _, g := range rp.GranteeNames {
 			gotGrantees[g] = true
 		}
-		for _, expected := range expectedGrantees {
+		for _, expected := range granteeNames {
 			if !gotGrantees[expected] {
 				return fmt.Errorf("expected grantee %q to be present, got %v", expected, rp.GranteeNames)
 			}
 		}
 
-		// ClickHouse stores both `TO ALL` and `TO ALL EXCEPT …` with apply_to_all=1, so an except
-		// list also reads back as grantee_all true at the dbops layer.
-		expectedGranteeAll := granteeAll || len(granteeAllExcept) > 0
-		if rp.GranteeAll != expectedGranteeAll {
-			return fmt.Errorf("expected grantee_all to be %v, was %v", expectedGranteeAll, rp.GranteeAll)
+		// A present grantee_all_except (empty or not) maps to apply_to_all=1 at the dbops layer.
+		if rp.GranteeAll != granteeAll {
+			return fmt.Errorf("expected grantee_all to be %v, was %v", granteeAll, rp.GranteeAll)
 		}
 
 		if len(rp.GranteeAllExcept) != len(granteeAllExcept) {
@@ -210,7 +176,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name = 'default'").
-				WithListResourceFieldReference("grantee_role_names", "clickhousedbops_role", granteeRoleName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(granteeRoleResource.Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -227,7 +193,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "1").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(granteeUserResource.Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -244,7 +210,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name != 'system'").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				WithBoolAttribute("is_restrictive", true).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -280,7 +246,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 					WithStringAttribute("database_name", "system").
 					WithStringAttribute("table_name", "databases").
 					WithStringAttribute("select_filter", "1").
-					WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+					WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 					AddDependency(granteeUserResource.Build()).
 					Build(),
 				resourcebuilder.New(resourceType, "bar").
@@ -288,12 +254,28 @@ func TestRowpolicy_acceptance(t *testing.T) {
 					WithStringAttribute("database_name", "system").
 					WithStringAttribute("table_name", "databases").
 					WithStringAttribute("select_filter", "1").
-					WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+					WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 					Build(),
 			),
 			ResourceName:    resourceName,
 			ResourceAddress: fmt.Sprintf("%s.%s", resourceType, resourceName),
 			ExpectError:     regexp.MustCompile("Import it with"),
+		},
+		{
+			Name:     "Create row policy for all users with an empty except set using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", "test_policy").
+				WithStringAttribute("database_name", "system").
+				WithStringAttribute("table_name", "databases").
+				WithStringAttribute("select_filter", "1").
+				WithEmptyListAttribute("grantee_all_except").
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
 			Name:     "Update row policy filter and restrictiveness in place using Native protocol on a single replica",
@@ -304,7 +286,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name = 'default'").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(granteeUserResource.Build()).
 				Build(),
 			UpdateResource: ptr(resourcebuilder.New(resourceType, resourceName).
@@ -313,13 +295,40 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name != 'system'").
 				WithBoolAttribute("is_restrictive", true).
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(granteeUserResource.Build()).
 				Build()),
-			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
-			CheckNotExistsFunc:  checkNotExistsFunc,
-			CheckAttributesFunc: checkAttributesFunc,
+			UpdateExpectNoReplace: true,
+			ResourceName:          resourceName,
+			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:    checkNotExistsFunc,
+			CheckAttributesFunc:   checkAttributesFunc,
+		},
+		{
+			Name:     "Rename row policy in place using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", "test_policy").
+				WithStringAttribute("database_name", "system").
+				WithStringAttribute("table_name", "databases").
+				WithStringAttribute("select_filter", "name = 'default'").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
+				AddDependency(granteeUserResource.Build()).
+				Build(),
+			UpdateResource: ptr(resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", "test_policy_renamed").
+				WithStringAttribute("database_name", "system").
+				WithStringAttribute("table_name", "databases").
+				WithStringAttribute("select_filter", "name = 'default'").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
+				AddDependency(granteeUserResource.Build()).
+				Build()),
+			UpdateExpectNoReplace: true,
+			ResourceName:          resourceName,
+			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:    checkNotExistsFunc,
+			CheckAttributesFunc:   checkAttributesFunc,
 		},
 		// Single replica, HTTP
 		{
@@ -331,7 +340,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "tables").
 				WithStringAttribute("select_filter", "database = 'default'").
-				WithListResourceFieldReference("grantee_role_names", "clickhousedbops_role", granteeRoleName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(granteeRoleResource.Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -348,7 +357,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name = 'default'").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(granteeUserResource.Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -365,7 +374,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "1").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				WithBoolAttribute("is_restrictive", true).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -384,7 +393,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name = 'default'").
-				WithListResourceFieldReference("grantee_role_names", "clickhousedbops_role", granteeRoleName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(granteeRoleResource.Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -401,7 +410,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "tables").
 				WithStringAttribute("select_filter", "database = 'system'").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(granteeUserResource.Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -418,7 +427,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name != 'system'").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				WithBoolAttribute("is_restrictive", true).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -437,7 +446,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "tables").
 				WithStringAttribute("select_filter", "database = 'default'").
-				WithListResourceFieldReference("grantee_role_names", "clickhousedbops_role", granteeRoleName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(granteeRoleResource.Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -454,7 +463,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "1").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(granteeUserResource.Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -471,7 +480,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name = 'default'").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				WithBoolAttribute("is_restrictive", true).
 				AddDependency(granteeUserResource.Build()).
 				Build(),
@@ -492,7 +501,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name = 'default'").
-				WithListResourceFieldReference("grantee_role_names", "clickhousedbops_role", granteeRoleName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(granteeRoleResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -511,7 +520,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "tables").
 				WithStringAttribute("select_filter", "database = 'system'").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(granteeUserResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -530,7 +539,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name != 'system'").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				WithBoolAttribute("is_restrictive", true).
 				AddDependency(granteeUserResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),
@@ -551,7 +560,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "tables").
 				WithStringAttribute("select_filter", "database = 'default'").
-				WithListResourceFieldReference("grantee_role_names", "clickhousedbops_role", granteeRoleName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(granteeRoleResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -570,7 +579,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "1").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(granteeUserResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),
 			ResourceName:        resourceName,
@@ -589,7 +598,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
 				WithStringAttribute("select_filter", "name = 'default'").
-				WithListResourceFieldReference("grantee_user_names", "clickhousedbops_user", granteeUserName, "name").
+				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				WithBoolAttribute("is_restrictive", true).
 				AddDependency(granteeUserResource.WithStringAttribute("cluster_name", clusterName).Build()).
 				Build(),

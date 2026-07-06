@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
@@ -20,14 +21,15 @@ import (
 )
 
 type TestCase struct {
-	Name            string
-	ChEnv           map[string]string
-	Protocol        string
-	ClusterName     *string
-	Resource        string
-	UpdateResource  *string
-	ResourceName    string
-	ResourceAddress string
+	Name                  string
+	ChEnv                 map[string]string
+	Protocol              string
+	ClusterName           *string
+	Resource              string
+	UpdateResource        *string
+	UpdateExpectNoReplace bool
+	ResourceName          string
+	ResourceAddress       string
 
 	ExpectError         *regexp.Regexp
 	CheckNotExistsFunc  func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error)
@@ -89,14 +91,22 @@ func RunTests(t *testing.T, tests []TestCase) {
 
 				// Add update step if UpdateResource is provided
 				if tc.UpdateResource != nil {
-					steps = append(steps, resource.TestStep{
+					updateStep := resource.TestStep{
 						Config: fmt.Sprintf("%s\n%s", providerCfg, *tc.UpdateResource),
 						ConfigStateChecks: []statecheck.StateCheck{
 							internalstatecheck.NewGetAttributes(tc.ResourceAddress, func(attrs map[string]interface{}) error {
 								return tc.CheckAttributesFunc(ctx, dbopsClient, tc.ClusterName, attrs)
 							}),
 						},
-					})
+					}
+					if tc.UpdateExpectNoReplace {
+						updateStep.ConfigPlanChecks = resource.ConfigPlanChecks{
+							PreApply: []plancheck.PlanCheck{
+								plancheck.ExpectResourceAction(tc.ResourceAddress, plancheck.ResourceActionUpdate),
+							},
+						}
+					}
+					steps = append(steps, updateStep)
 				}
 
 				resource.Test(t, resource.TestCase{
