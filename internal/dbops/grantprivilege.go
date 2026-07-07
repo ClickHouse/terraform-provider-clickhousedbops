@@ -114,6 +114,7 @@ func ClassicGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName 
 
 	where := []querybuilder.Where{
 		querybuilder.WhereIn("access_type", accessTypes),
+		querybuilder.WhereEquals("is_partial_revoke", 0),
 		valOrNullWhere("database", dbName),
 		valOrNullWhere("table", tblName),
 		valOrNullWhere("column", priv.ColumnName),
@@ -192,6 +193,7 @@ func SourcesReadWriteGrantMatcher(ctx context.Context, priv *GrantPrivilege, clu
 	where := []querybuilder.Where{
 		querybuilder.WhereEquals("access_object", priv.AccessObject),
 		querybuilder.WhereIn("access_type", []string{"READ", "WRITE"}),
+		querybuilder.WhereEquals("is_partial_revoke", 0),
 		valOrNullWhere("database", priv.DatabaseName),
 		valOrNullWhere("table", priv.TableName),
 		valOrNullWhere("column", priv.ColumnName),
@@ -263,22 +265,23 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivi
 	return grantPrivilege, nil
 }
 
-func (i *impl) RevokeGrantPrivilege(ctx context.Context, accessType string, database *string, table *string, column *string, granteeUserName *string, granteeRoleName *string, clusterName *string) error {
+func (i *impl) RevokeGrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege, clusterName *string) error {
 	var from string
 	{
-		if granteeUserName != nil {
-			from = *granteeUserName
-		} else if granteeRoleName != nil {
-			from = *granteeRoleName
-		} else {
+		switch {
+		case grantPrivilege.GranteeUserName != nil:
+			from = *grantPrivilege.GranteeUserName
+		case grantPrivilege.GranteeRoleName != nil:
+			from = *grantPrivilege.GranteeRoleName
+		default:
 			return errors.New("either GranteeUserName or GranteeRoleName must be set")
 		}
 	}
 
-	sql, err := querybuilder.RevokePrivilege(accessType, from).
-		WithDatabase(database).
-		WithTable(table).
-		WithColumn(column).
+	sql, err := querybuilder.RevokePrivilege(grantPrivilege.AccessType, from).
+		WithDatabase(grantPrivilege.DatabaseName).
+		WithTable(grantPrivilege.TableName).
+		WithColumn(grantPrivilege.ColumnName).
 		WithCluster(clusterName).
 		Build()
 	if err != nil {
@@ -295,12 +298,12 @@ func (i *impl) RevokeGrantPrivilege(ctx context.Context, accessType string, data
 
 func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string, clusterName *string) ([]GrantPrivilege, error) {
 	// Get all grants for the same grantee.
-	var to querybuilder.Where
+	where := []querybuilder.Where{querybuilder.WhereEquals("is_partial_revoke", 0)}
 	{
 		if granteeUsername != nil {
-			to = querybuilder.WhereEquals("user_name", *granteeUsername)
+			where = append(where, querybuilder.WhereEquals("user_name", *granteeUsername))
 		} else if granteeRoleName != nil {
-			to = querybuilder.WhereEquals("role_name", *granteeRoleName)
+			where = append(where, querybuilder.WhereEquals("role_name", *granteeRoleName))
 		} else {
 			return nil, errors.New("either granteeUsername or GranteeRoleName must be set")
 		}
@@ -314,7 +317,11 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		querybuilder.NewField("user_name"),
 		querybuilder.NewField("role_name"),
 		querybuilder.NewField("grant_option"),
-	}, "system.grants").WithCluster(clusterName).Where(to).Build()
+		querybuilder.NewField("is_partial_revoke"),
+	}, "system.grants").
+		WithCluster(clusterName).
+		Where(querybuilder.AndWhere(where...)).
+		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
