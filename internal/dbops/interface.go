@@ -32,6 +32,13 @@ type Client interface {
 	RevokeGrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege, clusterName *string) error
 	GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string, clusterName *string) ([]GrantPrivilege, error)
 
+	CreateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error)
+	GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *string) (*RowPolicy, error)
+	GetRowPolicyByID(ctx context.Context, id string, clusterName *string) (*RowPolicy, error)
+	UpdateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error)
+	DeleteRowPolicy(ctx context.Context, id string, clusterName *string) error
+	NormalizeRowPolicyFilter(ctx context.Context, filter string, clusterName *string) (string, error)
+
 	CreateSettingsProfile(ctx context.Context, profile SettingsProfile, clusterName *string) (*SettingsProfile, error)
 	GetSettingsProfile(ctx context.Context, id string, clusterName *string) (*SettingsProfile, error)
 	DeleteSettingsProfile(ctx context.Context, id string, clusterName *string) error
