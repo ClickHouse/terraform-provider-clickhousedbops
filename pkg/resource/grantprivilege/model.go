@@ -4,6 +4,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 )
 
 type GrantPrivilege struct {
@@ -20,13 +21,23 @@ type GrantPrivilege struct {
 func (g GrantPrivilege) toGrant() dbops.GrantPrivilege {
 	return dbops.GrantPrivilege{
 		AccessType:          g.Privilege.ValueString(),
-		ExpandedAccessTypes: AllDescendants(parsedGrants().Groups, g.Privilege.ValueString()),
+		ExpandedAccessTypes: grants.AllDescendants(grants.Parsed().Groups, g.Privilege.ValueString()),
 		DatabaseName:        g.Database.ValueStringPointer(),
 		TableName:           g.Table.ValueStringPointer(),
 		ColumnName:          g.Column.ValueStringPointer(),
 		GranteeUserName:     g.GranteeUserName.ValueStringPointer(),
 		GranteeRoleName:     g.GranteeRoleName.ValueStringPointer(),
 		GrantOption:         g.GrantOption.ValueBool(),
+	}
+}
+
+func (g GrantPrivilege) asGrant() grants.Grant {
+	return grants.Grant{
+		AccessType:  g.Privilege.ValueString(),
+		Database:    g.Database.ValueStringPointer(),
+		Table:       g.Table.ValueStringPointer(),
+		Column:      g.Column.ValueStringPointer(),
+		GrantOption: g.GrantOption.ValueBool(),
 	}
 }
 

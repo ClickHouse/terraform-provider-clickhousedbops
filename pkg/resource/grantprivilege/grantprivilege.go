@@ -17,56 +17,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 )
 
 //go:embed grantprivilege.md
 var grantPrivilegeDescription string
-
-type scopeAttributes struct {
-	database bool
-	table    bool
-	column   bool
-}
-
-var attributesByScope = map[string]scopeAttributes{
-	"GLOBAL":       {},
-	"DATABASE":     {database: true},
-	"TABLE":        {database: true, table: true},
-	"VIEW":         {database: true, table: true},
-	"DICTIONARY":   {database: true, table: true},
-	"COLUMN":       {database: true, table: true, column: true},
-	"USER_NAME":    {},
-	"DEFINER":      {},
-	"SOURCE":       {},
-	"TABLE_ENGINE": {},
-}
-
-// scopeAttributesFor returns attributes supported by a privilege, union of descedants, and whether it is supported at all.
-func scopeAttributesFor(privilege string) (scopeAttributes, scopeAttributes, bool) {
-	upstrGrts := parsedGrants()
-	attrs := attributesByScope[upstrGrts.Scopes[privilege]]
-
-	allAttrs := scopeAttributes{}
-	supported := false
-	for _, p := range AllDescendants(upstrGrts.Groups, privilege) {
-		a, ok := attributesByScope[upstrGrts.Scopes[p]]
-		if !ok {
-			continue
-		}
-		supported = true
-		allAttrs.database = allAttrs.database || a.database
-		allAttrs.table = allAttrs.table || a.table
-		allAttrs.column = allAttrs.column || a.column
-	}
-
-	return attrs, allAttrs, supported
-}
-
-type availableGrants struct {
-	Aliases map[string]string   `json:"aliases"`
-	Groups  map[string][]string `json:"groups"`
-	Scopes  map[string]string   `json:"scopes"`
-}
 
 var (
 	_ resource.Resource                   = &Resource{}
@@ -91,7 +46,7 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	validPrivileges := make([]string, 0)
 
-	upstrGrts := parsedGrants()
+	upstrGrts := grants.Parsed()
 
 	for privilege := range upstrGrts.Scopes {
 		validPrivileges = append(validPrivileges, privilege)
@@ -216,7 +171,7 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 		return
 	}
 
-	upstrGrts := parsedGrants()
+	upstrGrts := grants.Parsed()
 
 	// Aliases must be granted using their canonical name.
 	if alias := upstrGrts.Aliases[config.Privilege.ValueString()]; alias != "" {
@@ -229,7 +184,7 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 	}
 
 	// Only the target attributes supported by the privilege's scope may be set.
-	attrs, allAttrs, ok := scopeAttributesFor(config.Privilege.ValueString())
+	attrs, allAttrs, ok := grants.ScopeAttributesFor(config.Privilege.ValueString())
 	if !ok {
 		diags.AddAttributeError(
 			path.Root("privilege_name"),
@@ -260,9 +215,9 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 		)
 	}
 
-	checkAttr("database_name", attrs.database, allAttrs.database, !config.Database.IsNull())
-	checkAttr("table_name", attrs.table, allAttrs.table, !config.Table.IsNull())
-	checkAttr("column_name", attrs.column, allAttrs.column, !config.Column.IsNull())
+	checkAttr("database_name", attrs.Database, allAttrs.Database, !config.Database.IsNull())
+	checkAttr("table_name", attrs.Table, allAttrs.Table, !config.Table.IsNull())
+	checkAttr("column_name", attrs.Column, allAttrs.Column, !config.Column.IsNull())
 }
 
 func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
