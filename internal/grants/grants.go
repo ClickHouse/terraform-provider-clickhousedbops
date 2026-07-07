@@ -1,4 +1,7 @@
-package grantprivilege
+// Package grants exposes the ClickHouse privilege catalog (parsed from the
+// embedded grants.tsv) and the coverage/scope helpers shared by the
+// grant_privilege resource and the dbops client.
+package grants
 
 import (
 	"bufio"
@@ -10,22 +13,24 @@ import (
 
 //go:generate curl -so grants.tsv https://raw.githubusercontent.com/ClickHouse/ClickHouse/master/tests/queries/0_stateless/01271_show_privileges.reference
 //go:embed grants.tsv
-var grants string
+var grantsTSV string
 
-// parsedGrants caches the result of parsing the embedded grants.tsv exactly once.
-// The TSV is static (embedded at build time), so the result never changes.
-var parsedGrants = sync.OnceValue(parseGrants)
-
-// parseGrants reads the grants.tsv file and turns it into a data structure to get information about all available permissions users can grant.
-// The .tsv file comes from clickhouse core code and should be updated every time there is a change in permissions upstream.
-// information returned by this function is used for validation of user inputs.
-func parseGrants() availableGrants {
-	return ParseGrantsTSV(grants)
+// Catalog is the parsed privilege catalog: alias->canonical, the group
+// hierarchy, and per-privilege scope categories.
+type Catalog struct {
+	Aliases map[string]string
+	Groups  map[string][]string
+	Scopes  map[string]string
 }
 
-// ParseGrantsTSV builds the full privilege hierarchy from TSV data.
-// The TSV format comes from ClickHouse's 01271_show_privileges.reference.
-func ParseGrantsTSV(data string) availableGrants {
+var parsed = sync.OnceValue(func() Catalog { return ParseGrantsTSV(grantsTSV) })
+
+// Parsed returns the catalog parsed from the embedded grants.tsv, cached once.
+func Parsed() Catalog { return parsed() }
+
+// ParseGrantsTSV builds the privilege catalog from ClickHouse's
+// 01271_show_privileges.reference TSV format.
+func ParseGrantsTSV(data string) Catalog {
 	aliases := make(map[string]string)
 	groups := make(map[string][]string)
 	scopes := make(map[string]string)
@@ -60,18 +65,11 @@ func ParseGrantsTSV(data string) availableGrants {
 		log.Fatal(err)
 	}
 
-	ret := availableGrants{
-		Aliases: aliases,
-		Groups:  groups,
-		Scopes:  scopes,
-	}
-
-	return ret
+	return Catalog{Aliases: aliases, Groups: groups, Scopes: scopes}
 }
 
-// AllDescendants returns the privilege itself plus all its descendants
-// (children, grandchildren, etc.) from the hierarchy.
-// For a leaf privilege with no children it returns a single-element slice.
+// AllDescendants returns the privilege plus all its descendants (children,
+// grandchildren, ...) from the group hierarchy. A leaf yields a single element.
 func AllDescendants(groups map[string][]string, privilege string) []string {
 	result := []string{privilege}
 	for _, child := range groups[privilege] {

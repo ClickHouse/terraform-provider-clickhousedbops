@@ -2,41 +2,14 @@ package grantprivilege
 
 import (
 	"fmt"
-	"slices"
-	"strings"
-
-	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 )
 
+// overlaps reports whether an already-granted privilege covers the one in current.
 func overlaps(current GrantPrivilege, existing dbops.GrantPrivilege) bool {
-	// AccessType: existing must be the same privilege, or a group that contains current.
-	if !slices.Contains(AllDescendants(parsedGrants().Groups, existing.AccessType), current.Privilege.ValueString()) {
-		return false
-	}
-
-	// A grant that needs grant option is not covered by one lacking it.
-	if current.GrantOption.ValueBool() && !existing.GrantOption {
-		return false
-	}
-
-	attrs, _, ok := scopeAttributesFor(current.Privilege.ValueString())
-	if !ok {
-		return false
-	}
-
-	if attrs.database && !checkWildcardOverlaps(current.Database, existing.DatabaseName) {
-		return false
-	}
-	if attrs.table && !checkWildcardOverlaps(current.Table, existing.TableName) {
-		return false
-	}
-	if attrs.column && !checkWildcardOverlaps(current.Column, existing.ColumnName) {
-		return false
-	}
-
-	return true
+	return grants.Covers(existing.AsGrant(), current.asGrant())
 }
 
 func explainOverlap(current GrantPrivilege, existing dbops.GrantPrivilege) string {
@@ -77,24 +50,4 @@ func explainOverlap(current GrantPrivilege, existing dbops.GrantPrivilege) strin
 	}
 
 	return row
-}
-
-func checkWildcardOverlaps(current types.String, existing *string) bool {
-	// existing is unrestricted on this level: it covers anything (incl. current = all).
-	if existing == nil {
-		return true
-	}
-	// existing is specific but current is unrestricted (all): not covered.
-	if current.IsNull() {
-		return false
-	}
-	if current.ValueString() == *existing {
-		return true
-	}
-	// existing is a prefix wildcard: it covers current when current starts with the prefix.
-	if strings.HasSuffix(*existing, "*") {
-		return strings.HasPrefix(current.ValueString(), strings.TrimSuffix(*existing, "*"))
-	}
-	// existing is an exact value different from current.
-	return false
 }

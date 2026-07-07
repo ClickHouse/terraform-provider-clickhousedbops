@@ -2,19 +2,15 @@ package grantprivilege_test
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"testing"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/resourcebuilder"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/runner"
-	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/grantprivilege"
 )
-
-//go:embed grants.tsv
-var testGrantsTSV string
 
 const (
 	resourceType = "clickhousedbops_grant_privilege"
@@ -27,7 +23,7 @@ const (
 func TestGrantprivilege_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
-	grantsGroups := grantprivilege.ParseGrantsTSV(testGrantsTSV).Groups
+	grantsGroups := grants.Parsed().Groups
 
 	granteeRoleResource := resourcebuilder.
 		New("clickhousedbops_role", granteeRoleName).
@@ -79,7 +75,7 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 
 		grantPrivilege := dbops.GrantPrivilege{
 			AccessType:          accessType,
-			ExpandedAccessTypes: grantprivilege.AllDescendants(grantsGroups, accessType),
+			ExpandedAccessTypes: grants.AllDescendants(grantsGroups, accessType),
 			DatabaseName:        database,
 			TableName:           table,
 			ColumnName:          column,
@@ -138,7 +134,7 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 
 		grantPrivilege := dbops.GrantPrivilege{
 			AccessType:          accessType,
-			ExpandedAccessTypes: grantprivilege.AllDescendants(grantsGroups, accessType),
+			ExpandedAccessTypes: grants.AllDescendants(grantsGroups, accessType),
 			DatabaseName:        database,
 			TableName:           table,
 			ColumnName:          column,

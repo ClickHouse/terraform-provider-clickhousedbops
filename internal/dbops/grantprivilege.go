@@ -7,6 +7,7 @@ import (
 	"github.com/pingcap/errors"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/querybuilder"
 )
 
@@ -48,6 +49,17 @@ type GrantPrivilege struct {
 	ExpandedAccessTypes []string `json:"-"`
 }
 
+// AsGrant projects the grant onto the neutral grants.Grant used for coverage checks.
+func (g GrantPrivilege) AsGrant() grants.Grant {
+	return grants.Grant{
+		AccessType:  g.AccessType,
+		Database:    g.DatabaseName,
+		Table:       g.TableName,
+		Column:      g.ColumnName,
+		GrantOption: g.GrantOption,
+	}
+}
+
 // Defines the signature for a function that checks if privileges are granted.
 type MatcherFunc func(ctx context.Context, priv *GrantPrivilege, clusterName *string, i *impl) (bool, error)
 
@@ -86,9 +98,41 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		identifier += " to role " + *grantPrivilege.GranteeRoleName
 	}
 
+	// The grant succeeded. If a matching row is already visible we're done.
+	found, err := i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	if found != nil {
+		return found, nil
+	}
+
+	// Check if grant covered by broader grant. If so, we don't need to wait for the row to appear.
+	covered, err := i.isGrantCovered(ctx, &grantPrivilege, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	if covered {
+		return nil, nil
+	}
+
 	return retryWithBackoff(ctx, "grant privilege", identifier, func() (*GrantPrivilege, error) {
 		return i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
 	}, i.readAfterWriteTimeoutArgs()...)
+}
+
+func (i *impl) isGrantCovered(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string) (bool, error) {
+	existing, err := i.GetAllGrantsForGrantee(ctx, grantPrivilege.GranteeUserName, grantPrivilege.GranteeRoleName, clusterName)
+	if err != nil {
+		return false, err
+	}
+
+	for idx := range existing {
+		if grants.Covers(existing[idx].AsGrant(), grantPrivilege.AsGrant()) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Matcher function to handle classic grants: https://clickhouse.com/docs/sql-reference/statements/grant#granting-privilege-syntax
@@ -317,7 +361,6 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		querybuilder.NewField("user_name"),
 		querybuilder.NewField("role_name"),
 		querybuilder.NewField("grant_option"),
-		querybuilder.NewField("is_partial_revoke"),
 	}, "system.grants").
 		WithCluster(clusterName).
 		Where(querybuilder.AndWhere(where...)).
