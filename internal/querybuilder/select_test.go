@@ -5,9 +5,6 @@ import (
 )
 
 func Test_selectQueryBuilder_Build(t *testing.T) {
-	orderBy := NewField("col1")
-	orderDirection := ASC
-
 	tests := []struct {
 		name     string
 		fields   []Field
@@ -68,8 +65,8 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			name:     "Select with order by",
 			fields:   []Field{NewField("name")},
 			where:    []Where{whereMock{"mock_where_clause"}},
-			orderCol: &orderBy,
-			orderDir: &orderDirection,
+			orderCol: new(NewField("col1")),
+			orderDir: new(ASC),
 			from:     "users",
 			want:     "SELECT `name` FROM `users` WHERE (mock_where_clause) ORDER BY `col1` ASC;",
 			wantErr:  false,

@@ -66,13 +66,11 @@ func TestGrantRole_acceptance(t *testing.T) {
 
 		var granteeUserName, granteeRoleName *string
 		if attrs["grantee_user_name"] != nil {
-			s := attrs["grantee_user_name"].(string)
-			granteeUserName = &s
+			granteeUserName = new(attrs["grantee_user_name"].(string))
 		}
 
 		if attrs["grantee_role_name"] != nil {
-			s := attrs["grantee_role_name"].(string)
-			granteeRoleName = &s
+			granteeRoleName = new(attrs["grantee_role_name"].(string))
 		}
 
 		if granteeUserName == nil && granteeRoleName == nil {

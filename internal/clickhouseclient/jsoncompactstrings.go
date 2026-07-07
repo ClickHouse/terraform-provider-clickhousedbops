@@ -37,7 +37,7 @@ func (j jsonCompatStrings) Rows() []Row {
 				data.Set(colNames[i], field)
 			case "Nullable(String)":
 				if field == nullString {
-					data.Set(colNames[i], nilPtr[string]())
+					data.Set(colNames[i], (*string)(nil))
 				} else {
 					data.Set(colNames[i], &field)
 				}
@@ -66,9 +66,4 @@ func (j jsonCompatStrings) Rows() []Row {
 	}
 
 	return ret
-}
-
-func nilPtr[T any]() *T {
-	var r *T
-	return r
 }

@@ -4,8 +4,6 @@ import (
 	"testing"
 )
 
-func i64ptr(i int64) *int64 { return &i }
-
 func Test_createmaskingpolicy(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -29,7 +27,7 @@ func Test_createmaskingpolicy(t *testing.T) {
 					{Column: "logMessage", Expression: "'** redacted **'"},
 					{Column: "clientIp", Expression: "concat(splitByChar('.', clientIp)[1], '.x.x')"},
 				}).
-					WithWhere(strptr("ownerId NOT IN ('team_a', 'team_b')")).
+					WithWhere(new("ownerId NOT IN ('team_a', 'team_b')")).
 					GranteeNames([]string{"clickstate_sql_access_readonly"})
 			},
 			// columns sorted: clientIp before logMessage
@@ -43,7 +41,7 @@ func Test_createmaskingpolicy(t *testing.T) {
 				}).
 					GranteeAll(true).
 					GranteeAllExcept([]string{"admin"}).
-					WithPriority(i64ptr(10))
+					WithPriority(new(int64(10)))
 			},
 			want: "CREATE MASKING POLICY `pii` ON `default`.`t` UPDATE `c` = 'x' TO ALL EXCEPT `admin` PRIORITY 10;",
 		},

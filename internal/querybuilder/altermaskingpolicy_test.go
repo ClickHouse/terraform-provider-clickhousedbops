@@ -18,9 +18,9 @@ func Test_altermaskingpolicy(t *testing.T) {
 					{Column: "logMessage", Expression: "'** redacted **'"},
 					{Column: "clientIp", Expression: "concat(splitByChar('.', clientIp)[1], '.x.x')"},
 				}).
-					WithWhere(strptr("ownerId NOT IN ('team_a', 'team_b')")).
+					WithWhere(new("ownerId NOT IN ('team_a', 'team_b')")).
 					GranteeNames([]string{"analyst"}).
-					WithPriority(i64ptr(5))
+					WithPriority(new(int64(5)))
 			},
 			// columns sorted: clientIp before logMessage
 			want: "ALTER MASKING POLICY `pii` ON `logs_production`.`logs_unified_v4` UPDATE `clientIp` = concat(splitByChar('.', clientIp)[1], '.x.x'), `logMessage` = '** redacted **' WHERE ownerId NOT IN ('team_a', 'team_b') TO `analyst` PRIORITY 5;",
@@ -31,7 +31,7 @@ func Test_altermaskingpolicy(t *testing.T) {
 				return NewAlterMaskingPolicy("old", "d", "t", []ColumnMask{{Column: "c", Expression: "'x'"}}).
 					RenameTo("new").
 					GranteeAll(true).
-					WithPriority(i64ptr(3))
+					WithPriority(new(int64(3)))
 			},
 			want: "ALTER MASKING POLICY `old` ON `d`.`t` RENAME TO `new` UPDATE `c` = 'x' TO ALL PRIORITY 3;",
 		},
@@ -49,7 +49,7 @@ func Test_altermaskingpolicy(t *testing.T) {
 			build: func() AlterMaskingPolicyQueryBuilder {
 				return NewAlterMaskingPolicy("p", "d", "t", []ColumnMask{{Column: "c", Expression: "'x'"}}).
 					GranteeAll(true).
-					WithPriority(i64ptr(0))
+					WithPriority(new(int64(0)))
 			},
 			want: "ALTER MASKING POLICY `p` ON `d`.`t` UPDATE `c` = 'x' TO ALL PRIORITY 0;",
 		},

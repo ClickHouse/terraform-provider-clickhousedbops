@@ -35,7 +35,7 @@ func TestAlterRowPolicy_Basic(t *testing.T) {
 		{
 			name: "alter row policy with cluster",
 			builder: NewAlterRowPolicy("my_policy", "default", "users").
-				WithCluster(stringPtr("cluster1")).
+				WithCluster(new("cluster1")).
 				SelectFilter("tenant_id = 'abc'"),
 			want: "ALTER ROW POLICY `my_policy` ON CLUSTER `cluster1` ON `default`.`users` USING tenant_id = 'abc'",
 		},
@@ -88,8 +88,4 @@ func TestAlterRowPolicy_Basic(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
-}
-
-func stringPtr(s string) *string {
-	return &s
 }

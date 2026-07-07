@@ -22,7 +22,7 @@ func Test_createSettingsProfileQueryBuilder_Build(t *testing.T) {
 		{
 			name:        "on cluster",
 			profileName: "prf1",
-			clusterName: strPtr("cluster1"),
+			clusterName: new("cluster1"),
 			want:        "CREATE SETTINGS PROFILE `prf1` ON CLUSTER 'cluster1';",
 			wantErr:     false,
 		},

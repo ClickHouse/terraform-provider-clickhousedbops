@@ -147,13 +147,11 @@ func ClassicGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName 
 	// See: https://github.com/ClickHouse/ClickHouse/issues/92835
 	dbName := priv.DatabaseName
 	if dbName != nil && strings.HasSuffix(*dbName, "*") {
-		stripped := strings.TrimSuffix(*dbName, "*")
-		dbName = &stripped
+		dbName = new(strings.TrimSuffix(*dbName, "*"))
 	}
 	tblName := priv.TableName
 	if tblName != nil && strings.HasSuffix(*tblName, "*") {
-		stripped := strings.TrimSuffix(*tblName, "*")
-		tblName = &stripped
+		tblName = new(strings.TrimSuffix(*tblName, "*"))
 	}
 
 	accessTypes := priv.ExpandedAccessTypes
