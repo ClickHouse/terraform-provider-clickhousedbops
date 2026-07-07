@@ -4,6 +4,13 @@ Manages a ClickHouse row policy, which restricts the rows a user or role can acc
 
 Resource can be imported by `id` or `<database>.<table>.<short_name>` triple.
 
+## Grantees
+
+A policy applies either to a specific set of grantees or to everyone. Set exactly one of:
+
+- `grantee_names`: a list of user and role names. ClickHouse stores these as one untyped list and resolves each name to a user before a role, so users and roles are not distinguished here.
+- `grantee_all_except`: apply to all users and roles, excluding the ones listed. An empty set (`[]`) applies to everyone with no exclusions.
+
 ## Example Usage
 
 ```hcl
@@ -34,5 +41,14 @@ resource "clickhousedbops_row_policy" "admin_full_access" {
   table_name    = "example_table"
   select_filter = "1"
   grantee_names = ["admin"]
+}
+
+# Apply to everyone except user_a (an empty grantee_all_except set applies to everyone)
+resource "clickhousedbops_row_policy" "all_except_user_a" {
+  name               = "all_except_user_a"
+  database_name      = "logs"
+  table_name         = "example_table"
+  select_filter      = "1"
+  grantee_all_except = [clickhousedbops_user.user_a.name]
 }
 ```

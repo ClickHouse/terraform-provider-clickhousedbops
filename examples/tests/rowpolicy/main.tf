@@ -37,3 +37,13 @@ resource "clickhousedbops_row_policy" "permissive_to_all_except" {
   select_filter      = "1 = 1"
   grantee_all_except = [clickhousedbops_user.john.name]
 }
+
+# An empty grantee_all_except set applies the policy to everyone, with no exclusions.
+resource "clickhousedbops_row_policy" "permissive_to_all" {
+  cluster_name       = var.cluster_name
+  name               = "all_rows"
+  database_name      = "default"
+  table_name         = "tbl1"
+  select_filter      = "1 = 1"
+  grantee_all_except = []
+}
