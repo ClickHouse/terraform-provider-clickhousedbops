@@ -13,6 +13,7 @@ type GrantPrivilegeQueryBuilder interface {
 	WithDatabase(*string) GrantPrivilegeQueryBuilder
 	WithTable(*string) GrantPrivilegeQueryBuilder
 	WithColumn(*string) GrantPrivilegeQueryBuilder
+	WithAccessObject(*string) GrantPrivilegeQueryBuilder
 	WithGrantOption(bool) GrantPrivilegeQueryBuilder
 	WithCluster(*string) GrantPrivilegeQueryBuilder
 	WithCurrentGrants(bool) GrantPrivilegeQueryBuilder
@@ -24,6 +25,7 @@ type grantPrivilegeQueryBuilder struct {
 	database      *string
 	table         *string
 	column        *string
+	accessObject  *string
 	grantOption   bool
 	clusterName   *string
 	currentGrants bool
@@ -48,6 +50,11 @@ func (q *grantPrivilegeQueryBuilder) WithTable(table *string) GrantPrivilegeQuer
 
 func (q *grantPrivilegeQueryBuilder) WithColumn(column *string) GrantPrivilegeQueryBuilder {
 	q.column = column
+	return q
+}
+
+func (q *grantPrivilegeQueryBuilder) WithAccessObject(accessObject *string) GrantPrivilegeQueryBuilder {
+	q.accessObject = accessObject
 	return q
 }
 
@@ -90,15 +97,16 @@ func (q *grantPrivilegeQueryBuilder) Build() (string, error) {
 		privilege = q.accessType
 	}
 
-	// Target database/table
+	// Target database/table/access object
 	var target string
-	if q.database != nil {
-		if q.table != nil {
-			target = fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table))
-		} else {
-			target = fmt.Sprintf("%s.*", identifierOrPattern(*q.database))
-		}
-	} else {
+	switch {
+	case q.accessObject != nil:
+		target = identifierOrPattern(*q.accessObject)
+	case q.database != nil && q.table != nil:
+		target = fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table))
+	case q.database != nil:
+		target = fmt.Sprintf("%s.*", identifierOrPattern(*q.database))
+	default:
 		target = "*.*"
 	}
 

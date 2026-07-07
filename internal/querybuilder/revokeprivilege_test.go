@@ -48,6 +48,12 @@ func Test_revokePrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Access object on named user",
+			builder: RevokePrivilege("CREATE USER", "admin").WithAccessObject(new("bob")),
+			want:    "REVOKE CREATE USER ON `bob` FROM `admin`;",
+			wantErr: false,
+		},
+		{
 			name:    "Missing access type",
 			builder: RevokePrivilege("", "user1"),
 			want:    "",

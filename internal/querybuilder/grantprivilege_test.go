@@ -96,6 +96,18 @@ func Test_grantPrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Access object on named user",
+			builder: GrantPrivilege("CREATE USER", "admin").WithAccessObject(new("bob")),
+			want:    "GRANT CREATE USER ON `bob` TO `admin`;",
+			wantErr: false,
+		},
+		{
+			name:    "Access object prefix pattern",
+			builder: GrantPrivilege("CREATE USER", "admin").WithAccessObject(new("team_*")),
+			want:    "GRANT CREATE USER ON team_* TO `admin`;",
+			wantErr: false,
+		},
+		{
 			name:    "Missing access type",
 			builder: GrantPrivilege("", "user1"),
 			want:    "",

@@ -23,6 +23,8 @@ func explainOverlap(current GrantPrivilege, existing dbops.GrantPrivilege) strin
 
 	// The target description depends on the grant's scope dimension.
 	switch {
+	case existing.AccessObject != nil:
+		row = fmt.Sprintf("%s on %q", row, *existing.AccessObject)
 	case existing.ColumnName != nil:
 		row = fmt.Sprintf("%s on column %q of table %q in the %q database", row, *existing.ColumnName, *existing.TableName, *existing.DatabaseName)
 	case existing.TableName != nil:

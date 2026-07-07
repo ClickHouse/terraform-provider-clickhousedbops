@@ -77,3 +77,11 @@ resource "clickhousedbops_grant_privilege" "grant_user_admin_to_role" {
   grantee_role_name = clickhousedbops_role.reader.name
   grant_option      = true
 }
+
+resource "clickhousedbops_grant_privilege" "grant_create_user_on_object_to_user" {
+  cluster_name      = var.cluster_name
+  privilege_name    = "CREATE USER"
+  access_object     = "team_*"
+  grantee_user_name = clickhousedbops_user.john.name
+  grant_option      = true
+}

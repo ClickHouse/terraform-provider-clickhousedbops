@@ -31,3 +31,12 @@ resource "clickhousedbops_grant_privilege" "user_admin" {
   grantee_role_name = "provisioning_admin"
   grant_option      = true
 }
+
+# USER_NAME/DEFINER-scoped privileges can be restricted to a specific object or a
+# "prefix*" pattern via access_object, granting ON <object> instead of ON *.*.
+resource "clickhousedbops_grant_privilege" "team_user_admin" {
+  privilege_name    = "CREATE USER"
+  access_object     = "team_*"
+  grantee_role_name = "team_provisioner"
+  grant_option      = true
+}

@@ -117,6 +117,22 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					),
 				},
 			},
+			"access_object": schema.StringAttribute{
+				Optional:    true,
+				Description: "The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, or a source name (e.g. `S3`) for source READ/WRITE grants. Supports a trailing `*` prefix pattern.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+					stringvalidator.NoneOf("*"),
+					stringvalidator.ConflictsWith(
+						path.MatchRoot("database_name"),
+						path.MatchRoot("table_name"),
+						path.MatchRoot("column_name"),
+					),
+				},
+			},
 			"grantee_user_name": schema.StringAttribute{
 				Optional:    true,
 				Description: "Name of the `user` to grant privileges to.",
@@ -237,6 +253,26 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 	checkAttr("database_name", attrs.Database, allAttrs.Database, !config.Database.IsNull())
 	checkAttr("table_name", attrs.Table, allAttrs.Table, !config.Table.IsNull())
 	checkAttr("column_name", attrs.Column, allAttrs.Column, !config.Column.IsNull())
+	checkAttr("access_object", attrs.AccessObject, allAttrs.AccessObject, !config.AccessObject.IsNull())
+
+	if diags.HasError() {
+		return
+	}
+
+	// Restricting a multi-family group privilege to a scope silently drops members of the other family.
+	requested := grants.ScopeAttributes{
+		Database:     !config.Database.IsNull(),
+		Table:        !config.Table.IsNull(),
+		Column:       !config.Column.IsNull(),
+		AccessObject: !config.AccessObject.IsNull(),
+	}
+	if granted, folds := grants.FoldedMembers(config.Privilege.ValueString(), requested); folds {
+		diags.AddAttributeWarning(
+			path.Root("privilege_name"),
+			"Privilege granted on a subset of its members",
+			fmt.Sprintf("%q groups privileges with different scopes. At the requested scope ClickHouse only grants %s; its members that require a different scope are silently not granted.", config.Privilege.ValueString(), strings.Join(granted, ", ")),
+		)
+	}
 }
 
 func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {

@@ -13,6 +13,7 @@ type GrantPrivilege struct {
 	Database        types.String `tfsdk:"database_name"`
 	Table           types.String `tfsdk:"table_name"`
 	Column          types.String `tfsdk:"column_name"`
+	AccessObject    types.String `tfsdk:"access_object"`
 	GranteeUserName types.String `tfsdk:"grantee_user_name"`
 	GranteeRoleName types.String `tfsdk:"grantee_role_name"`
 	GrantOption     types.Bool   `tfsdk:"grant_option"`
@@ -26,6 +27,7 @@ func (g GrantPrivilege) toGrant() dbops.GrantPrivilege {
 		DatabaseName:        g.Database.ValueStringPointer(),
 		TableName:           g.Table.ValueStringPointer(),
 		ColumnName:          g.Column.ValueStringPointer(),
+		AccessObject:        g.AccessObject.ValueStringPointer(),
 		GranteeUserName:     g.GranteeUserName.ValueStringPointer(),
 		GranteeRoleName:     g.GranteeRoleName.ValueStringPointer(),
 		GrantOption:         g.GrantOption.ValueBool(),
@@ -35,11 +37,12 @@ func (g GrantPrivilege) toGrant() dbops.GrantPrivilege {
 
 func (g GrantPrivilege) asGrant() grants.Grant {
 	return grants.Grant{
-		AccessType:  g.Privilege.ValueString(),
-		Database:    g.Database.ValueStringPointer(),
-		Table:       g.Table.ValueStringPointer(),
-		Column:      g.Column.ValueStringPointer(),
-		GrantOption: g.GrantOption.ValueBool(),
+		AccessType:   g.Privilege.ValueString(),
+		Database:     g.Database.ValueStringPointer(),
+		Table:        g.Table.ValueStringPointer(),
+		Column:       g.Column.ValueStringPointer(),
+		AccessObject: g.AccessObject.ValueStringPointer(),
+		GrantOption:  g.GrantOption.ValueBool(),
 	}
 }
 
@@ -50,6 +53,7 @@ func toState(g dbops.GrantPrivilege, clusterName types.String) GrantPrivilege {
 		Database:        types.StringPointerValue(g.DatabaseName),
 		Table:           types.StringPointerValue(g.TableName),
 		Column:          types.StringPointerValue(g.ColumnName),
+		AccessObject:    types.StringPointerValue(g.AccessObject),
 		GranteeUserName: types.StringPointerValue(g.GranteeUserName),
 		GranteeRoleName: types.StringPointerValue(g.GranteeRoleName),
 		GrantOption:     types.BoolValue(g.GrantOption),

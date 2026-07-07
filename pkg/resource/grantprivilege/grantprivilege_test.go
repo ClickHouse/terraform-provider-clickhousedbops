@@ -62,6 +62,12 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			column = new(attrs["column_name"])
 		}
 
+		var accessObject *string
+		if attrs["access_object"] != "" {
+			s := attrs["access_object"]
+			accessObject = &s
+		}
+
 		var granteeUserName, granteeRoleName *string
 		if granteeUser != "" {
 			granteeUserName = &granteeUser
@@ -76,6 +82,7 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			DatabaseName:        database,
 			TableName:           table,
 			ColumnName:          column,
+			AccessObject:        accessObject,
 			GranteeUserName:     granteeUserName,
 			GranteeRoleName:     granteeRoleName,
 		}
@@ -105,6 +112,12 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			column = new(attrs["column_name"].(string))
 		}
 
+		var accessObject *string
+		if attrs["access_object"] != nil {
+			s := attrs["access_object"].(string)
+			accessObject = &s
+		}
+
 		var granteeUserName, granteeRoleName *string
 		if attrs["grantee_user_name"] != nil {
 			granteeUserName = new(attrs["grantee_user_name"].(string))
@@ -130,6 +143,7 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			DatabaseName:        database,
 			TableName:           table,
 			ColumnName:          column,
+			AccessObject:        accessObject,
 			GranteeUserName:     granteeUserName,
 			GranteeRoleName:     granteeRoleName,
 			GrantOption:         grantOption,
@@ -158,6 +172,10 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 
 		if !nilcompare.NilCompare(grantprivilege.ColumnName, attrs["column_name"]) {
 			return fmt.Errorf("wrong value for column attribute")
+		}
+
+		if !nilcompare.NilCompare(grantprivilege.AccessObject, attrs["access_object"]) {
+			return fmt.Errorf("wrong value for access_object attribute")
 		}
 
 		if !nilcompare.NilCompare(clusterName, attrs["cluster_name"]) {
@@ -306,6 +324,51 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("privilege_name", "SELECT").
 				WithStringAttribute("database_name", "test_prefix_*").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
+				AddDependency(granteeRoleResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Grant source privilege to user using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "S3").
+				WithResourceFieldReference("grantee_user_name", "clickhousedbops_user", granteeUserName, "name").
+				WithBoolAttribute("grant_option", true).
+				AddDependency(granteeUserResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Grant USER_NAME-scoped privilege on access object to role using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "CREATE USER").
+				WithStringAttribute("access_object", "bob").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
+				AddDependency(granteeRoleResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Grant SOURCE-scoped READ on access object to role using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "READ").
+				WithStringAttribute("access_object", "S3").
 				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(granteeRoleResource.Build()).
 				Build(),

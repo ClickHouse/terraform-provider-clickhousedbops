@@ -12,12 +12,12 @@ func TestScopeAttributesFor(t *testing.T) {
 		// Leaves: own scope equals the descendant union.
 		{"SELECT", ScopeAttributes{Database: true, Table: true, Column: true}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
 		{"CREATE DATABASE", ScopeAttributes{Database: true}, ScopeAttributes{Database: true}, true},
-		{"CREATE USER", ScopeAttributes{}, ScopeAttributes{}, true},
+		{"CREATE USER", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
 		{"CREATE", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true}, true},
-		{"ACCESS MANAGEMENT", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true}, true},
-		{"ALL", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
+		{"ACCESS MANAGEMENT", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, AccessObject: true}, true},
+		{"ALL", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, Column: true, AccessObject: true}, true},
 		{"TABLE ENGINE", ScopeAttributes{}, ScopeAttributes{}, true},
-		{"READ", ScopeAttributes{}, ScopeAttributes{}, true},
+		{"READ", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
 		{"CREATE NAMED COLLECTION", ScopeAttributes{}, ScopeAttributes{}, false},
 	}
 	for _, tt := range tests {

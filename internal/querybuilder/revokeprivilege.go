@@ -13,16 +13,18 @@ type RevokePrivilegeQueryBuilder interface {
 	WithDatabase(*string) RevokePrivilegeQueryBuilder
 	WithTable(*string) RevokePrivilegeQueryBuilder
 	WithColumn(*string) RevokePrivilegeQueryBuilder
+	WithAccessObject(*string) RevokePrivilegeQueryBuilder
 	WithCluster(*string) RevokePrivilegeQueryBuilder
 }
 
 type revokePrivilegeQueryBuilder struct {
-	accessType  string
-	from        string
-	database    *string
-	table       *string
-	column      *string
-	clusterName *string
+	accessType   string
+	from         string
+	database     *string
+	table        *string
+	column       *string
+	accessObject *string
+	clusterName  *string
 }
 
 func RevokePrivilege(accessType string, from string) RevokePrivilegeQueryBuilder {
@@ -44,6 +46,11 @@ func (q *revokePrivilegeQueryBuilder) WithTable(table *string) RevokePrivilegeQu
 
 func (q *revokePrivilegeQueryBuilder) WithColumn(column *string) RevokePrivilegeQueryBuilder {
 	q.column = column
+	return q
+}
+
+func (q *revokePrivilegeQueryBuilder) WithAccessObject(accessObject *string) RevokePrivilegeQueryBuilder {
+	q.accessObject = accessObject
 	return q
 }
 
@@ -79,13 +86,14 @@ func (q *revokePrivilegeQueryBuilder) Build() (string, error) {
 	{
 		tokens = append(tokens, "ON")
 
-		if q.database != nil {
-			if q.table != nil {
-				tokens = append(tokens, fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table)))
-			} else {
-				tokens = append(tokens, fmt.Sprintf("%s.*", identifierOrPattern(*q.database)))
-			}
-		} else {
+		switch {
+		case q.accessObject != nil:
+			tokens = append(tokens, identifierOrPattern(*q.accessObject))
+		case q.database != nil && q.table != nil:
+			tokens = append(tokens, fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table)))
+		case q.database != nil:
+			tokens = append(tokens, fmt.Sprintf("%s.*", identifierOrPattern(*q.database)))
+		default:
 			tokens = append(tokens, "*.*")
 		}
 	}
