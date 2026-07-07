@@ -247,7 +247,7 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 		if isAllSupported {
 			diags.AddAttributeWarning(
 				path.Root(attrName),
-				"Grant scope will be narrowed to a supported grants",
+				"Grant scope will be narrowed to supported grants",
 				fmt.Sprintf("only %q descendants that support %q attribute will be granted", config.Privilege.ValueString(), attrName),
 			)
 			return
