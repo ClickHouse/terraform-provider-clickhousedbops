@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -14,13 +15,52 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 )
 
 //go:embed grantprivilege.md
 var grantPrivilegeDescription string
+
+type scopeAttributes struct {
+	database bool
+	table    bool
+	column   bool
+}
+
+var attributesByScope = map[string]scopeAttributes{
+	"GLOBAL":       {},
+	"DATABASE":     {database: true},
+	"TABLE":        {database: true, table: true},
+	"VIEW":         {database: true, table: true},
+	"DICTIONARY":   {database: true, table: true},
+	"COLUMN":       {database: true, table: true, column: true},
+	"USER_NAME":    {},
+	"DEFINER":      {},
+	"SOURCE":       {},
+	"TABLE_ENGINE": {},
+}
+
+// scopeAttributesFor returns attributes supported by a privilege, union of descedants, and whether it is supported at all.
+func scopeAttributesFor(privilege string) (scopeAttributes, scopeAttributes, bool) {
+	upstrGrts := parsedGrants()
+	attrs := attributesByScope[upstrGrts.Scopes[privilege]]
+
+	allAttrs := scopeAttributes{}
+	supported := false
+	for _, p := range AllDescendants(upstrGrts.Groups, privilege) {
+		a, ok := attributesByScope[upstrGrts.Scopes[p]]
+		if !ok {
+			continue
+		}
+		supported = true
+		allAttrs.database = allAttrs.database || a.database
+		allAttrs.table = allAttrs.table || a.table
+		allAttrs.column = allAttrs.column || a.column
+	}
+
+	return attrs, allAttrs, supported
+}
 
 type availableGrants struct {
 	Aliases map[string]string   `json:"aliases"`
@@ -29,8 +69,9 @@ type availableGrants struct {
 }
 
 var (
-	_ resource.Resource              = &Resource{}
-	_ resource.ResourceWithConfigure = &Resource{}
+	_ resource.Resource                   = &Resource{}
+	_ resource.ResourceWithConfigure      = &Resource{}
+	_ resource.ResourceWithValidateConfig = &Resource{}
 )
 
 func NewResource() resource.Resource {
@@ -40,6 +81,8 @@ func NewResource() resource.Resource {
 type Resource struct {
 	client dbops.Client
 }
+
+var _ resource.ResourceWithValidateConfig = &Resource{}
 
 func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_grant_privilege"
@@ -94,7 +137,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 			"table_name": schema.StringAttribute{
 				Optional:    true,
-				Description: "The name of the table to grant privilege on.",
+				Description: "The name of the table to grant privilege on. Defaults to all tables if left null.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -167,28 +210,81 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, _
 	r.client = req.ProviderData.(dbops.Client)
 }
 
+// validateScope errors when target attributes are set on a privilege whose scope does not support them.
+func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
+	if config.Privilege.IsUnknown() {
+		return
+	}
+
+	upstrGrts := parsedGrants()
+
+	// Aliases must be granted using their canonical name.
+	if alias := upstrGrts.Aliases[config.Privilege.ValueString()]; alias != "" {
+		diags.AddAttributeError(
+			path.Root("privilege_name"),
+			"Cannot use alias",
+			fmt.Sprintf("%q is an alias for %q. Please use %q instead", config.Privilege.ValueString(), alias, alias),
+		)
+		return
+	}
+
+	// Only the target attributes supported by the privilege's scope may be set.
+	attrs, allAttrs, ok := scopeAttributesFor(config.Privilege.ValueString())
+	if !ok {
+		diags.AddAttributeError(
+			path.Root("privilege_name"),
+			"Unsupported Privilege",
+			fmt.Sprintf("%q privilege_name is currently unsupported", config.Privilege.ValueString()),
+		)
+		return
+	}
+
+	checkAttr := func(attrName string, isSupported, isAllSupported, isSet bool) {
+		if !isSet || isSupported {
+			return
+		}
+
+		if isAllSupported {
+			diags.AddAttributeWarning(
+				path.Root(attrName),
+				"Grant scope will be narrowed to supported grants",
+				fmt.Sprintf("only %q descendants that support %q attribute will be granted", config.Privilege.ValueString(), attrName),
+			)
+			return
+		}
+
+		diags.AddAttributeError(
+			path.Root(attrName),
+			"Invalid Grant Privilege",
+			fmt.Sprintf("%q must be null when 'privilege_name' is %q", attrName, config.Privilege.ValueString()),
+		)
+	}
+
+	checkAttr("database_name", attrs.database, allAttrs.database, !config.Database.IsNull())
+	checkAttr("table_name", attrs.table, allAttrs.table, !config.Table.IsNull())
+	checkAttr("column_name", attrs.column, allAttrs.column, !config.Column.IsNull())
+}
+
+func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config GrantPrivilege
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	validateScope(config, &resp.Diagnostics)
+}
+
 func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.Plan.Raw.IsNull() {
 		// If the entire plan is null, the resource is planned for destruction.
 		return
 	}
 
-	upstrGrts := parsedGrants()
-
-	var plan, state, config GrantPrivilege
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
-	if !req.State.Raw.IsNull() {
-		diags = req.State.Get(ctx, &state)
-		resp.Diagnostics.Append(diags...)
-	}
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
+	var config GrantPrivilege
 	if !req.Config.Raw.IsNull() {
-		diags = req.Config.Get(ctx, &config)
-		resp.Diagnostics.Append(diags...)
+		resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+		validateScope(config, &resp.Diagnostics)
 	}
 	if resp.Diagnostics.HasError() {
 		return
@@ -214,53 +310,6 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 			)
 		}
 	}
-
-	// Check if using an alias.
-	if alias := upstrGrts.Aliases[plan.Privilege.ValueString()]; alias != "" {
-		// Using an alias, block.
-		resp.Diagnostics.AddAttributeError(
-			path.Root("privilege_name"),
-			"Cannot use alias",
-			fmt.Sprintf("%q is an alias for %q. Please use %q instead", plan.Privilege.ValueString(), alias, alias),
-		)
-		return
-	}
-
-	// Check required fields which depend on the grant's scope.
-	{
-		scope := upstrGrts.Scopes[plan.Privilege.ValueString()]
-		switch scope {
-		case "GLOBAL":
-			if !plan.Database.IsNull() {
-				resp.Diagnostics.AddAttributeError(
-					path.Root("database_name"),
-					"Invalid Grant Privilege",
-					fmt.Sprintf("'database_name' must be null when 'privilege_name' is %q", plan.Privilege.ValueString()),
-				)
-				return
-			}
-		case "USER_NAME":
-			// USER_NAME-scoped privileges (CREATE/ALTER/DROP USER and ROLE, IMPERSONATE)
-			// are granted globally as `ON *.*`; they are not database-scoped. See #201.
-			if !plan.Database.IsNull() {
-				resp.Diagnostics.AddAttributeError(
-					path.Root("database_name"),
-					"Invalid Grant Privilege",
-					fmt.Sprintf("'database_name' must be null when 'privilege_name' is %q (it is granted on *.*)", plan.Privilege.ValueString()),
-				)
-				return
-			}
-		case "NAMED_COLLECTION":
-			fallthrough
-		case "TABLE ENGINE":
-			resp.Diagnostics.AddAttributeError(
-				path.Root("privilege_name"),
-				"Unsupported Privilege",
-				fmt.Sprintf("%q privilege_name is currently unsupported", plan.Privilege.ValueString()),
-			)
-			return
-		}
-	}
 }
 
 func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -271,17 +320,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	upstrGrts := parsedGrants()
-	grant := dbops.GrantPrivilege{
-		AccessType:          plan.Privilege.ValueString(),
-		ExpandedAccessTypes: AllDescendants(upstrGrts.Groups, plan.Privilege.ValueString()),
-		DatabaseName:        plan.Database.ValueStringPointer(),
-		TableName:           plan.Table.ValueStringPointer(),
-		ColumnName:          plan.Column.ValueStringPointer(),
-		GranteeUserName:     plan.GranteeUserName.ValueStringPointer(),
-		GranteeRoleName:     plan.GranteeRoleName.ValueStringPointer(),
-		GrantOption:         plan.GrantOption.ValueBool(),
-	}
+	grant := plan.toGrant()
 
 	createdGrant, err := r.client.GrantPrivilege(ctx, grant, plan.ClusterName.ValueStringPointer())
 	if err != nil {
@@ -330,16 +369,7 @@ This is a configuration error that prevents further actions. Please note that th
 		return
 	}
 
-	state := GrantPrivilege{
-		ClusterName:     plan.ClusterName,
-		Privilege:       types.StringValue(createdGrant.AccessType),
-		Database:        types.StringPointerValue(createdGrant.DatabaseName),
-		Table:           types.StringPointerValue(createdGrant.TableName),
-		Column:          types.StringPointerValue(createdGrant.ColumnName),
-		GranteeUserName: types.StringPointerValue(createdGrant.GranteeUserName),
-		GranteeRoleName: types.StringPointerValue(createdGrant.GranteeRoleName),
-		GrantOption:     types.BoolValue(createdGrant.GrantOption),
-	}
+	state := toState(*createdGrant, plan.ClusterName)
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -356,17 +386,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	upstrGrts := parsedGrants()
-	grantPrivilege := dbops.GrantPrivilege{
-		AccessType:          state.Privilege.ValueString(),
-		ExpandedAccessTypes: AllDescendants(upstrGrts.Groups, state.Privilege.ValueString()),
-		DatabaseName:        state.Database.ValueStringPointer(),
-		TableName:           state.Table.ValueStringPointer(),
-		ColumnName:          state.Column.ValueStringPointer(),
-		GranteeUserName:     state.GranteeUserName.ValueStringPointer(),
-		GranteeRoleName:     state.GranteeRoleName.ValueStringPointer(),
-		GrantOption:         state.GrantOption.ValueBool(),
-	}
+	grantPrivilege := state.toGrant()
 
 	grant, err := r.client.GetGrantPrivilege(ctx, &grantPrivilege, state.ClusterName.ValueStringPointer())
 	if err != nil {
@@ -378,22 +398,15 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	}
 
 	if grant != nil {
-		state.Privilege = types.StringValue(grant.AccessType)
-		state.Database = types.StringPointerValue(grant.DatabaseName)
-		state.Table = types.StringPointerValue(grant.TableName)
-		state.Column = types.StringPointerValue(grant.ColumnName)
-		state.GranteeUserName = types.StringPointerValue(grant.GranteeUserName)
-		state.GranteeRoleName = types.StringPointerValue(grant.GranteeRoleName)
-		state.GrantOption = types.BoolValue(grant.GrantOption)
-
-		diags = resp.State.Set(ctx, &state)
+		newState := toState(*grant, state.ClusterName)
+		diags = resp.State.Set(ctx, &newState)
 		resp.Diagnostics.Append(diags...)
 	} else {
 		resp.State.RemoveResource(ctx)
 	}
 }
 
-func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+func (r *Resource) Update(_ context.Context, _ resource.UpdateRequest, _ *resource.UpdateResponse) {
 	panic("Update of grant privilege resource is not supported")
 }
 
@@ -405,7 +418,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.RevokeGrantPrivilege(ctx, state.Privilege.ValueString(), state.Database.ValueStringPointer(), state.Table.ValueStringPointer(), state.Column.ValueStringPointer(), state.GranteeUserName.ValueStringPointer(), state.GranteeRoleName.ValueStringPointer(), state.ClusterName.ValueStringPointer())
+	err := r.client.RevokeGrantPrivilege(ctx, state.toGrant(), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting ClickHouse Privilege Grant",
