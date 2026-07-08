@@ -22,6 +22,7 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/database"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/grantprivilege"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/grantrole"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/namedcollection"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/role"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/rowpolicy"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/setting"
@@ -313,6 +314,7 @@ func (p *Provider) Resources(ctx context.Context) []func() tfresource.Resource {
 		setting.NewResource,
 		settingsprofileassociation.NewResource,
 		rowpolicy.NewResource,
+		namedcollection.NewResource,
 	}
 }
 

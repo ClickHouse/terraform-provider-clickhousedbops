@@ -3,6 +3,8 @@ package resourcebuilder
 import (
 	"strings"
 	"testing"
+
+	"github.com/zclconf/go-cty/cty"
 )
 
 func TestResourcebuilder_Build(t *testing.T) {
@@ -20,7 +22,8 @@ func TestResourcebuilder_Build(t *testing.T) {
 			function string
 			arg      string
 		}
-		want string
+		mapAttributes map[string]map[string]cty.Value
+		want          string
 	}{
 		{
 			name:         "Empty resource",
@@ -76,10 +79,31 @@ func TestResourcebuilder_Build(t *testing.T) {
   hash = sha256("test")
 }`,
 		},
+		{
+			name:         "Resource with map attribute",
+			resourceType: "test",
+			resourceName: "foo",
+			mapAttributes: map[string]map[string]cty.Value{
+				"keys": {
+					"url":    cty.StringVal("https://example.com/"),
+					"format": cty.StringVal("CSV"),
+				},
+			},
+			want: `resource "test" "foo" {
+  keys = {
+    format = "CSV"
+    url    = "https://example.com/"
+  }
+}`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := New(tt.resourceType, tt.resourceName)
+
+			for n, v := range tt.mapAttributes {
+				r.WithMapAttribute(n, v)
+			}
 
 			for n, v := range tt.stringAttributes {
 				r.WithStringAttribute(n, v)
