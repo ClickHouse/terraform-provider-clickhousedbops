@@ -254,6 +254,22 @@ func TestUser_acceptance(t *testing.T) {
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
+		{
+			Name:        "Create User with ssl_certificate auth using write-only auth_value_wo field",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:    "native",
+			ClusterName: nil,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithStringAttribute("auth_type", "ssl_certificate").
+				WithStringAttribute("auth_value_wo", "my_cert_cn").
+				WithIntAttribute("auth_value_wo_version", 1).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
 	}
 
 	runner.RunTests(t, tests)
@@ -355,6 +371,110 @@ func TestUser_validation_acceptance(t *testing.T) {
 				`,
 					PlanOnly:    true,
 					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Value Match`),
+				},
+			},
+		},
+		// test ensure you can't use auth_value without auth_type
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name       = "testuser"
+						auth_value = "my_cn"
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*auth_type.*must be specified when.*auth_value`),
+				},
+			},
+		},
+		// test ensure you can't use both auth_value and auth_value_wo
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name                  = "testuser"
+						auth_type             = "ssl_certificate"
+						auth_value            = "my_cn"
+						auth_value_wo         = "my_cn"
+						auth_value_wo_version = 1
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*auth_value.*cannot be specified`),
+				},
+			},
+		},
+		// test ensure you can't use auth_value_wo without specifying auth_value_wo_version
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name          = "testuser"
+						auth_type     = "ssl_certificate"
+						auth_value_wo = "my_cn"
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*auth_value_wo_version.*must be specified when.*auth_value_wo`),
+				},
+			},
+		},
+		// test ensure you can't use auth_value_wo_version without auth_value_wo
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name                  = "testuser"
+						auth_type             = "no_password"
+						auth_value_wo_version = 1
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*auth_value_wo.*must be specified when.*auth_value_wo_version`),
+				},
+			},
+		},
+		// test ensure you can't use auth_value when auth_type is no_password
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name       = "testuser"
+						auth_type  = "no_password"
+						auth_value = "something"
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)auth_value must not be specified when auth_type is no_password`),
+				},
+			},
+		},
+		// test ensure you can't use auth_value_wo when auth_type is no_password
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name                  = "testuser"
+						auth_type             = "no_password"
+						auth_value_wo         = "something"
+						auth_value_wo_version = 1
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)auth_value_wo must not be specified when auth_type is no_password`),
 				},
 			},
 		},

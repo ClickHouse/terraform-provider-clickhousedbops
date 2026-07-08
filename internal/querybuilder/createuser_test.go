@@ -73,10 +73,10 @@ func Test_createuser(t *testing.T) {
 		},
 		{
 			name:           "Create user with ssl_certificate auth",
-			resourceName:   "teleport_cert_read",
+			resourceName:   "cert_read",
 			identifiedWith: IdentificationSSLCertificate,
-			identifiedBy:   "teleport_cert_read",
-			want:           "CREATE USER `teleport_cert_read` IDENTIFIED WITH ssl_certificate CN 'teleport_cert_read';",
+			identifiedBy:   "cert_read_cn",
+			want:           "CREATE USER `cert_read` IDENTIFIED WITH ssl_certificate CN 'cert_read_cn';",
 			wantErr:        false,
 		},
 		{

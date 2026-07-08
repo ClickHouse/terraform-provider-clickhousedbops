@@ -27,9 +27,10 @@ import (
 var userResourceDescription string
 
 var (
-	_ resource.Resource               = &Resource{}
-	_ resource.ResourceWithConfigure  = &Resource{}
-	_ resource.ResourceWithModifyPlan = &Resource{}
+	_ resource.Resource                   = &Resource{}
+	_ resource.ResourceWithConfigure      = &Resource{}
+	_ resource.ResourceWithModifyPlan     = &Resource{}
+	_ resource.ResourceWithValidateConfig = &Resource{}
 )
 
 func NewResource() resource.Resource {
@@ -101,7 +102,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 			"auth_type": schema.StringAttribute{
 				Optional:    true,
-				Description: "Authentication type for the user. Supported values: sha256_hash, ssl_certificate, plaintext_password, bcrypt_hash, double_sha1_hash, no_password. When set, auth_value must also be provided (except for no_password). Conflicts with password_sha256_hash and password_sha256_hash_wo.",
+				Description: "Authentication type for the user. Supported values: sha256_hash, ssl_certificate, plaintext_password, bcrypt_hash, double_sha1_hash, no_password. When set, one of auth_value or auth_value_wo must also be provided (except for no_password). Conflicts with password_sha256_hash and password_sha256_hash_wo.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -123,9 +124,37 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"auth_value": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "Authentication value for the user. The meaning depends on auth_type: for sha256_hash it's the hash, for ssl_certificate it's the CN (Common Name), for plaintext_password it's the password, etc. Not required when auth_type is no_password.",
+				Description: "Authentication value for the user. The meaning depends on auth_type: for sha256_hash it's the hash, for ssl_certificate it's the CN (Common Name), for plaintext_password it's the password, etc. Must not be set when auth_type is no_password. Use this for Terraform/OpenTofu < 1.11. Conflicts with auth_value_wo.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(path.MatchRoot("auth_type")),
+					stringvalidator.ConflictsWith(path.MatchRoot("auth_value_wo")),
+				},
+			},
+			"auth_value_wo": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "Authentication value for the user, write-only variant of auth_value which is not stored in state. Use this for Terraform/OpenTofu >= 1.11. Conflicts with auth_value.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.AlsoRequires(path.MatchRoot("auth_type")),
+					stringvalidator.AlsoRequires(path.MatchRoot("auth_value_wo_version")),
+					stringvalidator.ConflictsWith(path.MatchRoot("auth_value")),
+				},
+				WriteOnly: true,
+			},
+			"auth_value_wo_version": schema.Int32Attribute{
+				Optional:    true,
+				Description: "Version of the auth_value_wo field. Bump this value to require a force update of the auth value on the user.",
+				PlanModifiers: []planmodifier.Int32{
+					int32planmodifier.RequiresReplace(),
+				},
+				Validators: []validator.Int32{
+					int32validator.AlsoRequires(path.MatchRoot("auth_value_wo")),
 				},
 			},
 			"host_ips": schema.SetAttribute{
@@ -138,6 +167,35 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 		},
 		MarkdownDescription: userResourceDescription,
+	}
+}
+
+func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config User
+	diags := req.Config.Get(ctx, &config)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if config.AuthType.ValueString() != "no_password" {
+		return
+	}
+
+	if !config.AuthValue.IsNull() && !config.AuthValue.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("auth_value"),
+			"Invalid auth_value",
+			"auth_value must not be specified when auth_type is no_password",
+		)
+	}
+
+	if !config.AuthValueWO.IsNull() && !config.AuthValueWO.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("auth_value_wo"),
+			"Invalid auth_value_wo",
+			"auth_value_wo must not be specified when auth_type is no_password",
+		)
 	}
 }
 
@@ -213,13 +271,24 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	case !plan.AuthType.IsNull():
 		// New auth_type/auth_value fields
 		user.AuthType = plan.AuthType.ValueString()
-		if !plan.AuthValue.IsNull() {
+		switch {
+		case !plan.AuthValue.IsNull():
 			user.AuthValue = plan.AuthValue.ValueString()
+		case !config.AuthValueWO.IsNull():
+			// Write-only attributes are only available in the config.
+			user.AuthValue = config.AuthValueWO.ValueString()
+		}
+		if user.AuthType == "no_password" && user.AuthValue != "" {
+			resp.Diagnostics.AddError(
+				"Invalid auth_value",
+				"auth_value must not be specified when auth_type is no_password",
+			)
+			return
 		}
 		if user.AuthType != "no_password" && user.AuthValue == "" {
 			resp.Diagnostics.AddError(
 				"Missing auth_value",
-				"auth_value must be specified when auth_type is not no_password",
+				"one of auth_value or auth_value_wo must be specified when auth_type is not no_password",
 			)
 			return
 		}
@@ -265,6 +334,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		PasswordSha256HashVersionWO: plan.PasswordSha256HashVersionWO,
 		AuthType:                    plan.AuthType,
 		AuthValue:                   plan.AuthValue,
+		AuthValueVersionWO:          plan.AuthValueVersionWO,
 		HostIPs:                     plan.HostIPs,
 	}
 

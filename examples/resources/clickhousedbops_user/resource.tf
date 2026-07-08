@@ -15,11 +15,19 @@ resource "clickhousedbops_user" "john" {
   password_sha256_hash = sha256("test")
 }
 
-# Example using ssl_certificate authentication (e.g., for Teleport mTLS)
-resource "clickhousedbops_user" "teleport_cert_read" {
-  name       = "teleport_cert_read"
+# Example using ssl_certificate authentication with the write-only auth_value_wo field
+resource "clickhousedbops_user" "cert_user" {
+  name                  = "cert_user"
+  auth_type             = "ssl_certificate"
+  auth_value_wo         = "cert-common-name"
+  auth_value_wo_version = 1
+}
+
+# Example using ssl_certificate authentication with auth_value (recommended only for Terraform/OpenTofu < 1.11 compatibility)
+resource "clickhousedbops_user" "legacy_cert_user" {
+  name       = "legacy_cert_user"
   auth_type  = "ssl_certificate"
-  auth_value = "teleport_cert_read"
+  auth_value = "cert-common-name"
 }
 
 # Example using no_password authentication
