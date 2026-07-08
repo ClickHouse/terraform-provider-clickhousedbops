@@ -110,6 +110,12 @@ func (r *ResourceBuilder) WithListResourceFieldReference(attrName string, resour
 	return r
 }
 
+func (r *ResourceBuilder) WithMapAttribute(attrName string, data map[string]cty.Value) *ResourceBuilder {
+	r.getRootResourceBody().SetAttributeValue(attrName, cty.MapVal(data))
+
+	return r
+}
+
 func (r *ResourceBuilder) AddDependency(resource string) *ResourceBuilder {
 	r.dependencies = append(r.dependencies, resource)
 	return r

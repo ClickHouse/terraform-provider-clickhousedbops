@@ -89,6 +89,21 @@ func Test_drop(t *testing.T) {
 			want:         "",
 			wantErr:      true,
 		},
+		{
+			name:         "Drop named collection",
+			resourceType: resourceTypeNamedCollection,
+			resourceName: "collection1",
+			want:         "DROP NAMED COLLECTION `collection1`;",
+			wantErr:      false,
+		},
+		{
+			name:         "Drop named collection on cluster",
+			resourceType: resourceTypeNamedCollection,
+			resourceName: "collection1",
+			clusterName:  &cluster,
+			want:         "DROP NAMED COLLECTION `collection1` ON CLUSTER 'cluster1';",
+			wantErr:      false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
