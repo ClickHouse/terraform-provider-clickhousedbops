@@ -41,8 +41,8 @@ jobs:
       - name: Check for changes
         id: diff
         run: |
-          git diff pkg/resource/grantprivilege/grants.tsv
-          if ! git diff-index --quiet HEAD -- pkg/resource/grantprivilege/grants.tsv; then
+          git diff internal/grants/grants.tsv
+          if ! git diff-index --quiet HEAD -- internal/grants/grants.tsv; then
             echo "push_pr=true" >> "$GITHUB_OUTPUT"
           else
             echo "push_pr=false" >> "$GITHUB_OUTPUT"
@@ -55,7 +55,7 @@ jobs:
         with:
           token: ${{ steps.generate-token.outputs.token }}
           add-paths: |
-            pkg/resource/grantprivilege/grants.tsv
+            internal/grants/grants.tsv
           author: "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
           commit-message: "chore: update grants from ClickHouse core code"
           branch: ${{ steps.diff.outputs.branch }}
