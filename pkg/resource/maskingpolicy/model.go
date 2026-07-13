@@ -1,7 +1,8 @@
-package rowpolicy
+package maskingpolicy
 
 import (
 	"context"
+	"sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -11,49 +12,65 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/tfutils"
 )
 
-type RowPolicy struct {
+type MaskingPolicy struct {
 	ID               types.String `tfsdk:"id"`
-	ClusterName      types.String `tfsdk:"cluster_name"`
 	Name             types.String `tfsdk:"name"`
 	Database         types.String `tfsdk:"database_name"`
 	Table            types.String `tfsdk:"table_name"`
-	SelectFilter     types.String `tfsdk:"select_filter"`
-	IsRestrictive    types.Bool   `tfsdk:"is_restrictive"`
+	Masks            types.Map    `tfsdk:"masks"`
+	WhereExpression  types.String `tfsdk:"where_expression"`
 	GranteeNames     types.Set    `tfsdk:"grantee_names"`
 	GranteeAllExcept types.Set    `tfsdk:"grantee_all_except"`
+	Priority         types.Int64  `tfsdk:"priority"`
 }
 
-func (m *RowPolicy) toDBOps(ctx context.Context) (dbops.RowPolicy, diag.Diagnostics) {
+func (m *MaskingPolicy) toDBOps(ctx context.Context) (dbops.MaskingPolicy, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	granteeNames, d := tfutils.SetToStringSlice(ctx, m.GranteeNames)
+	masks, d := mapToColumnMasks(ctx, m.Masks)
 	diags.Append(d...)
-
-	granteeAllExcept, d := tfutils.SetToStringSlice(ctx, m.GranteeAllExcept)
+	names, d := tfutils.SetToStringSlice(ctx, m.GranteeNames)
 	diags.Append(d...)
+	allExcept, d := tfutils.SetToStringSlice(ctx, m.GranteeAllExcept)
+	diags.Append(d...)
+	if diags.HasError() {
+		return dbops.MaskingPolicy{}, diags
+	}
 
-	return dbops.RowPolicy{
+	return dbops.MaskingPolicy{
 		ID:               m.ID.ValueString(),
 		Name:             m.Name.ValueString(),
 		Database:         m.Database.ValueString(),
 		Table:            m.Table.ValueString(),
-		SelectFilter:     m.SelectFilter.ValueString(),
-		IsRestrictive:    m.IsRestrictive.ValueBool(),
-		GranteeNames:     granteeNames,
+		Masks:            masks,
+		Where:            m.WhereExpression.ValueString(),
+		GranteeNames:     names,
 		GranteeAll:       !m.GranteeAllExcept.IsNull(),
-		GranteeAllExcept: granteeAllExcept,
+		GranteeAllExcept: allExcept,
+		Priority:         m.Priority.ValueInt64Pointer(),
 	}, diags
 }
 
-func (m *RowPolicy) fromDBOps(result *dbops.RowPolicy) diag.Diagnostics {
+func (m *MaskingPolicy) fromDBOps(result *dbops.MaskingPolicy) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	m.ID = types.StringValue(result.ID)
 	m.Name = types.StringValue(result.Name)
 	m.Database = types.StringValue(result.Database)
 	m.Table = types.StringValue(result.Table)
-	m.SelectFilter = types.StringValue(result.SelectFilter)
-	m.IsRestrictive = types.BoolValue(result.IsRestrictive)
+
+	if result.Where == "" {
+		m.WhereExpression = types.StringNull()
+	} else {
+		m.WhereExpression = types.StringValue(result.Where)
+	}
+
+	if result.Priority != nil {
+		m.Priority = types.Int64Value(*result.Priority)
+	} else {
+		m.Priority = types.Int64Value(0)
+	}
+
 	m.GranteeNames = types.SetNull(types.StringType)
 	m.GranteeAllExcept = types.SetNull(types.StringType)
 	if result.GranteeAll {
@@ -71,4 +88,21 @@ func (m *RowPolicy) fromDBOps(result *dbops.RowPolicy) diag.Diagnostics {
 	diags.Append(d...)
 	m.GranteeNames = set
 	return diags
+}
+
+func mapToColumnMasks(ctx context.Context, m types.Map) ([]dbops.ColumnMask, diag.Diagnostics) {
+	if m.IsNull() || m.IsUnknown() {
+		return nil, nil
+	}
+	var raw map[string]string
+	diags := m.ElementsAs(ctx, &raw, false)
+	if diags.HasError() {
+		return nil, diags
+	}
+	masks := make([]dbops.ColumnMask, 0, len(raw))
+	for col, expr := range raw {
+		masks = append(masks, dbops.ColumnMask{Column: col, Expression: expr})
+	}
+	sort.Slice(masks, func(i, j int) bool { return masks[i].Column < masks[j].Column })
+	return masks, diags
 }

@@ -159,37 +159,6 @@ func (i *impl) getRowPolicyWhere(ctx context.Context, where []querybuilder.Where
 	return result, nil
 }
 
-func (i *impl) NormalizeRowPolicyFilter(ctx context.Context, filter string, clusterName *string) (string, error) {
-	const prefix = "SELECT 1 WHERE "
-	sql := fmt.Sprintf("SELECT formatQuerySingleLine(concat('%s', %s)) AS formatted", prefix, chStringLiteral(filter))
-
-	var formatted string
-	found := false
-	err := i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-		v, err := data.GetString("formatted")
-		if err != nil {
-			return errors.WithMessage(err, "error scanning query result, missing 'formatted' field")
-		}
-		formatted = v
-		found = true
-		return nil
-	})
-	if err != nil {
-		return filter, errors.WithMessage(err, "error running query")
-	}
-	if !found || !strings.HasPrefix(formatted, prefix) {
-		return filter, nil
-	}
-	return strings.TrimPrefix(formatted, prefix), nil
-}
-
-// chStringLiteral renders s as a single-quoted ClickHouse string literal with backslash escaping.
-func chStringLiteral(s string) string {
-	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "'", "\\'")
-	return "'" + s + "'"
-}
-
 // splitNonEmpty splits a newline-joined string into its parts, returning nil for the empty string
 // (so an empty grantee list maps to a null Terraform set rather than [""]).
 func splitNonEmpty(s string) []string {

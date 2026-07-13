@@ -240,18 +240,17 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
+	filter := state.SelectFilter
 	resp.Diagnostics.Append(state.fromDBOps(result)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Compare normalized select_filters to avoid unnecessary diffs
-	if state.SelectFilter.IsNull() || state.SelectFilter.ValueString() == "" {
-		state.SelectFilter = types.StringValue(result.SelectFilter)
-	} else {
-		normalized, err := r.client.NormalizeRowPolicyFilter(ctx, state.SelectFilter.ValueString(), state.ClusterName.ValueStringPointer())
-		if err == nil && normalized != result.SelectFilter {
-			state.SelectFilter = types.StringValue(result.SelectFilter)
+	// Keep non-normalized form if its normalization equals server value.
+	if !filter.IsNull() && filter.ValueString() != "" {
+		normalized, err := r.client.NormalizeExpression(ctx, filter.ValueString())
+		if err != nil || normalized == result.SelectFilter {
+			state.SelectFilter = filter
 		}
 	}
 
