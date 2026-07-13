@@ -62,6 +62,8 @@ resource "clickhousedbops_grant_privilege" "grant_sources2" {
 }
 
 resource "clickhousedbops_grant_privilege" "grant_current_grants_to_role" {
+  count = (var.cluster_name == null) ? 1 : 0
+
   cluster_name      = var.cluster_name
   privilege_name    = "SELECT"
   grantee_role_name = clickhousedbops_role.reader.name

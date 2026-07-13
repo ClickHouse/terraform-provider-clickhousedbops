@@ -181,6 +181,15 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 		return
 	}
 
+	// GRANT CURRENT GRANTS cannot be executed ON CLUSTER, so current_grants and cluster_name are mutually exclusive.
+	if config.CurrentGrants.ValueBool() && !config.ClusterName.IsUnknown() && config.ClusterName.ValueString() != "" {
+		diags.AddAttributeError(
+			path.Root("current_grants"),
+			"Invalid Grant Privilege",
+			"'current_grants' cannot be used together with 'cluster_name': GRANT CURRENT GRANTS cannot be executed ON CLUSTER.",
+		)
+	}
+
 	upstrGrts := grants.Parsed()
 
 	// Aliases must be granted using their canonical name.
