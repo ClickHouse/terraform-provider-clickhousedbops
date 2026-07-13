@@ -16,6 +16,7 @@ type GrantPrivilege struct {
 	GranteeUserName types.String `tfsdk:"grantee_user_name"`
 	GranteeRoleName types.String `tfsdk:"grantee_role_name"`
 	GrantOption     types.Bool   `tfsdk:"grant_option"`
+	CurrentGrants   types.Bool   `tfsdk:"current_grants"`
 }
 
 func (g GrantPrivilege) toGrant() dbops.GrantPrivilege {
@@ -28,6 +29,7 @@ func (g GrantPrivilege) toGrant() dbops.GrantPrivilege {
 		GranteeUserName:     g.GranteeUserName.ValueStringPointer(),
 		GranteeRoleName:     g.GranteeRoleName.ValueStringPointer(),
 		GrantOption:         g.GrantOption.ValueBool(),
+		CurrentGrants:       g.CurrentGrants.ValueBool(),
 	}
 }
 
