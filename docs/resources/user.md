@@ -111,16 +111,16 @@ resource "clickhousedbops_user" "readonly" {
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
 - `auth_type` (String) Authentication type for the user. Supported values: sha256_hash, ssl_certificate, plaintext_password, bcrypt_hash, double_sha1_hash, no_password. When set, one of auth_value or auth_value_wo must also be provided (except for no_password). Conflicts with password_sha256_hash and password_sha256_hash_wo.
-- `auth_value` (String, Sensitive) Authentication value for the user. The meaning depends on auth_type: for sha256_hash it's the hash, for ssl_certificate it's the CN (Common Name), for plaintext_password it's the password, etc. Must not be set when auth_type is no_password. Use this for Terraform/OpenTofu < 1.11. Conflicts with auth_value_wo.
-- `auth_value_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Authentication value for the user, write-only variant of auth_value which is not stored in state. Use this for Terraform/OpenTofu >= 1.11. Conflicts with auth_value.
+- `auth_value` (String, Sensitive) Authentication value for the user. The meaning depends on auth_type: for sha256_hash it's the hash, for ssl_certificate it's the CN (Common Name), for plaintext_password it's the password, etc. Must not be set when auth_type is no_password.
+- `auth_value_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Authentication value for the user, write-only variant of auth_value which is not stored in state.
 - `auth_value_wo_version` (Number) Version of the auth_value_wo field. Bump this value to require a force update of the auth value on the user.
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `host_ips` (Set of String) IP addresses from which the user is allowed to connect. If not specified, user can connect from any host.
-- `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user.
-- `password_sha256_hash_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.
-- `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
+- `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user.
+- `password_sha256_hash_wo` (String, Sensitive, Deprecated, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.
+- `password_sha256_hash_wo_version` (Number, Deprecated) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
 
 ### Read-Only
 

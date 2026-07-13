@@ -7,6 +7,7 @@ import (
 func Test_alterUserQueryBuilder_Build(t *testing.T) {
 	tests := []struct {
 		name               string
+		identified         string
 		oldSettingsProfile *string
 		newSettingsProfile *string
 		newName            *string
@@ -73,11 +74,32 @@ func Test_alterUserQueryBuilder_Build(t *testing.T) {
 			want:    "",
 			wantErr: true,
 		},
+		{
+			name:       "Change identification",
+			identified: "IDENTIFIED WITH sha256_hash BY 'blah'",
+			want:       "ALTER USER `foo` IDENTIFIED WITH sha256_hash BY 'blah';",
+			wantErr:    false,
+		},
+		{
+			name:        "Change identification on cluster",
+			identified:  "IDENTIFIED WITH ssl_certificate CN 'cn'",
+			clusterName: strPtr("cluster1"),
+			want:        "ALTER USER `foo` ON CLUSTER 'cluster1' IDENTIFIED WITH ssl_certificate CN 'cn';",
+			wantErr:     false,
+		},
+		{
+			name:       "Rename and change identification",
+			newName:    strPtr("test"),
+			identified: "IDENTIFIED WITH no_password",
+			want:       "ALTER USER `foo` RENAME TO `test` IDENTIFIED WITH no_password;",
+			wantErr:    false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			q := &alterUserQueryBuilder{
 				resourceName:       "foo",
+				identified:         tt.identified,
 				oldSettingsProfile: tt.oldSettingsProfile,
 				newSettingsProfile: tt.newSettingsProfile,
 				newName:            tt.newName,

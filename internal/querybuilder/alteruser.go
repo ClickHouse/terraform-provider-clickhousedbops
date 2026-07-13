@@ -10,6 +10,7 @@ import (
 type AlterUserQueryBuilder interface {
 	QueryBuilder
 	RenameTo(newName *string) AlterUserQueryBuilder
+	Identified(with Identification, by string) AlterUserQueryBuilder
 	DropSettingsProfile(profileName *string) AlterUserQueryBuilder
 	AddSettingsProfile(profileName *string) AlterUserQueryBuilder
 	WithCluster(clusterName *string) AlterUserQueryBuilder
@@ -17,6 +18,7 @@ type AlterUserQueryBuilder interface {
 
 type alterUserQueryBuilder struct {
 	resourceName       string
+	identified         string
 	oldSettingsProfile *string
 	newSettingsProfile *string
 	newName            *string
@@ -32,6 +34,11 @@ func NewAlterUser(resourceName string) AlterUserQueryBuilder {
 func (q *alterUserQueryBuilder) RenameTo(newName *string) AlterUserQueryBuilder {
 	q.newName = newName
 
+	return q
+}
+
+func (q *alterUserQueryBuilder) Identified(with Identification, by string) AlterUserQueryBuilder {
+	q.identified = identifiedClause(with, by)
 	return q
 }
 
@@ -69,6 +76,11 @@ func (q *alterUserQueryBuilder) Build() (string, error) {
 
 	if q.clusterName != nil {
 		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
+	}
+
+	if q.identified != "" {
+		anyChanges = true
+		tokens = append(tokens, q.identified)
 	}
 
 	if (q.oldSettingsProfile != nil && q.newSettingsProfile != nil && *q.oldSettingsProfile != *q.newSettingsProfile) ||

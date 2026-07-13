@@ -27,14 +27,18 @@ const (
 	IdentificationNoPassword        Identification = "no_password"
 )
 
-// identificationUseCN returns true for auth types that use CN syntax instead of BY.
-func identificationUseCN(id Identification) bool {
-	return id == IdentificationSSLCertificate
-}
-
-// identificationNoValue returns true for auth types that take no value.
-func identificationNoValue(id Identification) bool {
-	return id == IdentificationNoPassword
+// identifiedClause renders the "IDENTIFIED WITH ..." clause shared by CREATE and ALTER USER.
+func identifiedClause(with Identification, by string) string {
+	switch with {
+	case "":
+		return ""
+	case IdentificationNoPassword:
+		return fmt.Sprintf("IDENTIFIED WITH %s", with)
+	case IdentificationSSLCertificate:
+		return fmt.Sprintf("IDENTIFIED WITH %s CN %s", with, quote(by))
+	default:
+		return fmt.Sprintf("IDENTIFIED WITH %s BY %s", with, quote(by))
+	}
 }
 
 type createUserQueryBuilder struct {
@@ -52,14 +56,7 @@ func NewCreateUser(resourceName string) CreateUserQueryBuilder {
 }
 
 func (q *createUserQueryBuilder) Identified(with Identification, by string) CreateUserQueryBuilder {
-	switch {
-	case identificationNoValue(with):
-		q.identified = fmt.Sprintf("IDENTIFIED WITH %s", with)
-	case identificationUseCN(with):
-		q.identified = fmt.Sprintf("IDENTIFIED WITH %s CN %s", with, quote(by))
-	default:
-		q.identified = fmt.Sprintf("IDENTIFIED WITH %s BY %s", with, quote(by))
-	}
+	q.identified = identifiedClause(with, by)
 	return q
 }
 
