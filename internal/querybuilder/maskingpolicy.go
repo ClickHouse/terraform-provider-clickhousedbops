@@ -20,26 +20,23 @@ type ColumnMask struct {
 // ClickHouse Cloud only and have no ON CLUSTER form.
 type CreateMaskingPolicyQueryBuilder interface {
 	QueryBuilder
-	OrReplace(bool) CreateMaskingPolicyQueryBuilder
-	IfNotExists(bool) CreateMaskingPolicyQueryBuilder
 	WithWhere(*string) CreateMaskingPolicyQueryBuilder
-	WithGrantees(users []string, roles []string, all bool, allExcept []string) CreateMaskingPolicyQueryBuilder
+	GranteeNames([]string) CreateMaskingPolicyQueryBuilder
+	GranteeAll(bool) CreateMaskingPolicyQueryBuilder
+	GranteeAllExcept([]string) CreateMaskingPolicyQueryBuilder
 	WithPriority(*int64) CreateMaskingPolicyQueryBuilder
 }
 
 type createMaskingPolicyQueryBuilder struct {
-	name        string
-	database    string
-	table       string
-	masks       []ColumnMask
-	where       *string
-	users       []string
-	roles       []string
-	all         bool
-	allExcept   []string
-	priority    *int64
-	orReplace   bool
-	ifNotExists bool
+	name             string
+	database         string
+	table            string
+	masks            []ColumnMask
+	where            *string
+	granteeNames     []string
+	granteeAll       bool
+	granteeAllExcept []string
+	priority         *int64
 }
 
 func NewCreateMaskingPolicy(name string, database string, table string, masks []ColumnMask) CreateMaskingPolicyQueryBuilder {
@@ -51,26 +48,23 @@ func NewCreateMaskingPolicy(name string, database string, table string, masks []
 	}
 }
 
-func (q *createMaskingPolicyQueryBuilder) OrReplace(v bool) CreateMaskingPolicyQueryBuilder {
-	q.orReplace = v
-	return q
-}
-
-func (q *createMaskingPolicyQueryBuilder) IfNotExists(v bool) CreateMaskingPolicyQueryBuilder {
-	q.ifNotExists = v
-	return q
-}
-
 func (q *createMaskingPolicyQueryBuilder) WithWhere(where *string) CreateMaskingPolicyQueryBuilder {
 	q.where = where
 	return q
 }
 
-func (q *createMaskingPolicyQueryBuilder) WithGrantees(users []string, roles []string, all bool, allExcept []string) CreateMaskingPolicyQueryBuilder {
-	q.users = users
-	q.roles = roles
-	q.all = all
-	q.allExcept = allExcept
+func (q *createMaskingPolicyQueryBuilder) GranteeNames(names []string) CreateMaskingPolicyQueryBuilder {
+	q.granteeNames = names
+	return q
+}
+
+func (q *createMaskingPolicyQueryBuilder) GranteeAll(all bool) CreateMaskingPolicyQueryBuilder {
+	q.granteeAll = all
+	return q
+}
+
+func (q *createMaskingPolicyQueryBuilder) GranteeAllExcept(except []string) CreateMaskingPolicyQueryBuilder {
+	q.granteeAllExcept = except
 	return q
 }
 
@@ -89,42 +83,21 @@ func (q *createMaskingPolicyQueryBuilder) Build() (string, error) {
 	if len(q.masks) == 0 {
 		return "", errors.New("at least one column mask is required")
 	}
-	if q.orReplace && q.ifNotExists {
-		return "", errors.New("cannot use both OR REPLACE and IF NOT EXISTS")
+
+	grantees := granteeClause(q.granteeNames, q.granteeAll, q.granteeAllExcept)
+	if grantees == "" {
+		return "", errors.New("must specify at least one grantee: user, role, ALL, or ALL EXCEPT")
 	}
 
-	grantees, err := maskingPolicyGrantees(q.users, q.roles, q.all, q.allExcept)
+	assignments, err := maskAssignments(q.masks)
 	if err != nil {
 		return "", err
 	}
 
-	// OR REPLACE goes between CREATE and the object type (CREATE OR REPLACE MASKING POLICY),
-	// while IF NOT EXISTS goes after it (CREATE MASKING POLICY IF NOT EXISTS), matching ClickHouse.
-	tokens := []string{"CREATE"}
-	if q.orReplace {
-		tokens = append(tokens, "OR", "REPLACE")
+	tokens := []string{
+		"CREATE", "MASKING", "POLICY", backtick(q.name), "ON",
+		fmt.Sprintf("%s.%s", backtick(q.database), backtick(q.table)), "UPDATE", assignments,
 	}
-	tokens = append(tokens, "MASKING", "POLICY")
-	if q.ifNotExists {
-		tokens = append(tokens, "IF", "NOT", "EXISTS")
-	}
-	tokens = append(tokens, backtick(q.name), "ON", fmt.Sprintf("%s.%s", backtick(q.database), backtick(q.table)))
-
-	// Sort masks by column name so the generated SQL is deterministic regardless of map iteration order.
-	masks := append([]ColumnMask(nil), q.masks...)
-	sort.Slice(masks, func(i, j int) bool { return masks[i].Column < masks[j].Column })
-
-	assignments := make([]string, 0, len(masks))
-	for _, m := range masks {
-		if m.Column == "" {
-			return "", errors.New("column name in mask cannot be empty")
-		}
-		if strings.TrimSpace(m.Expression) == "" {
-			return "", errors.Errorf("expression for column %q cannot be empty", m.Column)
-		}
-		assignments = append(assignments, fmt.Sprintf("%s = %s", backtick(m.Column), m.Expression))
-	}
-	tokens = append(tokens, "UPDATE", strings.Join(assignments, ", "))
 
 	if q.where != nil && strings.TrimSpace(*q.where) != "" {
 		tokens = append(tokens, "WHERE", *q.where)
@@ -182,20 +155,25 @@ func (q *dropMaskingPolicyQueryBuilder) Build() (string, error) {
 	return strings.Join(tokens, " ") + ";", nil
 }
 
-// maskingPolicyGrantees builds the TO clause: a list of users/roles, or ALL, or ALL EXCEPT a list.
-func maskingPolicyGrantees(users []string, roles []string, all bool, allExcept []string) (string, error) {
-	if all {
-		if len(allExcept) > 0 {
-			return "ALL EXCEPT " + strings.Join(backtickAll(allExcept), ", "), nil
-		}
-		return "ALL", nil
+// maskAssignments renders the UPDATE clause assignments, sorted by column name so the generated
+// SQL is deterministic regardless of map iteration order.
+func maskAssignments(masks []ColumnMask) (string, error) {
+	if len(masks) == 0 {
+		return "", errors.New("at least one column mask is required")
 	}
 
-	grantees := make([]string, 0, len(users)+len(roles))
-	grantees = append(grantees, backtickAll(users)...)
-	grantees = append(grantees, backtickAll(roles)...)
-	if len(grantees) == 0 {
-		return "", errors.New("must specify at least one grantee: user, role, or ALL")
+	sorted := append([]ColumnMask(nil), masks...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Column < sorted[j].Column })
+
+	assignments := make([]string, 0, len(sorted))
+	for _, m := range sorted {
+		if m.Column == "" {
+			return "", errors.New("column name in mask cannot be empty")
+		}
+		if strings.TrimSpace(m.Expression) == "" {
+			return "", errors.Errorf("expression for column %q cannot be empty", m.Column)
+		}
+		assignments = append(assignments, fmt.Sprintf("%s = %s", backtick(m.Column), m.Expression))
 	}
-	return strings.Join(grantees, ", "), nil
+	return strings.Join(assignments, ", "), nil
 }

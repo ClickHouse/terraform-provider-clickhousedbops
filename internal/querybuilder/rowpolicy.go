@@ -76,7 +76,7 @@ func (c *CreateRowPolicy) Build() (string, error) {
 		return "", fmt.Errorf("select filter is required")
 	}
 
-	grantees := c.buildGranteeClause()
+	grantees := granteeClause(c.granteeNames, c.granteeAll, c.granteeAllExcept)
 	if grantees == "" {
 		return "", fmt.Errorf("must specify at least one grantee: user, role, ALL, or ALL EXCEPT")
 	}
@@ -158,21 +158,4 @@ func (d *DropRowPolicy) Build() (string, error) {
 	fmt.Fprintf(&sb, " ON %s.%s", backtick(d.database), backtick(d.table))
 
 	return sb.String(), nil
-}
-
-// buildGranteeClause builds the TO clause for grantee specification.
-func (c *CreateRowPolicy) buildGranteeClause() string {
-	if len(c.granteeAllExcept) > 0 {
-		return fmt.Sprintf("ALL EXCEPT %s", strings.Join(backtickAll(c.granteeAllExcept), ", "))
-	}
-
-	if c.granteeAll {
-		return "ALL"
-	}
-
-	if len(c.granteeNames) == 0 {
-		return ""
-	}
-
-	return strings.Join(backtickAll(c.granteeNames), ", ")
 }

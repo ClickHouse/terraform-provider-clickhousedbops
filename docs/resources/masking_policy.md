@@ -6,7 +6,10 @@ description: |-
   You can use the clickhousedbops_masking_policy resource to manage a masking policy https://clickhouse.com/docs/cloud/guides/data-masking on a ClickHouse table.
   A masking policy rewrites the listed columns for the grantees named in the policy, optionally only for the rows matching where_expression. Use it to hide PII or secrets from a role while leaving the underlying data untouched.
   ~> ClickHouse Cloud only: masking policies are only available on ClickHouse Cloud (version 25.12+) and the feature must be enabled for the service. Open-source ClickHouse rejects the DDL.
-  ~> Read-back limitation: only the existence of the policy is read back from SHOW MASKING POLICIES. The masking expressions, where_expression and grantees are taken from configuration, so drift made outside Terraform on those fields is not detected. Changing the name, database_name or table_name forces a new policy.
+  Resource can be imported by id or the <database>.<table>.<name> triple.
+  Grantees
+  A policy applies either to a specific set of grantees or to everyone. Set exactly one of:
+  grantee_names: a list of user and role names. ClickHouse stores these as one untyped list and resolves each name to a user before a role, so users and roles are not distinguished here.grantee_all_except: apply to all users and roles, excluding the ones listed. An empty set ([]) applies to everyone with no exclusions.
 ---
 
 # clickhousedbops_masking_policy (Resource)
@@ -17,7 +20,14 @@ A masking policy rewrites the listed columns for the grantees named in the polic
 
 ~> **ClickHouse Cloud only**: masking policies are only available on ClickHouse Cloud (version 25.12+) and the feature must be enabled for the service. Open-source ClickHouse rejects the DDL.
 
-~> **Read-back limitation**: only the existence of the policy is read back from `SHOW MASKING POLICIES`. The masking expressions, `where_expression` and grantees are taken from configuration, so drift made outside Terraform on those fields is not detected. Changing the `name`, `database_name` or `table_name` forces a new policy.
+Resource can be imported by `id` or the `<database>.<table>.<name>` triple.
+
+## Grantees
+
+A policy applies either to a specific set of grantees or to everyone. Set exactly one of:
+
+- `grantee_names`: a list of user and role names. ClickHouse stores these as one untyped list and resolves each name to a user before a role, so users and roles are not distinguished here.
+- `grantee_all_except`: apply to all users and roles, excluding the ones listed. An empty set (`[]`) applies to everyone with no exclusions.
 
 ## Example Usage
 
@@ -36,7 +46,7 @@ resource "clickhousedbops_masking_policy" "logs_pii" {
 
   where_expression = "ownerId NOT IN ('team_internal', 'team_tests')"
 
-  grantee_role_names = ["analyst"]
+  grantee_names = ["analyst"]
 }
 
 # Mask a column for everyone except the admins.
@@ -49,7 +59,6 @@ resource "clickhousedbops_masking_policy" "secrets" {
     "ipAddress" = "'** redacted **'"
   }
 
-  grantee_all        = true
   grantee_all_except = ["admin"]
 }
 ```
@@ -59,16 +68,18 @@ resource "clickhousedbops_masking_policy" "secrets" {
 
 ### Required
 
-- `database_name` (String) The database of the table the masking policy applies to.
+- `database_name` (String) The database of the table the masking policy applies to. Must be a concrete name; wildcards (`*`) are not supported.
 - `masks` (Map of String) Map of column name to the ClickHouse expression that replaces it (the `UPDATE column = expression` clause). The expression is interpolated verbatim, e.g. `'** redacted **'` or `concat(splitByChar('.', clientIp)[1], '.x.x')`.
 - `name` (String) The name of the masking policy.
-- `table_name` (String) The table the masking policy applies to.
+- `table_name` (String) The table the masking policy applies to. Must be a concrete name; wildcards (`*`) are not supported.
 
 ### Optional
 
-- `grantee_all` (Boolean) Apply the masking policy to all users and roles.
-- `grantee_all_except` (List of String) Apply the masking policy to all users and roles except those listed.
-- `grantee_role_names` (List of String) List of role names the masking policy applies to.
-- `grantee_user_names` (List of String) List of user names the masking policy applies to.
-- `priority` (Number) Optional priority. When several policies touch the same column, they are applied from highest to lowest priority. Defaults to 0 in ClickHouse.
+- `grantee_all_except` (Set of String) Apply the masking policy to all users and roles, excluding those listed. An empty set applies to everyone with no exclusions.
+- `grantee_names` (Set of String) Set of user or role names the masking policy applies to. ClickHouse resolves each name to a user before a role, so users and roles are not distinguished here.
+- `priority` (Number) Optional priority. When several policies touch the same column, they are applied from highest to lowest priority. Must be non-negative. Defaults to 0.
 - `where_expression` (String) Optional `WHERE` condition; the columns are only masked for rows matching it. For example `ownerId NOT IN ('team_a', 'team_b')`.
+
+### Read-Only
+
+- `id` (String) The system-assigned ID for the masking policy.

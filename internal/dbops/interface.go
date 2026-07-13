@@ -37,7 +37,6 @@ type Client interface {
 	GetRowPolicyByID(ctx context.Context, id string, clusterName *string) (*RowPolicy, error)
 	UpdateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error)
 	DeleteRowPolicy(ctx context.Context, id string, clusterName *string) error
-	NormalizeRowPolicyFilter(ctx context.Context, filter string, clusterName *string) (string, error)
 
 	CreateSettingsProfile(ctx context.Context, profile SettingsProfile, clusterName *string) (*SettingsProfile, error)
 	GetSettingsProfile(ctx context.Context, id string, clusterName *string) (*SettingsProfile, error)
@@ -49,8 +48,9 @@ type Client interface {
 
 	CreateMaskingPolicy(ctx context.Context, maskingPolicy MaskingPolicy) (*MaskingPolicy, error)
 	GetMaskingPolicy(ctx context.Context, maskingPolicy *MaskingPolicy) (*MaskingPolicy, error)
+	GetMaskingPolicyByID(ctx context.Context, id string) (*MaskingPolicy, error)
 	UpdateMaskingPolicy(ctx context.Context, maskingPolicy MaskingPolicy) (*MaskingPolicy, error)
-	DeleteMaskingPolicy(ctx context.Context, name string, database string, table string) error
+	DeleteMaskingPolicy(ctx context.Context, id string) error
 
 	CreateSetting(ctx context.Context, settingsProfileID string, setting Setting, clusterName *string, timeout time.Duration) (*Setting, error)
 	GetSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) (*Setting, error)
@@ -58,4 +58,5 @@ type Client interface {
 
 	IsReplicatedStorage(ctx context.Context) (bool, error)
 	GetCapabilityFlags(ctx context.Context) (CapabilityFlags, error)
+	NormalizeExpression(ctx context.Context, expression string) (string, error)
 }

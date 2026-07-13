@@ -115,21 +115,8 @@ func (a *AlterRowPolicy) Build() (string, error) {
 	hasGranteeSpec := len(a.granteeNames) > 0 || (a.granteeAll != nil && *a.granteeAll) || len(a.granteeAllExcept) > 0
 
 	if hasGranteeSpec {
-		fmt.Fprintf(&sb, " TO %s", a.buildGranteeClause())
+		fmt.Fprintf(&sb, " TO %s", granteeClause(a.granteeNames, a.granteeAll != nil && *a.granteeAll, a.granteeAllExcept))
 	}
 
 	return sb.String(), nil
-}
-
-// buildGranteeClause builds the TO clause for grantee specification.
-func (a *AlterRowPolicy) buildGranteeClause() string {
-	if len(a.granteeAllExcept) > 0 {
-		return fmt.Sprintf("ALL EXCEPT %s", strings.Join(backtickAll(a.granteeAllExcept), ", "))
-	}
-
-	if a.granteeAll != nil && *a.granteeAll {
-		return "ALL"
-	}
-
-	return strings.Join(backtickAll(a.granteeNames), ", ")
 }

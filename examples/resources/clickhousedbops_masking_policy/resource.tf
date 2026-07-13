@@ -12,7 +12,7 @@ resource "clickhousedbops_masking_policy" "logs_pii" {
 
   where_expression = "ownerId NOT IN ('team_internal', 'team_tests')"
 
-  grantee_role_names = ["analyst"]
+  grantee_names = ["analyst"]
 }
 
 # Mask a column for everyone except the admins.
@@ -25,6 +25,5 @@ resource "clickhousedbops_masking_policy" "secrets" {
     "ipAddress" = "'** redacted **'"
   }
 
-  grantee_all        = true
   grantee_all_except = ["admin"]
 }

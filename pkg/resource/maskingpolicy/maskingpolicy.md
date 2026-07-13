@@ -4,4 +4,11 @@ A masking policy rewrites the listed columns for the grantees named in the polic
 
 ~> **ClickHouse Cloud only**: masking policies are only available on ClickHouse Cloud (version 25.12+) and the feature must be enabled for the service. Open-source ClickHouse rejects the DDL.
 
-~> **Read-back limitation**: only the existence of the policy is read back from `SHOW MASKING POLICIES`. The masking expressions, `where_expression` and grantees are taken from configuration, so drift made outside Terraform on those fields is not detected. Changing the `name`, `database_name` or `table_name` forces a new policy.
+Resource can be imported by `id` or the `<database>.<table>.<name>` triple.
+
+## Grantees
+
+A policy applies either to a specific set of grantees or to everyone. Set exactly one of:
+
+- `grantee_names`: a list of user and role names. ClickHouse stores these as one untyped list and resolves each name to a user before a role, so users and roles are not distinguished here.
+- `grantee_all_except`: apply to all users and roles, excluding the ones listed. An empty set (`[]`) applies to everyone with no exclusions.
