@@ -157,7 +157,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Optional:    true,
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
-				Description: "If true, emit `GRANT CURRENT GRANTS(...)` so the privilege is copied from the grantor's own grants instead of granted directly. Required on ClickHouse Cloud for broad privileges (e.g. `ALL`, or `SELECT` on `*.*`) that the admin user holds but cannot transfer directly. Note: the effective grants depend on what the grantor holds at apply time, so drift on a `current_grants` grant is not reconciled.",
+				Description: "If true, emit `GRANT CURRENT GRANTS(...)` so the privilege is copied from the grantor's own grants instead of granted directly. Required on ClickHouse Cloud for broad privileges (e.g. `ALL`, or `SELECT` on `*.*`) that the admin user holds but cannot transfer directly. Note: the effective grants depend on what the grantor holds at apply time, so drift on a `current_grants` grant is not reconciled. On destroy the privilege is revoked in full from the grantee on the target.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.RequiresReplace(),
 				},
@@ -223,13 +223,6 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 			"Invalid Grant Privilege",
 			fmt.Sprintf("%q must be null when 'privilege_name' is %q", attrName, config.Privilege.ValueString()),
 		)
-	}
-
-	// CURRENT GRANTS targets the grantor's own privileges, so scope-based field requirements
-	// (e.g. a GLOBAL privilege needing a null database_name) do not apply: the target can
-	// legitimately be *.* for any privilege. Aliases and unsupported privileges stay blocked.
-	if config.CurrentGrants.ValueBool() {
-		return
 	}
 
 	checkAttr("database_name", attrs.Database, allAttrs.Database, !config.Database.IsNull())

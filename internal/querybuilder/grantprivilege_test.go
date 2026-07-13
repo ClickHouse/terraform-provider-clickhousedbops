@@ -72,6 +72,12 @@ func Test_grantPrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Current grants on single column",
+			builder: GrantPrivilege("SELECT", "user1").WithCurrentGrants(true).WithDatabase(strptr("db1")).WithTable(strptr("tbl1")).WithColumn(strptr("test")),
+			want:    "GRANT CURRENT GRANTS(SELECT(`test`) ON `db1`.`tbl1`) TO `user1`;",
+			wantErr: false,
+		},
+		{
 			name:    "Current grants false is unchanged",
 			builder: GrantPrivilege("SELECT", "user1").WithCurrentGrants(false),
 			want:    "GRANT SELECT ON *.* TO `user1`;",
