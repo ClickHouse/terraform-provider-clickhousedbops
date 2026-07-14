@@ -1,38 +1,30 @@
-# Example using password_sha256_hash_wo field 
+# A user with several authentication methods combined.
 resource "clickhousedbops_user" "jane" {
-  cluster_name = "cluster"
-  name         = "jane"
-  # You'll want to generate the password and feed it here instead of hardcoding.
-  password_sha256_hash_wo         = sha256("test")
-  password_sha256_hash_wo_version = 4
+  name = "jane"
+
+  auth {
+    sha256_hash {
+      value_wo         = sha256("changeme")
+      value_wo_version = 1
+    }
+
+    ssl_certificate {
+      common_name = "jane-service"
+    }
+  }
 }
 
-# Example using the new password_sha256_hash field (recommended only for OpenTofu (version < 1.11) compatibility)
-resource "clickhousedbops_user" "john" {
-  cluster_name = "cluster"
-  name         = "john"
-  # You'll want to generate the password and feed it here instead of hardcoding.
-  password_sha256_hash = sha256("test")
-}
-
-# Example using ssl_certificate authentication with the write-only auth_value_wo field
-resource "clickhousedbops_user" "cert_user" {
-  name                  = "cert_user"
-  auth_type             = "ssl_certificate"
-  auth_value_wo         = "cert-common-name"
-  auth_value_wo_version = 1
-}
-
-# Example using ssl_certificate authentication with auth_value (recommended only for Terraform/OpenTofu < 1.11 compatibility)
-resource "clickhousedbops_user" "legacy_cert_user" {
-  name       = "legacy_cert_user"
-  auth_type  = "ssl_certificate"
-  auth_value = "cert-common-name"
-}
-
-# Example using no_password authentication
+# A passwordless user. no_password cannot be combined with any other method.
 resource "clickhousedbops_user" "readonly" {
-  name      = "readonly"
-  auth_type = "no_password"
+  name = "readonly"
+
+  auth {
+    no_password {}
+  }
 }
 
+# Legacy password field (deprecated), kept for backward compatibility.
+resource "clickhousedbops_user" "john" {
+  name                 = "john"
+  password_sha256_hash = sha256("changeme")
+}

@@ -1,35 +1,56 @@
 You can use the `clickhousedbops_user` resource to create a user in a `ClickHouse` instance.
 
-## Authentication Options
+## Authentication
 
-This resource supports two approaches for authenticating users:
+Use the `auth` block to configure the user's authentication. ClickHouse supports combining several
+methods, so `auth` may contain multiple method blocks, and every method block except `no_password`
+may be repeated:
 
-### Option 1: `auth_type` and `auth_value` (recommended for new configurations)
+```terraform
+resource "clickhousedbops_user" "example" {
+  name = "example"
 
-Use `auth_type` to specify the ClickHouse authentication method, and either `auth_value` or the write-only `auth_value_wo` (together with `auth_value_wo_version`) to provide the corresponding credential or identifier.
+  auth {
+    sha256_hash {
+      value_wo         = sha256("changeme")
+      value_wo_version = 1
+    }
+    ssl_certificate {
+      common_name = "example-service"
+    }
+  }
+}
+```
 
-- **`auth_value_wo` and `auth_value_wo_version`**: Write-only pattern (not stored in state), so you must bump `auth_value_wo_version` to trigger auth value updates. Requires Terraform/OpenTofu >= 1.11.
-- **`auth_value`**: Uses the standard `Sensitive` attribute and is stored in state. Use this for Terraform/OpenTofu < 1.11.
+Supported method blocks: `no_password`, `plaintext_password`, `sha256_password`, `sha256_hash`,
+`double_sha1_password`, `double_sha1_hash`, `bcrypt_password`, `bcrypt_hash`, `ssl_certificate`
+(`common_name` or `subject_alt_name`), `http` (`server` or `scheme`), `ssh_key` (`public_key` +
+`type`), `ldap` (`server`) and `kerberos` (optional `realm`).
 
-Supported `auth_type` values:
-- **`sha256_hash`**: Authenticate with a SHA256 password hash. The auth value is the hash.
-- **`ssl_certificate`**: Authenticate with a TLS client certificate. The auth value is the Common Name (CN) from the certificate.
-- **`plaintext_password`**: Authenticate with a plaintext password. The auth value is the password (will be hashed server-side).
-- **`bcrypt_hash`**: Authenticate with a bcrypt password hash. The auth value is the hash.
-- **`double_sha1_hash`**: Authenticate with a double SHA1 hash. The auth value is the hash.
-- **`no_password`**: No authentication required. Neither `auth_value` nor `auth_value_wo` must be set.
+- At least one authentication method must be configured.
 
-### Option 2: `password_sha256_hash` or `password_sha256_hash_wo` (legacy)
+- `no_password` is exclusive — it cannot be combined with any other method.
 
-- **`password_sha256_hash_wo` and `password_sha256_hash_wo_version`**: Write-only pattern (not stored in state), so you must bump `password_sha256_hash_wo_version` to trigger password updates.
-- **`password_sha256_hash`**: Use this field for OpenTofu (version < 1.11) compatibility. This field uses the standard `Sensitive` attribute and is stored in state, so OpenTofu can automatically detect password changes. Any change to this field will trigger resource replacement.
+- The password/hash methods take a secret value; set exactly one of:
 
-You must use either `auth_type` with `auth_value` or `auth_value_wo`/`auth_value_wo_version`, or one of
-`password_sha256_hash_wo`/`password_sha256_hash_wo_version` or `password_sha256_hash`. These options are mutually exclusive.
+  - `value_wo` (with `value_wo_version`): write-only, never stored in state (Terraform/OpenTofu >= 1.11).
+    Bump `value_wo_version` to re-apply the value.
+
+  - `value`: stored in state, for Terraform/OpenTofu < 1.11.
+
+## Legacy password fields (deprecated)
+
+`password_sha256_hash` / `password_sha256_hash_wo` (with `password_sha256_hash_wo_version`) are kept
+for backwards compatibility and behave as a single `sha256_hash` method. They compose additively with
+the `auth` block, so existing configurations keep working — but prefer the `auth.sha256_hash` block
+for new ones. Changing a legacy password field replaces the user.
 
 Known limitations:
 
-- Changing the password or authentication will cause the database user to be deleted and recreated.
-- Changing `password_sha256_hash_wo` alone does not trigger an update. You must also bump `password_sha256_hash_wo_version`.
-- Changing `auth_value_wo` alone does not trigger an update. You must also bump `auth_value_wo_version`.
-- When importing an existing user, the `clickhousedbops_user` resource will be lacking the password or the `password_sha256_hash_wo_version`, and thus the subsequent apply will need to recreate the database User in order to set a password.
+- Authentication values cannot be read back from ClickHouse, so external drift of a secret is not
+  detected; bump the relevant `*_version` to force a re-apply of a write-only value.
+
+- Changing a write-only value alone does not trigger an update — you must also bump its `*_version`.
+
+- On import only the user identity is read; the configured authentication methods are re-asserted from
+  configuration on the next apply.

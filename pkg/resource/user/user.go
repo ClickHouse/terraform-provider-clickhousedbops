@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -26,14 +26,11 @@ import (
 //go:embed user.md
 var userResourceDescription string
 
-const authTypeSHA256Hash = "sha256_hash"
-
 var (
 	_ resource.Resource                     = &Resource{}
 	_ resource.ResourceWithConfigure        = &Resource{}
 	_ resource.ResourceWithConfigValidators = &Resource{}
 	_ resource.ResourceWithModifyPlan       = &Resource{}
-	_ resource.ResourceWithValidateConfig   = &Resource{}
 )
 
 func NewResource() resource.Resource {
@@ -69,73 +66,41 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"password_sha256_hash": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "SHA256 hash of the password to be set for the user.",
+				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
-					stringvalidator.PreferWriteOnlyAttribute(path.MatchRoot("password_sha256_hash_wo")),
+					stringvalidator.ConflictsWith(path.MatchRoot("password_sha256_hash_wo")),
 				},
-				DeprecationMessage: "Prefer generic auth_value with auth_type set to sha256_hash.",
+				DeprecationMessage: "Prefer auth.sha256_hash block",
 			},
 			"password_sha256_hash_wo": schema.StringAttribute{
 				Optional:    true,
 				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.",
 				Sensitive:   true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
 					stringvalidator.AlsoRequires(path.MatchRoot("password_sha256_hash_wo_version")),
+					stringvalidator.ConflictsWith(path.MatchRoot("password_sha256_hash")),
 				},
-				DeprecationMessage: "Prefer generic auth_value_wo with auth_type set to sha256_hash",
 				WriteOnly:          true,
+				DeprecationMessage: "Prefer auth.sha256_hash block",
 			},
 			"password_sha256_hash_wo_version": schema.Int32Attribute{
 				Optional:    true,
 				Description: "Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.",
+				PlanModifiers: []planmodifier.Int32{
+					int32planmodifier.RequiresReplace(),
+				},
 				Validators: []validator.Int32{
 					int32validator.AlsoRequires(path.MatchRoot("password_sha256_hash_wo")),
 				},
-				DeprecationMessage: "Prefer generic auth_value_wo with auth_type set to sha256_hash",
-			},
-			"auth_type": schema.StringAttribute{
-				Optional:    true,
-				Description: "Authentication type for the user. Supported values: sha256_hash, ssl_certificate, plaintext_password, bcrypt_hash, double_sha1_hash, no_password. When set, one of auth_value or auth_value_wo must also be provided (except for no_password). Conflicts with password_sha256_hash and password_sha256_hash_wo.",
-				Validators: []validator.String{
-					stringvalidator.OneOf(
-						"sha256_hash",
-						"ssl_certificate",
-						"plaintext_password",
-						"bcrypt_hash",
-						"double_sha1_hash",
-						"no_password",
-					),
-				},
-			},
-			"auth_value": schema.StringAttribute{
-				Optional:    true,
-				Sensitive:   true,
-				Description: "Authentication value for the user. The meaning depends on auth_type: for sha256_hash it's the hash, for ssl_certificate it's the CN (Common Name), for plaintext_password it's the password, etc. Must not be set when auth_type is no_password.",
-				Validators: []validator.String{
-					stringvalidator.AlsoRequires(path.MatchRoot("auth_type")),
-					stringvalidator.ConflictsWith(path.MatchRoot("auth_value_wo")),
-					stringvalidator.PreferWriteOnlyAttribute(path.MatchRoot("auth_value_wo")),
-				},
-			},
-			"auth_value_wo": schema.StringAttribute{
-				Optional:    true,
-				Sensitive:   true,
-				Description: "Authentication value for the user, write-only variant of auth_value which is not stored in state.",
-				Validators: []validator.String{
-					stringvalidator.AlsoRequires(path.MatchRoot("auth_type")),
-					stringvalidator.AlsoRequires(path.MatchRoot("auth_value_wo_version")),
-					stringvalidator.ConflictsWith(path.MatchRoot("auth_value")),
-				},
-				WriteOnly: true,
-			},
-			"auth_value_wo_version": schema.Int32Attribute{
-				Optional:    true,
-				Description: "Version of the auth_value_wo field. Bump this value to require a force update of the auth value on the user.",
-				Validators: []validator.Int32{
-					int32validator.AlsoRequires(path.MatchRoot("auth_value_wo")),
-				},
+				DeprecationMessage: "Prefer auth.sha256_hash block",
 			},
 			"host_ips": schema.SetAttribute{
 				ElementType: types.StringType,
@@ -146,57 +111,15 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				},
 			},
 		},
+		Blocks: map[string]schema.Block{
+			"auth": userAuthBlock(),
+		},
 		MarkdownDescription: userResourceDescription,
 	}
 }
 
 func (r *Resource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
-	return []resource.ConfigValidator{
-		resourcevalidator.ExactlyOneOf(
-			path.MatchRoot("password_sha256_hash"),
-			path.MatchRoot("password_sha256_hash_wo"),
-			path.MatchRoot("auth_type"),
-		),
-	}
-}
-
-func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var config User
-	diags := req.Config.Get(ctx, &config)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	if config.AuthType.IsUnknown() || config.AuthType.IsNull() {
-		return
-	}
-
-	if config.AuthType.ValueString() == "no_password" {
-		if !config.AuthValue.IsNull() && !config.AuthValue.IsUnknown() {
-			resp.Diagnostics.AddAttributeError(
-				path.Root("auth_value"),
-				"Invalid auth_value",
-				"auth_value must not be specified when auth_type is no_password",
-			)
-		}
-		if !config.AuthValueWO.IsNull() && !config.AuthValueWO.IsUnknown() {
-			resp.Diagnostics.AddAttributeError(
-				path.Root("auth_value_wo"),
-				"Invalid auth_value_wo",
-				"auth_value_wo must not be specified when auth_type is no_password",
-			)
-		}
-		return
-	}
-
-	if config.AuthValue.IsNull() && config.AuthValueWO.IsNull() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("auth_value"),
-			"Missing auth_value",
-			"one of auth_value or auth_value_wo must be specified when auth_type is not no_password",
-		)
-	}
+	return authConfigValidators()
 }
 
 func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
@@ -264,10 +187,9 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	}
 
 	user := dbops.User{
-		Name: plan.Name.ValueString(),
+		Name:        plan.Name.ValueString(),
+		AuthMethods: resolveAuthMethods(plan, config),
 	}
-
-	user.AuthType, user.AuthValue = resolveAuth(plan, config)
 
 	// Only set host IPs if provided
 	if !plan.HostIPs.IsNull() && len(plan.HostIPs.Elements()) > 0 {
@@ -295,10 +217,8 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		Name:                        types.StringValue(createdUser.Name),
 		PasswordSha256Hash:          plan.PasswordSha256Hash,
 		PasswordSha256HashVersionWO: plan.PasswordSha256HashVersionWO,
-		AuthType:                    plan.AuthType,
-		AuthValue:                   plan.AuthValue,
-		AuthValueVersionWO:          plan.AuthValueVersionWO,
 		HostIPs:                     plan.HostIPs,
+		Auth:                        plan.Auth,
 	}
 
 	diags = resp.State.Set(ctx, state)
@@ -361,13 +281,11 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
-	user := dbops.User{
-		ID:   state.ID.ValueString(),
-		Name: plan.Name.ValueString(),
-	}
-	user.AuthType, user.AuthValue = resolveAuth(plan, config)
-
-	updatedUser, err := r.client.UpdateUser(ctx, user, plan.ClusterName.ValueStringPointer())
+	updatedUser, err := r.client.UpdateUser(ctx, dbops.User{
+		ID:          state.ID.ValueString(),
+		Name:        plan.Name.ValueString(),
+		AuthMethods: resolveAuthMethods(plan, config),
+	}, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating ClickHouse User",
@@ -382,10 +300,8 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		Name:                        types.StringValue(updatedUser.Name),
 		PasswordSha256Hash:          plan.PasswordSha256Hash,
 		PasswordSha256HashVersionWO: plan.PasswordSha256HashVersionWO,
-		AuthType:                    plan.AuthType,
-		AuthValue:                   plan.AuthValue,
-		AuthValueVersionWO:          plan.AuthValueVersionWO,
 		HostIPs:                     plan.HostIPs,
+		Auth:                        plan.Auth,
 	}
 
 	diags = resp.State.Set(ctx, &newState)
@@ -444,25 +360,4 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	if clusterName != nil {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
 	}
-}
-
-func resolveAuth(plan, config User) (string, string) {
-	switch {
-	case !plan.AuthType.IsNull():
-		authType := plan.AuthType.ValueString()
-		switch {
-		case !plan.AuthValue.IsNull():
-			return authType, plan.AuthValue.ValueString()
-		case !config.AuthValueWO.IsNull():
-			// Write-only attributes are only available in the config.
-			return authType, config.AuthValueWO.ValueString()
-		}
-		return authType, "" // no_password carries no value
-	case !plan.PasswordSha256Hash.IsNull():
-		return authTypeSHA256Hash, plan.PasswordSha256Hash.ValueString()
-	case !config.PasswordSha256HashWO.IsNull():
-		return authTypeSHA256Hash, config.PasswordSha256HashWO.ValueString()
-	}
-
-	return "", ""
 }

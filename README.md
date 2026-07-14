@@ -16,7 +16,7 @@ With this Terraform provider you can:
 
 ## Getting started
 
-The `clickhousedbops_user` resource works with both Terraform and OpenTofu. When using the `password_sha256_hash` field, it works with all versions. The `password_sha256_hash_wo` field requires at least Terraform 1.11 (write-only arguments support). All other resources work with older versions too.
+The `clickhousedbops_user` resource works with both Terraform and OpenTofu. Write-only authentication values (the `auth` block's `value_wo` fields and the legacy `password_sha256_hash_wo`) require at least Terraform 1.11 (write-only arguments support); the in-state `value` / `password_sha256_hash` fields work with all versions. All other resources work with older versions too.
 
 You can find examples in the [examples/tests](https://github.com/ClickHouse/terraform-provider-clickhousedbops/tree/main/examples/tests) directory.
 

@@ -10,12 +10,30 @@ import (
 )
 
 type User struct {
-	ID               string   `json:"id"`
-	Name             string   `json:"name"`
-	AuthType         string   `json:"-"`
-	AuthValue        string   `json:"-"`
-	SettingsProfiles []string `json:"-"`
-	HostIPs          []string `json:"-"`
+	ID               string       `json:"id"`
+	Name             string       `json:"name"`
+	AuthMethods      []AuthMethod `json:"-"`
+	SettingsProfiles []string     `json:"-"`
+	HostIPs          []string     `json:"-"`
+}
+
+// AuthMethod is one resolved authentication method. Type is the querybuilder render-key and Args are
+// the positional argument values for that method's keywords.
+type AuthMethod struct {
+	Type string
+	Args []string
+}
+
+func toQuerybuilderAuthMethods(methods []AuthMethod) []querybuilder.AuthMethod {
+	out := make([]querybuilder.AuthMethod, 0, len(methods))
+	for _, m := range methods {
+		out = append(out, querybuilder.AuthMethod{
+			Type: querybuilder.Identification(m.Type),
+			Args: m.Args,
+		})
+	}
+
+	return out
 }
 
 func (u *User) HasSettingProfile(profileName string) bool {
@@ -29,7 +47,8 @@ func (u *User) HasSettingProfile(profileName string) bool {
 }
 
 func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
-	builder := querybuilder.NewCreateUser(user.Name).Identified(querybuilder.Identification(user.AuthType), user.AuthValue)
+	builder := querybuilder.NewCreateUser(user.Name).
+		Identified(toQuerybuilderAuthMethods(user.AuthMethods))
 
 	// Only set host IP restriction if provided
 	if len(user.HostIPs) > 0 {
@@ -178,16 +197,15 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 		return nil, errors.WithMessage(err, "Unable to get existing user")
 	}
 	if existing == nil {
-		return nil, errors.New("user not found")
+		return nil, errors.Errorf("user %q not found", user.ID)
 	}
 
-	builder := querybuilder.
+	sql, err := querybuilder.
 		NewAlterUser(existing.Name).
 		WithCluster(clusterName).
 		RenameTo(&user.Name).
-		Identified(querybuilder.Identification(user.AuthType), user.AuthValue)
-
-	sql, err := builder.Build()
+		Identified(toQuerybuilderAuthMethods(user.AuthMethods)).
+		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}

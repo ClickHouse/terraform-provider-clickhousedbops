@@ -60,41 +60,24 @@ func TestUser_acceptance(t *testing.T) {
 		return nil
 	}
 
-	updateCertUser := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
-	updateCertResource := resourcebuilder.New(resourceType, resourceName).
-		WithStringAttribute("name", updateCertUser).
-		WithStringAttribute("auth_type", "ssl_certificate").
-		WithStringAttribute("auth_value", "my_cert_cn_updated").
+	rotateName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	rotateUpdate := resourcebuilder.New(resourceType, resourceName).
+		WithStringAttribute("name", rotateName).
+		WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+			auth.WithBlock("sha256_hash", func(m *resourcebuilder.BlockBuilder) {
+				m.WithFunction("value_wo", "sha256", "changeme2").WithIntAttribute("value_wo_version", 2)
+			})
+		}).
 		Build()
 
-	rotateHashUser := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
-	rotateHashResource := resourcebuilder.New(resourceType, resourceName).
-		WithStringAttribute("name", rotateHashUser).
-		WithStringAttribute("auth_type", "sha256_hash").
-		WithFunction("auth_value_wo", "sha256", "changeme2").
-		WithIntAttribute("auth_value_wo_version", 2).
-		Build()
-
-	renameFromUser := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
-	renameToUser := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
-	renameResource := resourcebuilder.New(resourceType, resourceName).
-		WithStringAttribute("name", renameToUser).
-		WithStringAttribute("auth_type", "ssl_certificate").
-		WithStringAttribute("auth_value", "my_cert_cn").
-		Build()
-
-	noPasswordUser := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
-	noPasswordResource := resourcebuilder.New(resourceType, resourceName).
-		WithStringAttribute("name", noPasswordUser).
-		WithStringAttribute("auth_type", "no_password").
-		Build()
-
-	typeSwitchUser := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
-	typeSwitchResource := resourcebuilder.New(resourceType, resourceName).
-		WithStringAttribute("name", typeSwitchUser).
-		WithStringAttribute("auth_type", "ssl_certificate").
-		WithStringAttribute("auth_value_wo", "mypass").
-		WithIntAttribute("auth_value_wo_version", 1).
+	sslName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	sslUpdate := resourcebuilder.New(resourceType, resourceName).
+		WithStringAttribute("name", sslName).
+		WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+			auth.WithBlock("ssl_certificate", func(m *resourcebuilder.BlockBuilder) {
+				m.WithStringAttribute("common_name", "cn_b")
+			})
+		}).
 		Build()
 
 	tests := []runner.TestCase{
@@ -217,14 +200,18 @@ func TestUser_acceptance(t *testing.T) {
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:        "Create User with ssl_certificate auth using Native protocol on a single replica",
+			Name:        "Create user with sha256_hash auth block (write-only)",
 			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol:    "native",
 			ClusterName: nil,
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithStringAttribute("auth_type", "ssl_certificate").
-				WithStringAttribute("auth_value", "my_cert_cn").
+				WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+					auth.WithBlock("sha256_hash", func(m *resourcebuilder.BlockBuilder) {
+						m.WithFunction("value_wo", "sha256", "changeme").
+							WithIntAttribute("value_wo_version", 1)
+					})
+				}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -232,14 +219,17 @@ func TestUser_acceptance(t *testing.T) {
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:        "Create User with ssl_certificate auth using HTTP protocol on a single replica",
+			Name:        "Create user with ssl_certificate auth block",
 			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
-			Protocol:    "http",
+			Protocol:    "native",
 			ClusterName: nil,
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithStringAttribute("auth_type", "ssl_certificate").
-				WithStringAttribute("auth_value", "my_cert_cn").
+				WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+					auth.WithBlock("ssl_certificate", func(m *resourcebuilder.BlockBuilder) {
+						m.WithStringAttribute("common_name", "my_cn")
+					})
+				}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -247,13 +237,20 @@ func TestUser_acceptance(t *testing.T) {
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:        "Create User with no_password auth using Native protocol on a single replica",
+			Name:        "Create user with multiple auth methods",
 			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol:    "native",
 			ClusterName: nil,
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithStringAttribute("auth_type", "no_password").
+				WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+					auth.WithBlock("ssl_certificate", func(m *resourcebuilder.BlockBuilder) {
+						m.WithStringAttribute("common_name", "my_cn")
+					})
+					auth.WithBlock("bcrypt_password", func(m *resourcebuilder.BlockBuilder) {
+						m.WithStringAttribute("value", "secret")
+					})
+				}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -261,14 +258,15 @@ func TestUser_acceptance(t *testing.T) {
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:        "Create User with auth_type sha256_hash using Native protocol on a single replica",
+			Name:        "Create user with no_password auth block",
 			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol:    "native",
 			ClusterName: nil,
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithStringAttribute("auth_type", "sha256_hash").
-				WithFunction("auth_value", "sha256", "changeme").
+				WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+					auth.WithBlock("no_password", func(_ *resourcebuilder.BlockBuilder) {})
+				}).
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -276,48 +274,20 @@ func TestUser_acceptance(t *testing.T) {
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 		{
-			Name:        "Create User with ssl_certificate auth on cluster with localfile storage",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
-			Protocol:    "native",
-			ClusterName: &clusterName,
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("cluster_name", clusterName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithStringAttribute("auth_type", "ssl_certificate").
-				WithStringAttribute("auth_value", "my_cert_cn").
-				Build(),
-			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
-			CheckNotExistsFunc:  checkNotExistsFunc,
-			CheckAttributesFunc: checkAttributesFunc,
-		},
-		{
-			Name:        "Create User with ssl_certificate auth using write-only auth_value_wo field",
+			Name:        "Rotate sha256_hash write-only value via version bump in place",
 			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol:    "native",
 			ClusterName: nil,
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
-				WithStringAttribute("auth_type", "ssl_certificate").
-				WithStringAttribute("auth_value_wo", "my_cert_cn").
-				WithIntAttribute("auth_value_wo_version", 1).
+				WithStringAttribute("name", rotateName).
+				WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+					auth.WithBlock("sha256_hash", func(m *resourcebuilder.BlockBuilder) {
+						m.WithFunction("value_wo", "sha256", "changeme").
+							WithIntAttribute("value_wo_version", 1)
+					})
+				}).
 				Build(),
-			ResourceName:        resourceName,
-			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
-			CheckNotExistsFunc:  checkNotExistsFunc,
-			CheckAttributesFunc: checkAttributesFunc,
-		},
-		{
-			Name:        "Update User ssl_certificate CN in place using Native protocol",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
-			Protocol:    "native",
-			ClusterName: nil,
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", updateCertUser).
-				WithStringAttribute("auth_type", "ssl_certificate").
-				WithStringAttribute("auth_value", "my_cert_cn").
-				Build(),
-			UpdateResource:        &updateCertResource,
+			UpdateResource:        &rotateUpdate,
 			UpdateExpectNoReplace: true,
 			ResourceName:          resourceName,
 			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -325,69 +295,19 @@ func TestUser_acceptance(t *testing.T) {
 			CheckAttributesFunc:   checkAttributesFunc,
 		},
 		{
-			Name:        "Rotate sha256_hash password via auth_value_wo_version bump in place using Native protocol",
+			Name:        "Change ssl_certificate common_name in place",
 			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
 			Protocol:    "native",
 			ClusterName: nil,
 			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", rotateHashUser).
-				WithStringAttribute("auth_type", "sha256_hash").
-				WithFunction("auth_value_wo", "sha256", "changeme").
-				WithIntAttribute("auth_value_wo_version", 1).
+				WithStringAttribute("name", sslName).
+				WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+					auth.WithBlock("ssl_certificate", func(m *resourcebuilder.BlockBuilder) {
+						m.WithStringAttribute("common_name", "cn_a")
+					})
+				}).
 				Build(),
-			UpdateResource:        &rotateHashResource,
-			UpdateExpectNoReplace: true,
-			ResourceName:          resourceName,
-			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
-			CheckNotExistsFunc:    checkNotExistsFunc,
-			CheckAttributesFunc:   checkAttributesFunc,
-		},
-		{
-			Name:        "Rename user in place preserving ssl_certificate auth using Native protocol",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
-			Protocol:    "native",
-			ClusterName: nil,
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", renameFromUser).
-				WithStringAttribute("auth_type", "ssl_certificate").
-				WithStringAttribute("auth_value", "my_cert_cn").
-				Build(),
-			UpdateResource:        &renameResource,
-			UpdateExpectNoReplace: true,
-			ResourceName:          resourceName,
-			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
-			CheckNotExistsFunc:    checkNotExistsFunc,
-			CheckAttributesFunc:   checkAttributesFunc,
-		},
-		{
-			Name:        "Change auth to no_password in place using Native protocol",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
-			Protocol:    "native",
-			ClusterName: nil,
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", noPasswordUser).
-				WithStringAttribute("auth_type", "sha256_hash").
-				WithFunction("auth_value", "sha256", "changeme").
-				Build(),
-			UpdateResource:        &noPasswordResource,
-			UpdateExpectNoReplace: true,
-			ResourceName:          resourceName,
-			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
-			CheckNotExistsFunc:    checkNotExistsFunc,
-			CheckAttributesFunc:   checkAttributesFunc,
-		},
-		{
-			Name:        "Change auth_type with write-only value and unchanged version in place using Native protocol",
-			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
-			Protocol:    "native",
-			ClusterName: nil,
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", typeSwitchUser).
-				WithStringAttribute("auth_type", "plaintext_password").
-				WithStringAttribute("auth_value_wo", "mypass").
-				WithIntAttribute("auth_value_wo_version", 1).
-				Build(),
-			UpdateResource:        &typeSwitchResource,
+			UpdateResource:        &sslUpdate,
 			UpdateExpectNoReplace: true,
 			ResourceName:          resourceName,
 			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -418,7 +338,7 @@ func TestUser_validation_acceptance(t *testing.T) {
 					}
 				`, sha256, sha256),
 					PlanOnly:    true,
-					ExpectError: regexp.MustCompile(`(?s)Exactly one of these attributes must be configured`),
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*password_sha256_hash.*cannot be specified`),
 				},
 				// test ensure you can't use password_sha256_hash_wo without specifying password_sha256_hash_wo_version
 				{
@@ -444,7 +364,26 @@ func TestUser_validation_acceptance(t *testing.T) {
 				},
 			},
 		},
-		// test ensure you can't use auth_type with password_sha256_hash
+		// auth: no_password cannot be combined with another method
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name = "testuser"
+						auth {
+							no_password {}
+							plaintext_password { value = "p" }
+						}
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination`),
+				},
+			},
+		},
+		// auth: no_password cannot be combined with a legacy password field
 		{
 			ProtoV6ProviderFactories: providers,
 			Steps: []resource.TestStep{
@@ -452,9 +391,10 @@ func TestUser_validation_acceptance(t *testing.T) {
 					Config: fmt.Sprintf(`
 					resource "clickhousedbops_user" "test" {
 						name                 = "testuser"
-						auth_type            = "ssl_certificate"
-						auth_value           = "my_cn"
 						password_sha256_hash = "%s"
+						auth {
+							no_password {}
+						}
 					}
 				`, sha256),
 					PlanOnly:    true,
@@ -462,35 +402,78 @@ func TestUser_validation_acceptance(t *testing.T) {
 				},
 			},
 		},
-		// test ensure you can't use auth_type with password_sha256_hash_wo
-		{
-			ProtoV6ProviderFactories: providers,
-			Steps: []resource.TestStep{
-				{
-					Config: fmt.Sprintf(`
-					resource "clickhousedbops_user" "test" {
-						name                    = "testuser"
-						auth_type               = "ssl_certificate"
-						auth_value              = "my_cn"
-						password_sha256_hash_wo = "%s"
-						password_sha256_hash_wo_version = 1
-					}
-				`, sha256),
-					PlanOnly:    true,
-					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination`),
-				},
-			},
-		},
-		// test ensure invalid auth_type is rejected
+		// auth: ssl_certificate needs exactly one of common_name / subject_alt_name (both set)
 		{
 			ProtoV6ProviderFactories: providers,
 			Steps: []resource.TestStep{
 				{
 					Config: `
 					resource "clickhousedbops_user" "test" {
-						name       = "testuser"
-						auth_type  = "invalid_type"
-						auth_value = "something"
+						name = "testuser"
+						auth {
+							ssl_certificate {
+								common_name      = "a"
+								subject_alt_name = "b"
+							}
+						}
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination`),
+				},
+			},
+		},
+		// auth: ssl_certificate needs exactly one of common_name / subject_alt_name (neither set)
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name = "testuser"
+						auth {
+							ssl_certificate {}
+						}
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination`),
+				},
+			},
+		},
+		// auth: a secret method needs exactly one of value / value_wo (both set)
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name = "testuser"
+						auth {
+							sha256_hash {
+								value            = "x"
+								value_wo         = "y"
+								value_wo_version = 1
+							}
+						}
+					}
+				`,
+					PlanOnly:    true,
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination`),
+				},
+			},
+		},
+		// auth: sha256_hash value must be a valid SHA256 hash
+		{
+			ProtoV6ProviderFactories: providers,
+			Steps: []resource.TestStep{
+				{
+					Config: `
+					resource "clickhousedbops_user" "test" {
+						name = "testuser"
+						auth {
+							sha256_hash { value = "nothex" }
+						}
 					}
 				`,
 					PlanOnly:    true,
@@ -498,127 +481,43 @@ func TestUser_validation_acceptance(t *testing.T) {
 				},
 			},
 		},
-		// test ensure you can't use auth_value without auth_type
+		// auth: double_sha1_hash value must be a valid SHA1 hash
 		{
 			ProtoV6ProviderFactories: providers,
 			Steps: []resource.TestStep{
 				{
 					Config: `
 					resource "clickhousedbops_user" "test" {
-						name       = "testuser"
-						auth_value = "my_cn"
+						name = "testuser"
+						auth {
+							double_sha1_hash { value = "nothex" }
+						}
 					}
 				`,
 					PlanOnly:    true,
-					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*auth_type.*must be specified when.*auth_value`),
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Value Match`),
 				},
 			},
 		},
-		// test ensure you can't use both auth_value and auth_value_wo
+		// auth: bcrypt_hash value must be a valid bcrypt hash
 		{
 			ProtoV6ProviderFactories: providers,
 			Steps: []resource.TestStep{
 				{
 					Config: `
 					resource "clickhousedbops_user" "test" {
-						name                  = "testuser"
-						auth_type             = "ssl_certificate"
-						auth_value            = "my_cn"
-						auth_value_wo         = "my_cn"
-						auth_value_wo_version = 1
+						name = "testuser"
+						auth {
+							bcrypt_hash { value = "notbcrypt" }
+						}
 					}
 				`,
 					PlanOnly:    true,
-					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*auth_value.*cannot be specified`),
+					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Value Match`),
 				},
 			},
 		},
-		// test ensure you can't use auth_value_wo without specifying auth_value_wo_version
-		{
-			ProtoV6ProviderFactories: providers,
-			Steps: []resource.TestStep{
-				{
-					Config: `
-					resource "clickhousedbops_user" "test" {
-						name          = "testuser"
-						auth_type     = "ssl_certificate"
-						auth_value_wo = "my_cn"
-					}
-				`,
-					PlanOnly:    true,
-					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*auth_value_wo_version.*must be specified when.*auth_value_wo`),
-				},
-			},
-		},
-		// test ensure you can't use auth_value_wo_version without auth_value_wo
-		{
-			ProtoV6ProviderFactories: providers,
-			Steps: []resource.TestStep{
-				{
-					Config: `
-					resource "clickhousedbops_user" "test" {
-						name                  = "testuser"
-						auth_type             = "no_password"
-						auth_value_wo_version = 1
-					}
-				`,
-					PlanOnly:    true,
-					ExpectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*auth_value_wo.*must be specified when.*auth_value_wo_version`),
-				},
-			},
-		},
-		// test ensure you can't use auth_value when auth_type is no_password
-		{
-			ProtoV6ProviderFactories: providers,
-			Steps: []resource.TestStep{
-				{
-					Config: `
-					resource "clickhousedbops_user" "test" {
-						name       = "testuser"
-						auth_type  = "no_password"
-						auth_value = "something"
-					}
-				`,
-					PlanOnly:    true,
-					ExpectError: regexp.MustCompile(`(?s)auth_value must not be specified when auth_type is no_password`),
-				},
-			},
-		},
-		// test ensure you can't use auth_value_wo when auth_type is no_password
-		{
-			ProtoV6ProviderFactories: providers,
-			Steps: []resource.TestStep{
-				{
-					Config: `
-					resource "clickhousedbops_user" "test" {
-						name                  = "testuser"
-						auth_type             = "no_password"
-						auth_value_wo         = "something"
-						auth_value_wo_version = 1
-					}
-				`,
-					PlanOnly:    true,
-					ExpectError: regexp.MustCompile(`(?s)auth_value_wo must not be specified when auth_type is no_password`),
-				},
-			},
-		},
-		// test ensure auth_type other than no_password requires a value
-		{
-			ProtoV6ProviderFactories: providers,
-			Steps: []resource.TestStep{
-				{
-					Config: `
-					resource "clickhousedbops_user" "test" {
-						name      = "testuser"
-						auth_type = "ssl_certificate"
-					}
-				`,
-					PlanOnly:    true,
-					ExpectError: regexp.MustCompile(`(?s)one of auth_value or auth_value_wo must be specified`),
-				},
-			},
-		},
-		// test ensure some authentication is specified
+		// no authentication configured at all
 		{
 			ProtoV6ProviderFactories: providers,
 			Steps: []resource.TestStep{
@@ -629,7 +528,7 @@ func TestUser_validation_acceptance(t *testing.T) {
 					}
 				`,
 					PlanOnly:    true,
-					ExpectError: regexp.MustCompile(`(?s)Exactly one of these attributes must be configured`),
+					ExpectError: regexp.MustCompile(`(?s)(Invalid Attribute Combination|Missing Attribute Configuration|[Aa]t least one)`),
 				},
 			},
 		},

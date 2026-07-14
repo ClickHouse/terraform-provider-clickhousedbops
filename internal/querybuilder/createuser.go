@@ -1,7 +1,6 @@
 package querybuilder
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -10,35 +9,10 @@ import (
 // CreateUserQueryBuilder is an interface to build CREATE USER SQL queries (already interpolated).
 type CreateUserQueryBuilder interface {
 	QueryBuilder
-	Identified(with Identification, by string) CreateUserQueryBuilder
+	Identified(methods []AuthMethod) CreateUserQueryBuilder
 	WithSettingsProfile(profileName *string) CreateUserQueryBuilder
 	WithCluster(clusterName *string) CreateUserQueryBuilder
 	HostIPs(ips []string) CreateUserQueryBuilder
-}
-
-type Identification string
-
-const (
-	IdentificationSHA256Hash        Identification = "sha256_hash"
-	IdentificationSSLCertificate    Identification = "ssl_certificate"
-	IdentificationPlaintextPassword Identification = "plaintext_password"
-	IdentificationBcryptHash        Identification = "bcrypt_hash"
-	IdentificationDoubleSHA1Hash    Identification = "double_sha1_hash"
-	IdentificationNoPassword        Identification = "no_password"
-)
-
-// identifiedClause renders the "IDENTIFIED WITH ..." clause shared by CREATE and ALTER USER.
-func identifiedClause(with Identification, by string) string {
-	switch with {
-	case "":
-		return ""
-	case IdentificationNoPassword:
-		return fmt.Sprintf("IDENTIFIED WITH %s", with)
-	case IdentificationSSLCertificate:
-		return fmt.Sprintf("IDENTIFIED WITH %s CN %s", with, quote(by))
-	default:
-		return fmt.Sprintf("IDENTIFIED WITH %s BY %s", with, quote(by))
-	}
 }
 
 type createUserQueryBuilder struct {
@@ -55,8 +29,8 @@ func NewCreateUser(resourceName string) CreateUserQueryBuilder {
 	}
 }
 
-func (q *createUserQueryBuilder) Identified(with Identification, by string) CreateUserQueryBuilder {
-	q.identified = identifiedClause(with, by)
+func (q *createUserQueryBuilder) Identified(methods []AuthMethod) CreateUserQueryBuilder {
+	q.identified = identifiedClause(methods)
 	return q
 }
 

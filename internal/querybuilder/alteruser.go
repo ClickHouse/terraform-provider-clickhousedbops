@@ -10,7 +10,7 @@ import (
 type AlterUserQueryBuilder interface {
 	QueryBuilder
 	RenameTo(newName *string) AlterUserQueryBuilder
-	Identified(with Identification, by string) AlterUserQueryBuilder
+	Identified(methods []AuthMethod) AlterUserQueryBuilder
 	DropSettingsProfile(profileName *string) AlterUserQueryBuilder
 	AddSettingsProfile(profileName *string) AlterUserQueryBuilder
 	WithCluster(clusterName *string) AlterUserQueryBuilder
@@ -37,8 +37,8 @@ func (q *alterUserQueryBuilder) RenameTo(newName *string) AlterUserQueryBuilder 
 	return q
 }
 
-func (q *alterUserQueryBuilder) Identified(with Identification, by string) AlterUserQueryBuilder {
-	q.identified = identifiedClause(with, by)
+func (q *alterUserQueryBuilder) Identified(methods []AuthMethod) AlterUserQueryBuilder {
+	q.identified = identifiedClause(methods)
 	return q
 }
 
