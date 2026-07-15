@@ -49,20 +49,17 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 
 		var database *string
 		if attrs["database_name"] != "" {
-			s := attrs["database_name"]
-			database = &s
+			database = new(attrs["database_name"])
 		}
 
 		var table *string
 		if attrs["table_name"] != "" {
-			s := attrs["table_name"]
-			table = &s
+			table = new(attrs["table_name"])
 		}
 
 		var column *string
 		if attrs["column_name"] != "" {
-			s := attrs["column_name"]
-			column = &s
+			column = new(attrs["column_name"])
 		}
 
 		var granteeUserName, granteeRoleName *string
@@ -95,31 +92,26 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 
 		var database *string
 		if attrs["database_name"] != nil {
-			s := attrs["database_name"].(string)
-			database = &s
+			database = new(attrs["database_name"].(string))
 		}
 
 		var table *string
 		if attrs["table_name"] != nil {
-			s := attrs["table_name"].(string)
-			table = &s
+			table = new(attrs["table_name"].(string))
 		}
 
 		var column *string
 		if attrs["column_name"] != nil {
-			s := attrs["column_name"].(string)
-			column = &s
+			column = new(attrs["column_name"].(string))
 		}
 
 		var granteeUserName, granteeRoleName *string
 		if attrs["grantee_user_name"] != nil {
-			s := attrs["grantee_user_name"].(string)
-			granteeUserName = &s
+			granteeUserName = new(attrs["grantee_user_name"].(string))
 		}
 
 		if attrs["grantee_role_name"] != nil {
-			s := attrs["grantee_role_name"].(string)
-			granteeRoleName = &s
+			granteeRoleName = new(attrs["grantee_role_name"].(string))
 		}
 
 		if granteeUserName == nil && granteeRoleName == nil {

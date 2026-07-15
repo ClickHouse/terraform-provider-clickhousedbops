@@ -5,8 +5,6 @@ import (
 )
 
 func Test_drop(t *testing.T) {
-	cluster := "cluster1"
-
 	tests := []struct {
 		name         string
 		action       string
@@ -29,7 +27,7 @@ func Test_drop(t *testing.T) {
 			name:         "Drop database on cluster",
 			resourceType: resourceTypeDatabase,
 			resourceName: "db1",
-			clusterName:  &cluster,
+			clusterName:  new("cluster1"),
 			want:         "DROP DATABASE `db1` ON CLUSTER 'cluster1';",
 			wantErr:      false,
 		},

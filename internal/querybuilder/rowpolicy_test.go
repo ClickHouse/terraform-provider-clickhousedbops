@@ -23,7 +23,7 @@ func TestCreateRowPolicy_Build(t *testing.T) {
 		{
 			name: "restrictive to user with cluster",
 			builder: NewCreateRowPolicy("john_rows", "default", "tbl1").
-				WithCluster(stringPtr("cluster1")).
+				WithCluster(new("cluster1")).
 				SelectFilter("owner_id = 'john'").
 				IsRestrictive(true).
 				GranteeNames([]string{"john"}),
@@ -87,7 +87,7 @@ func TestDropRowPolicy_Build(t *testing.T) {
 		},
 		{
 			name:    "drop if exists with cluster",
-			builder: NewDropRowPolicy("p", "default", "t").WithCluster(stringPtr("cluster1")).IfExists(true),
+			builder: NewDropRowPolicy("p", "default", "t").WithCluster(new("cluster1")).IfExists(true),
 			want:    "DROP ROW POLICY IF EXISTS `p` ON CLUSTER `cluster1` ON `default`.`t`",
 		},
 		{

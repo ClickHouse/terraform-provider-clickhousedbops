@@ -17,22 +17,22 @@ func TestCovers(t *testing.T) {
 		{"leaf does not cover a group", Grant{AccessType: "CREATE TABLE"}, Grant{AccessType: "CREATE"}, false},
 
 		// Database dimension.
-		{"database: same", Grant{AccessType: "SELECT", Database: ptr("test")}, Grant{AccessType: "SELECT", Database: ptr("test")}, true},
-		{"database: unrelated", Grant{AccessType: "SELECT", Database: ptr("prod")}, Grant{AccessType: "SELECT", Database: ptr("test")}, false},
-		{"database: broader unrestricted covers specific", Grant{AccessType: "SELECT"}, Grant{AccessType: "SELECT", Database: ptr("test")}, true},
-		{"database: specific does not cover all", Grant{AccessType: "SELECT", Database: ptr("test")}, Grant{AccessType: "SELECT"}, false},
-		{"database: prefix wildcard covers", Grant{AccessType: "SELECT", Database: ptr("tes*")}, Grant{AccessType: "SELECT", Database: ptr("test*")}, true},
-		{"database: implicit prefix wildcard covers", Grant{AccessType: "SELECT", Database: ptr("tes")}, Grant{AccessType: "SELECT", Database: ptr("test")}, true},
+		{"database: same", Grant{AccessType: "SELECT", Database: new("test")}, Grant{AccessType: "SELECT", Database: new("test")}, true},
+		{"database: unrelated", Grant{AccessType: "SELECT", Database: new("prod")}, Grant{AccessType: "SELECT", Database: new("test")}, false},
+		{"database: broader unrestricted covers specific", Grant{AccessType: "SELECT"}, Grant{AccessType: "SELECT", Database: new("test")}, true},
+		{"database: specific does not cover all", Grant{AccessType: "SELECT", Database: new("test")}, Grant{AccessType: "SELECT"}, false},
+		{"database: prefix wildcard covers", Grant{AccessType: "SELECT", Database: new("tes*")}, Grant{AccessType: "SELECT", Database: new("test*")}, true},
+		{"database: implicit prefix wildcard covers", Grant{AccessType: "SELECT", Database: new("tes")}, Grant{AccessType: "SELECT", Database: new("test")}, true},
 
 		// Table dimension.
-		{"table: broader database covers a table in it", Grant{AccessType: "SELECT", Database: ptr("db")}, Grant{AccessType: "SELECT", Database: ptr("db"), Table: ptr("t")}, true},
-		{"table: specific table does not cover the database", Grant{AccessType: "SELECT", Database: ptr("db"), Table: ptr("t")}, Grant{AccessType: "SELECT", Database: ptr("db")}, false},
-		{"table: different table", Grant{AccessType: "SELECT", Database: ptr("db"), Table: ptr("t1")}, Grant{AccessType: "SELECT", Database: ptr("db"), Table: ptr("t2")}, false},
+		{"table: broader database covers a table in it", Grant{AccessType: "SELECT", Database: new("db")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t")}, true},
+		{"table: specific table does not cover the database", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t")}, Grant{AccessType: "SELECT", Database: new("db")}, false},
+		{"table: different table", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t1")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t2")}, false},
 
 		// Column dimension.
-		{"column: broader table covers a column in it", Grant{AccessType: "SELECT", Database: ptr("db"), Table: ptr("t")}, Grant{AccessType: "SELECT", Database: ptr("db"), Table: ptr("t"), Column: ptr("c")}, true},
-		{"column: specific column does not cover all", Grant{AccessType: "SELECT", Database: ptr("db"), Table: ptr("t"), Column: ptr("c")}, Grant{AccessType: "SELECT", Database: ptr("db"), Table: ptr("t")}, false},
-		{"column: different column", Grant{AccessType: "SELECT", Database: ptr("db"), Table: ptr("t"), Column: ptr("c1")}, Grant{AccessType: "SELECT", Database: ptr("db"), Table: ptr("t"), Column: ptr("c2")}, false},
+		{"column: broader table covers a column in it", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t"), Column: new("c")}, true},
+		{"column: specific column does not cover all", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t"), Column: new("c")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t")}, false},
+		{"column: different column", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t"), Column: new("c1")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t"), Column: new("c2")}, false},
 
 		// Grant option.
 		{"grant option needed but broader lacks it", Grant{AccessType: "SELECT"}, Grant{AccessType: "SELECT", GrantOption: true}, false},
@@ -47,5 +47,3 @@ func TestCovers(t *testing.T) {
 		})
 	}
 }
-
-func ptr(s string) *string { return &s }

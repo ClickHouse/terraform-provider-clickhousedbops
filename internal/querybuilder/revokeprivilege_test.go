@@ -19,31 +19,31 @@ func Test_revokePrivilegeQueryBuilder(t *testing.T) {
 		},
 		{
 			name:    "Select on database",
-			builder: RevokePrivilege("SELECT", "user1").WithDatabase(strptr("db1")),
+			builder: RevokePrivilege("SELECT", "user1").WithDatabase(new("db1")),
 			want:    "REVOKE SELECT ON `db1`.* FROM `user1`;",
 			wantErr: false,
 		},
 		{
 			name:    "Select on wildcard database",
-			builder: RevokePrivilege("SELECT", "user1").WithDatabase(strptr("prefix_*")),
+			builder: RevokePrivilege("SELECT", "user1").WithDatabase(new("prefix_*")),
 			want:    "REVOKE SELECT ON prefix_*.* FROM `user1`;",
 			wantErr: false,
 		},
 		{
 			name:    "Select on table",
-			builder: RevokePrivilege("SELECT", "user1").WithDatabase(strptr("db1")).WithTable(strptr("tbl1")),
+			builder: RevokePrivilege("SELECT", "user1").WithDatabase(new("db1")).WithTable(new("tbl1")),
 			want:    "REVOKE SELECT ON `db1`.`tbl1` FROM `user1`;",
 			wantErr: false,
 		},
 		{
 			name:    "Select on wildcard table",
-			builder: RevokePrivilege("SELECT", "user1").WithDatabase(strptr("db1")).WithTable(strptr("tbl_*")),
+			builder: RevokePrivilege("SELECT", "user1").WithDatabase(new("db1")).WithTable(new("tbl_*")),
 			want:    "REVOKE SELECT ON `db1`.tbl_* FROM `user1`;",
 			wantErr: false,
 		},
 		{
 			name:    "Select on single column",
-			builder: RevokePrivilege("SELECT", "user1").WithDatabase(strptr("db1")).WithTable(strptr("tbl1")).WithColumn(strptr("test")),
+			builder: RevokePrivilege("SELECT", "user1").WithDatabase(new("db1")).WithTable(new("tbl1")).WithColumn(new("test")),
 			want:    "REVOKE SELECT(`test`) ON `db1`.`tbl1` FROM `user1`;",
 			wantErr: false,
 		},
@@ -72,8 +72,4 @@ func Test_revokePrivilegeQueryBuilder(t *testing.T) {
 			}
 		})
 	}
-}
-
-func strptr(str string) *string {
-	return &str
 }
