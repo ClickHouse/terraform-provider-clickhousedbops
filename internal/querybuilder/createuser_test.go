@@ -1,6 +1,7 @@
 package querybuilder
 
 import (
+	"maps"
 	"testing"
 )
 
@@ -12,6 +13,7 @@ func Test_createuser(t *testing.T) {
 		hostIPs         []string
 		settingsProfile string
 		want            string
+		wantParams      map[string]string
 		wantErr         bool
 	}{
 		{
@@ -30,7 +32,8 @@ func Test_createuser(t *testing.T) {
 			name:         "Create user with simple name and password",
 			resourceName: "john",
 			methods:      []AuthMethod{{Type: IdentificationSHA256Hash, Args: []string{"blah"}}},
-			want:         "CREATE USER `john` IDENTIFIED WITH sha256_hash BY 'blah';",
+			want:         "CREATE USER `john` IDENTIFIED WITH sha256_hash BY {secret_0:String};",
+			wantParams:   map[string]string{"secret_0": "blah"},
 			wantErr:      false,
 		},
 		{
@@ -58,7 +61,8 @@ func Test_createuser(t *testing.T) {
 			resourceName: "mira",
 			hostIPs:      []string{"127.0.0.1"},
 			methods:      []AuthMethod{{Type: IdentificationSHA256Hash, Args: []string{"blah"}}},
-			want:         "CREATE USER `mira` HOST IP '127.0.0.1' IDENTIFIED WITH sha256_hash BY 'blah';",
+			want:         "CREATE USER `mira` HOST IP '127.0.0.1' IDENTIFIED WITH sha256_hash BY {secret_0:String};",
+			wantParams:   map[string]string{"secret_0": "blah"},
 			wantErr:      false,
 		},
 		{
@@ -75,8 +79,9 @@ func Test_createuser(t *testing.T) {
 				{Type: IdentificationSSLCertificateCN, Args: []string{"a"}},
 				{Type: IdentificationBcryptPassword, Args: []string{"pw"}},
 			},
-			want:    "CREATE USER `svc` IDENTIFIED WITH ssl_certificate CN 'a', bcrypt_password BY 'pw';",
-			wantErr: false,
+			want:       "CREATE USER `svc` IDENTIFIED WITH ssl_certificate CN 'a', bcrypt_password BY {secret_0:String};",
+			wantParams: map[string]string{"secret_0": "pw"},
+			wantErr:    false,
 		},
 	}
 	for _, tt := range tests {
@@ -104,6 +109,9 @@ func Test_createuser(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("Build() got = %v, want %v", got, tt.want)
+			}
+			if !maps.Equal(q.Parameters(), tt.wantParams) {
+				t.Errorf("Parameters() = %v, want %v", q.Parameters(), tt.wantParams)
 			}
 		})
 	}

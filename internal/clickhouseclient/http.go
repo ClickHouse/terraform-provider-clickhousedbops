@@ -75,7 +75,7 @@ func NewHTTPClient(config HTTPClientConfig) (ClickhouseClient, error) {
 }
 
 func (i *httpClient) Select(ctx context.Context, qry string, callback func(Row) error) error {
-	body, err := i.runQuery(ctx, qry)
+	body, err := i.runQuery(ctx, qry, nil)
 	if err != nil {
 		return errors.WithMessage(err, "error running query")
 	}
@@ -97,8 +97,14 @@ func (i *httpClient) Select(ctx context.Context, qry string, callback func(Row) 
 	return nil
 }
 
-func (i *httpClient) Exec(ctx context.Context, qry string) error {
-	_, err := i.runQuery(ctx, qry)
+func (i *httpClient) Exec(ctx context.Context, qry string, params ...map[string]string) error {
+	var err error
+
+	if len(params) > 0 {
+		_, err = i.runQuery(ctx, qry, params[0])
+	} else {
+		_, err = i.runQuery(ctx, qry, nil)
+	}
 	if err != nil {
 		return errors.WithMessage(err, "error running query")
 	}
@@ -106,10 +112,19 @@ func (i *httpClient) Exec(ctx context.Context, qry string) error {
 	return nil
 }
 
-func (i *httpClient) runQuery(ctx context.Context, qry string) (string, error) {
+func (i *httpClient) runQuery(ctx context.Context, qry string, params map[string]string) (string, error) {
 	ctx = tflog.SetField(ctx, "Query", qry)
 
-	req, err := http.NewRequest(http.MethodPost, i.baseUrl.String(), strings.NewReader(qry))
+	reqURL := i.baseUrl
+	if len(params) > 0 {
+		q := reqURL.Query()
+		for k, v := range params {
+			q.Set("param_"+k, v)
+		}
+		reqURL.RawQuery = q.Encode()
+	}
+
+	req, err := http.NewRequest(http.MethodPost, reqURL.String(), strings.NewReader(qry))
 	if err != nil {
 		return "", errors.WithMessage(err, "error preparing HTTP request")
 	}
@@ -118,6 +133,12 @@ func (i *httpClient) runQuery(ctx context.Context, qry string) (string, error) {
 
 	resp, err := i.client.Do(req)
 	if err != nil {
+		// Do's *url.Error embeds the request URL; drop the query string so param_ secrets don't leak.
+		if uerr, ok := err.(*url.Error); ok {
+			u := *req.URL
+			u.RawQuery = ""
+			uerr.URL = u.Redacted()
+		}
 		return "", errors.WithMessage(err, "error executing query")
 	}
 

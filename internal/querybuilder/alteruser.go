@@ -14,11 +14,13 @@ type AlterUserQueryBuilder interface {
 	DropSettingsProfile(profileName *string) AlterUserQueryBuilder
 	AddSettingsProfile(profileName *string) AlterUserQueryBuilder
 	WithCluster(clusterName *string) AlterUserQueryBuilder
+	Parameters() map[string]string
 }
 
 type alterUserQueryBuilder struct {
 	resourceName       string
 	identified         string
+	params             map[string]string
 	oldSettingsProfile *string
 	newSettingsProfile *string
 	newName            *string
@@ -38,8 +40,12 @@ func (q *alterUserQueryBuilder) RenameTo(newName *string) AlterUserQueryBuilder 
 }
 
 func (q *alterUserQueryBuilder) Identified(methods []AuthMethod) AlterUserQueryBuilder {
-	q.identified = identifiedClause(methods)
+	q.identified, q.params = identifiedClause(methods)
 	return q
+}
+
+func (q *alterUserQueryBuilder) Parameters() map[string]string {
+	return q.params
 }
 
 func (q *alterUserQueryBuilder) DropSettingsProfile(profileName *string) AlterUserQueryBuilder {

@@ -13,11 +13,13 @@ type CreateUserQueryBuilder interface {
 	WithSettingsProfile(profileName *string) CreateUserQueryBuilder
 	WithCluster(clusterName *string) CreateUserQueryBuilder
 	HostIPs(ips []string) CreateUserQueryBuilder
+	Parameters() map[string]string
 }
 
 type createUserQueryBuilder struct {
 	resourceName    string
 	identified      string
+	params          map[string]string
 	hostIPs         []string
 	settingsProfile *string
 	clusterName     *string
@@ -30,8 +32,12 @@ func NewCreateUser(resourceName string) CreateUserQueryBuilder {
 }
 
 func (q *createUserQueryBuilder) Identified(methods []AuthMethod) CreateUserQueryBuilder {
-	q.identified = identifiedClause(methods)
+	q.identified, q.params = identifiedClause(methods)
 	return q
+}
+
+func (q *createUserQueryBuilder) Parameters() map[string]string {
+	return q.params
 }
 
 func (q *createUserQueryBuilder) HostIPs(ips []string) CreateUserQueryBuilder {

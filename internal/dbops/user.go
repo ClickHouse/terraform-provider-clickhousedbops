@@ -60,7 +60,7 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 		return nil, errors.WithMessage(err, "error building query")
 	}
 
-	err = i.clickhouseClient.Exec(ctx, sql)
+	err = i.clickhouseClient.Exec(ctx, sql, builder.Parameters())
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}
@@ -200,17 +200,17 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 		return nil, errors.Errorf("user %q not found", user.ID)
 	}
 
-	sql, err := querybuilder.
+	builder := querybuilder.
 		NewAlterUser(existing.Name).
 		WithCluster(clusterName).
 		RenameTo(&user.Name).
-		Identified(toQuerybuilderAuthMethods(user.AuthMethods)).
-		Build()
+		Identified(toQuerybuilderAuthMethods(user.AuthMethods))
+	sql, err := builder.Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
 
-	err = i.clickhouseClient.Exec(ctx, sql)
+	err = i.clickhouseClient.Exec(ctx, sql, builder.Parameters())
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}
