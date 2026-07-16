@@ -71,14 +71,15 @@ func (r *ResourceBuilder) WithResourceFieldReference(attrName string, resourceTy
 	return r
 }
 
-func (r *ResourceBuilder) WithFunction(attrName string, function string, arg string) *ResourceBuilder {
-	// function call
-	r.getRootResourceBody().SetAttributeRaw(attrName, hclwrite.Tokens{
-		{Type: hclsyntax.TokenIdent, Bytes: []byte(function)},
-		{Type: hclsyntax.TokenOParen, Bytes: []byte("(")},
-		{Type: hclsyntax.TokenQuotedLit, Bytes: []byte(fmt.Sprintf("%q", arg))},
-		{Type: hclsyntax.TokenCParen, Bytes: []byte(")")},
-	})
+func (r *ResourceBuilder) WithFunction(attrName string, function string, args ...string) *ResourceBuilder {
+	r.getRootResourceBody().SetAttributeRaw(attrName, functionTokens(function, args))
+
+	return r
+}
+
+func (r *ResourceBuilder) WithBlock(name string, fn func(*BlockBuilder)) *ResourceBuilder {
+	block := r.getRootResourceBody().AppendNewBlock(name, nil)
+	fn(&BlockBuilder{body: block.Body()})
 
 	return r
 }
@@ -125,4 +126,59 @@ func (r *ResourceBuilder) Build() string {
 
 func (r *ResourceBuilder) getRootResourceBody() *hclwrite.Body {
 	return r.file.Body().FirstMatchingBlock("resource", []string{r.resourceType, r.resourceName}).Body()
+}
+
+// BlockBuilder is a helper
+type BlockBuilder struct {
+	body *hclwrite.Body
+}
+
+func (b *BlockBuilder) WithStringAttribute(attrName string, attrVal string) *BlockBuilder {
+	b.body.SetAttributeValue(attrName, cty.StringVal(attrVal))
+
+	return b
+}
+
+func (b *BlockBuilder) WithIntAttribute(attrName string, attrVal int64) *BlockBuilder {
+	b.body.SetAttributeValue(attrName, cty.NumberIntVal(attrVal))
+
+	return b
+}
+
+func (b *BlockBuilder) WithBoolAttribute(attrName string, attrVal bool) *BlockBuilder {
+	b.body.SetAttributeValue(attrName, cty.BoolVal(attrVal))
+
+	return b
+}
+
+func (b *BlockBuilder) WithFunction(attrName string, function string, args ...string) *BlockBuilder {
+	b.body.SetAttributeRaw(attrName, functionTokens(function, args))
+
+	return b
+}
+
+// WithBlock appends a nested block inside this block. Call it more than once with the same name to emit repeated blocks.
+func (b *BlockBuilder) WithBlock(name string, fn func(*BlockBuilder)) *BlockBuilder {
+	nested := b.body.AppendNewBlock(name, nil)
+	fn(&BlockBuilder{body: nested.Body()})
+
+	return b
+}
+
+func functionTokens(function string, args []string) hclwrite.Tokens {
+	tokens := hclwrite.Tokens{
+		{Type: hclsyntax.TokenIdent, Bytes: []byte(function)},
+		{Type: hclsyntax.TokenOParen, Bytes: []byte("(")},
+	}
+
+	for i, arg := range args {
+		if i != 0 {
+			tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenComma, Bytes: []byte(",")})
+		}
+
+		tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenQuotedLit, Bytes: []byte(fmt.Sprintf("%q", arg))})
+	}
+
+	tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenCParen, Bytes: []byte(")")})
+	return tokens
 }

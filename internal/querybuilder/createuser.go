@@ -1,7 +1,6 @@
 package querybuilder
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -10,21 +9,17 @@ import (
 // CreateUserQueryBuilder is an interface to build CREATE USER SQL queries (already interpolated).
 type CreateUserQueryBuilder interface {
 	QueryBuilder
-	Identified(with Identification, by string) CreateUserQueryBuilder
+	Identified(methods []AuthMethod) CreateUserQueryBuilder
 	WithSettingsProfile(profileName *string) CreateUserQueryBuilder
 	WithCluster(clusterName *string) CreateUserQueryBuilder
 	HostIPs(ips []string) CreateUserQueryBuilder
+	Parameters() map[string]string
 }
-
-type Identification string
-
-const (
-	IdentificationSHA256Hash Identification = "sha256_hash"
-)
 
 type createUserQueryBuilder struct {
 	resourceName    string
 	identified      string
+	params          map[string]string
 	hostIPs         []string
 	settingsProfile *string
 	clusterName     *string
@@ -36,9 +31,13 @@ func NewCreateUser(resourceName string) CreateUserQueryBuilder {
 	}
 }
 
-func (q *createUserQueryBuilder) Identified(with Identification, by string) CreateUserQueryBuilder {
-	q.identified = fmt.Sprintf("IDENTIFIED WITH %s BY %s", with, quote(by))
+func (q *createUserQueryBuilder) Identified(methods []AuthMethod) CreateUserQueryBuilder {
+	q.identified, q.params = identifiedClause(methods)
 	return q
+}
+
+func (q *createUserQueryBuilder) Parameters() map[string]string {
+	return q.params
 }
 
 func (q *createUserQueryBuilder) HostIPs(ips []string) CreateUserQueryBuilder {

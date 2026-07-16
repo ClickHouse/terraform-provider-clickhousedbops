@@ -1,17 +1,20 @@
 package querybuilder
 
 import (
+	"maps"
 	"testing"
 )
 
 func Test_alterUserQueryBuilder_Build(t *testing.T) {
 	tests := []struct {
 		name               string
+		identified         []AuthMethod
 		oldSettingsProfile *string
 		newSettingsProfile *string
 		newName            *string
 		clusterName        *string
 		want               string
+		wantParams         map[string]string
 		wantErr            bool
 	}{
 		{
@@ -73,6 +76,27 @@ func Test_alterUserQueryBuilder_Build(t *testing.T) {
 			want:    "",
 			wantErr: true,
 		},
+		{
+			name:       "Change identification",
+			identified: []AuthMethod{{Type: IdentificationSHA256Hash, Args: []string{"blah"}}},
+			want:       "ALTER USER `foo` IDENTIFIED WITH sha256_hash BY {secret_0:String};",
+			wantParams: map[string]string{"secret_0": "blah"},
+			wantErr:    false,
+		},
+		{
+			name:        "Change identification on cluster",
+			identified:  []AuthMethod{{Type: IdentificationSSLCertificateCN, Args: []string{"cn"}}},
+			clusterName: new("cluster1"),
+			want:        "ALTER USER `foo` ON CLUSTER 'cluster1' IDENTIFIED WITH ssl_certificate CN 'cn';",
+			wantErr:     false,
+		},
+		{
+			name:       "Rename and change identification",
+			newName:    new("test"),
+			identified: []AuthMethod{{Type: IdentificationNoPassword}},
+			want:       "ALTER USER `foo` RENAME TO `test` IDENTIFIED WITH no_password;",
+			wantErr:    false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -83,6 +107,7 @@ func Test_alterUserQueryBuilder_Build(t *testing.T) {
 				newName:            tt.newName,
 				clusterName:        tt.clusterName,
 			}
+			q.Identified(tt.identified)
 			got, err := q.Build()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Build() error = %v, wantErr %v", err, tt.wantErr)
@@ -90,6 +115,9 @@ func Test_alterUserQueryBuilder_Build(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("Build() got = %v, want %v", got, tt.want)
+			}
+			if !maps.Equal(q.Parameters(), tt.wantParams) {
+				t.Errorf("Parameters() = %v, want %v", q.Parameters(), tt.wantParams)
 			}
 		})
 	}
