@@ -38,6 +38,12 @@ func TestCovers(t *testing.T) {
 		{"grant option needed but broader lacks it", Grant{AccessType: "SELECT"}, Grant{AccessType: "SELECT", GrantOption: true}, false},
 		{"grant option needed and broader has it", Grant{AccessType: "SELECT", GrantOption: true}, Grant{AccessType: "SELECT", GrantOption: true}, true},
 		{"grant option not needed", Grant{AccessType: "SELECT", GrantOption: true}, Grant{AccessType: "SELECT"}, true},
+
+		// Access object (USER_NAME/DEFINER scope).
+		{"access object: same", Grant{AccessType: "CREATE USER", AccessObject: new("u")}, Grant{AccessType: "CREATE USER", AccessObject: new("u")}, true},
+		{"access object: different", Grant{AccessType: "CREATE USER", AccessObject: new("u1")}, Grant{AccessType: "CREATE USER", AccessObject: new("u2")}, false},
+		{"access object: broader unrestricted covers specific", Grant{AccessType: "CREATE USER"}, Grant{AccessType: "CREATE USER", AccessObject: new("u")}, true},
+		{"access object: prefix covers", Grant{AccessType: "CREATE USER", AccessObject: new("team")}, Grant{AccessType: "CREATE USER", AccessObject: new("team_a")}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

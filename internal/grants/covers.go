@@ -7,11 +7,12 @@ import (
 
 // Grant is a privilege grant reduced to the fields that determine coverage.
 type Grant struct {
-	AccessType  string
-	Database    *string
-	Table       *string
-	Column      *string
-	GrantOption bool
+	AccessType   string
+	Database     *string
+	Table        *string
+	Column       *string
+	AccessObject *string
+	GrantOption  bool
 }
 
 // Covers reports whether broader already conveys at least narrower. Both are
@@ -27,7 +28,8 @@ func Covers(broader, narrower Grant) bool {
 	}
 	return objectCovers(broader.Database, narrower.Database) &&
 		objectCovers(broader.Table, narrower.Table) &&
-		objectCovers(broader.Column, narrower.Column)
+		objectCovers(broader.Column, narrower.Column) &&
+		objectCovers(broader.AccessObject, narrower.AccessObject)
 }
 
 // objectCovers reports whether broader covers narrower on a single dimension; nil means wildcard.
