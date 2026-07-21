@@ -34,6 +34,10 @@ type TestCase struct {
 	ExpectError         *regexp.Regexp
 	CheckNotExistsFunc  func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error)
 	CheckAttributesFunc func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error
+
+	// SetupFunc, when set, runs after the ClickHouse cluster is up and before
+	// terraform runs. Use it to seed pre-existing out-of-band resources.
+	SetupFunc func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error
 }
 
 func RunTests(t *testing.T, tests []TestCase) {
@@ -71,6 +75,12 @@ func RunTests(t *testing.T, tests []TestCase) {
 			providerCfg, err := providerconfig.ProviderConfig(tc.Protocol, connSettings.Host, connSettings.Port, connSettings.Username, connSettings.Password)
 			if err != nil {
 				t.Fatal(err)
+			}
+
+			if tc.SetupFunc != nil {
+				if err := tc.SetupFunc(ctx, dbopsClient, tc.ClusterName); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			t.Run(tc.Name, func(t *testing.T) {
