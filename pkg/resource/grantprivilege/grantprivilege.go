@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
@@ -27,6 +28,7 @@ var grantPrivilegeDescription string
 var (
 	_ resource.Resource                   = &Resource{}
 	_ resource.ResourceWithConfigure      = &Resource{}
+	_ resource.ResourceWithUpgradeState   = &Resource{}
 	_ resource.ResourceWithValidateConfig = &Resource{}
 )
 
@@ -45,6 +47,10 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 }
 
 func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = resourceSchema(1)
+}
+
+func resourceSchema(version int64) schema.Schema {
 	validPrivileges := make([]string, 0)
 
 	upstrGrts := grants.Parsed()
@@ -61,7 +67,8 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 		validPrivileges = append(validPrivileges, groupName)
 	}
 
-	resp.Schema = schema.Schema{
+	return schema.Schema{
+		Version: version,
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Optional:    true,
@@ -180,6 +187,34 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 		},
 		MarkdownDescription: grantPrivilegeDescription,
+	}
+}
+
+func (r *Resource) UpgradeState(_ context.Context) map[int64]resource.StateUpgrader {
+	// Reusing the current schema as the version 0 prior schema is safe:
+	// attributes missing from an old raw state (e.g. `current_grants` before
+	// v1.11.0) are decoded as null. Both pre-v1.11.0 and v1.11.0 states are
+	// version 0; only v1.11.0 states may already carry a `current_grants`
+	// value, which is preserved as-is below.
+	priorSchema := resourceSchema(0)
+
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema: &priorSchema,
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				var state GrantPrivilege
+				resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				if state.CurrentGrants.IsNull() {
+					state.CurrentGrants = types.BoolValue(false)
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+			},
+		},
 	}
 }
 
