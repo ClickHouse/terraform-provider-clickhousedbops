@@ -2,8 +2,8 @@ package dbops
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pingcap/errors"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
@@ -28,7 +28,22 @@ func (i *impl) CreateSettingsProfile(ctx context.Context, profile SettingsProfil
 
 	err = i.clickhouseClient.Exec(ctx, sql)
 	if err != nil {
-		return nil, errors.WithMessage(err, "error running query")
+		if !isAlreadyExistsError(err) {
+			return nil, errors.WithMessage(err, "error running query")
+		}
+
+		// The settings profile already exists in ClickHouse but terraform has
+		// no record of it. This happens when a previous apply successfully ran
+		// CREATE but the post-create lookup missed (e.g. replication lag) and
+		// the ID was never saved to state; the retried apply then hits error
+		// code 493 (ACCESS_ENTITY_ALREADY_EXISTS) forever. Recover by adopting
+		// the existing profile: fall through to the lookup below so its ID is
+		// recorded in state. If the adopted profile's attributes diverge from
+		// the plan, terraform reports the inconsistency after apply instead of
+		// silently overwriting an out-of-band entity.
+		tflog.Warn(ctx, "settings profile already exists, adopting it instead of failing", map[string]any{
+			"name": profile.Name,
+		})
 	}
 
 	return retryWithBackoff(ctx, "settings profile", profile.Name, func() (*SettingsProfile, error) {
@@ -321,7 +336,9 @@ func (i *impl) FindSettingsProfileByName(ctx context.Context, name string, clust
 	}
 
 	if settingsProfileID == "" {
-		return nil, errors.New(fmt.Sprintf("settings profile with name %s not found", name))
+		// No settings profile with such name found. Returning (nil, nil) lets
+		// retryWithBackoff callers keep retrying within their backoff window.
+		return nil, nil
 	}
 
 	return i.GetSettingsProfile(ctx, settingsProfileID, clusterName)
