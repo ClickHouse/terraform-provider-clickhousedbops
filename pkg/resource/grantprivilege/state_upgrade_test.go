@@ -58,6 +58,10 @@ func TestUpgradeState(t *testing.T) {
 			diags = response.State.Get(ctx, &state)
 			require.False(t, diags.HasError(), diags.Errors())
 			require.Equal(t, test.expected, state.CurrentGrants.ValueBool())
+
+			// Other fields must round-trip unchanged through the upgrader.
+			require.Equal(t, types.StringValue("SELECT"), state.Privilege)
+			require.Equal(t, types.StringValue("reader"), state.GranteeRoleName)
 		})
 	}
 }

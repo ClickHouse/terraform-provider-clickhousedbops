@@ -191,6 +191,11 @@ func resourceSchema(version int64) schema.Schema {
 }
 
 func (r *Resource) UpgradeState(_ context.Context) map[int64]resource.StateUpgrader {
+	// Reusing the current schema as the version 0 prior schema is safe:
+	// attributes missing from an old raw state (e.g. `current_grants` before
+	// v1.11.0) are decoded as null. Both pre-v1.11.0 and v1.11.0 states are
+	// version 0; only v1.11.0 states may already carry a `current_grants`
+	// value, which is preserved as-is below.
 	priorSchema := resourceSchema(0)
 
 	return map[int64]resource.StateUpgrader{
