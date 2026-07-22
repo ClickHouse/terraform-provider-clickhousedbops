@@ -3,6 +3,7 @@ package grantprivilege_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -630,6 +631,27 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Grant privilege to a role fails when a user with the same name exists using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "SELECT").
+				WithStringAttribute("database_name", "default").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", "shadowedrole", "name").
+				AddDependency(resourcebuilder.New("clickhousedbops_role", "shadowedrole").
+					WithResourceFieldReference("name", "clickhousedbops_user", "shadowuser", "name").
+					AddDependency(resourcebuilder.New("clickhousedbops_user", "shadowuser").
+						WithStringAttribute("name", "shadowed").
+						WithFunction("password_sha256_hash_wo", "sha256", "test").
+						WithIntAttribute("password_sha256_hash_wo_version", 1).
+						Build()).
+					Build()).
+				Build(),
+			ResourceName:    resourceName,
+			ResourceAddress: fmt.Sprintf("%s.%s", resourceType, resourceName),
+			ExpectError:     regexp.MustCompile(`(?s)a\s+user\s+with\s+the\s+same\s+name\s+exists`),
 		},
 	}
 
