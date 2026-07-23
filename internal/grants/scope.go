@@ -4,23 +4,26 @@ import "slices"
 
 // ScopeAttributes describes which target attributes a privilege's scope allows.
 type ScopeAttributes struct {
-	Database     bool
-	Table        bool
-	Column       bool
-	AccessObject bool
+	Database           bool
+	Table              bool
+	Column             bool
+	AccessObject       bool
+	AccessObjectFilter bool
+	Parameterized      bool
 }
 
 var attributesByScope = map[string]ScopeAttributes{
-	"GLOBAL":       {},
-	"DATABASE":     {Database: true},
-	"TABLE":        {Database: true, Table: true},
-	"VIEW":         {Database: true, Table: true},
-	"DICTIONARY":   {Database: true, Table: true},
-	"COLUMN":       {Database: true, Table: true, Column: true},
-	"USER_NAME":    {AccessObject: true},
-	"DEFINER":      {AccessObject: true},
-	"SOURCE":       {AccessObject: true},
-	"TABLE_ENGINE": {},
+	"GLOBAL":           {},
+	"DATABASE":         {Database: true},
+	"TABLE":            {Database: true, Table: true},
+	"VIEW":             {Database: true, Table: true},
+	"DICTIONARY":       {Database: true, Table: true},
+	"COLUMN":           {Database: true, Table: true, Column: true},
+	"NAMED_COLLECTION": {AccessObject: true, Parameterized: true},
+	"USER_NAME":        {AccessObject: true, Parameterized: true},
+	"DEFINER":          {AccessObject: true, Parameterized: true},
+	"SOURCE":           {AccessObject: true, AccessObjectFilter: true, Parameterized: true},
+	"TABLE_ENGINE":     {AccessObject: true, Parameterized: true},
 }
 
 // ScopeAttributesFor returns the attributes supported by the privilege's own
@@ -42,6 +45,8 @@ func ScopeAttributesFor(privilege string) (ScopeAttributes, ScopeAttributes, boo
 		allAttrs.Table = allAttrs.Table || a.Table
 		allAttrs.Column = allAttrs.Column || a.Column
 		allAttrs.AccessObject = allAttrs.AccessObject || a.AccessObject
+		allAttrs.AccessObjectFilter = allAttrs.AccessObjectFilter || a.AccessObjectFilter
+		allAttrs.Parameterized = allAttrs.Parameterized || a.Parameterized
 	}
 
 	return attrs, allAttrs, supported
@@ -52,7 +57,9 @@ func (s ScopeAttributes) SubsetOf(o ScopeAttributes) bool {
 	return (!s.Database || o.Database) &&
 		(!s.Table || o.Table) &&
 		(!s.Column || o.Column) &&
-		(!s.AccessObject || o.AccessObject)
+		(!s.AccessObject || o.AccessObject) &&
+		(!s.AccessObjectFilter || o.AccessObjectFilter) &&
+		(!s.Parameterized || o.Parameterized)
 }
 
 // FoldedMembers returns the members of privilege actually granted at the requested
