@@ -124,11 +124,23 @@ func (i *httpClient) Exec(ctx context.Context, qry string, params ...map[string]
 	return nil
 }
 
+func (i *httpClient) ExecSensitive(ctx context.Context, qry string, redactedQry string, sensitiveValues []string) error {
+	_, err := i.runQueryWithLog(ctx, qry, nil, redactedQry, sensitiveValues)
+	if err != nil {
+		return errors.WithMessage(err, "error running query")
+	}
+	return nil
+}
+
 func (i *httpClient) runQuery(ctx context.Context, qry string, params map[string]string) (string, error) {
+	return i.runQueryWithLog(ctx, qry, params, loggableQuery(ctx, qry), nil)
+}
+
+func (i *httpClient) runQueryWithLog(ctx context.Context, qry string, params map[string]string, loggedQry string, sensitiveValues []string) (string, error) {
 	ctx, cancel := queryContext(ctx, i.queryTimeout)
 	defer cancel()
 
-	ctx = tflog.SetField(ctx, "Query", loggableQuery(ctx, qry))
+	ctx = tflog.SetField(ctx, "Query", loggedQry)
 
 	reqURL := i.baseUrl
 	if len(params) > 0 {
@@ -171,6 +183,7 @@ func (i *httpClient) runQuery(ctx context.Context, qry string, params map[string
 		// Best effort, if we fail parsing we leave the body as-is, otherwise we use the formatted version.
 		body = buf.Bytes()
 	}
+	body = []byte(redactSensitiveValues(string(body), sensitiveValues))
 
 	ctx = tflog.SetField(ctx, "QueryResult", loggableResult(ctx, string(body)))
 
