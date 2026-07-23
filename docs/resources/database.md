@@ -4,24 +4,58 @@ page_title: "clickhousedbops_database Resource - clickhousedbops"
 subcategory: ""
 description: |-
   Use the clickhousedbops_database resource to create a database in a ClickHouse instance.
-  Known limitations:
-  Changing the comment on a database resource is unsupported and will cause the database to be destroyed and recreated. WARNING: you will lose any content of the database if you do so!
+  Database engines can be configured with engine, engine_arguments, and
+  engine_settings. Arguments and setting values are ClickHouse SQL expressions,
+  so include quotes around string literals. This representation supports database
+  engines with different signatures without tying the provider to a fixed engine
+  catalog.
+  For secret engine arguments or settings, reference a write-only string parameter
+  such as {catalog_credential:String} and provide its value through
+  engine_parameters_wo. The provider safely quotes these string values and
+  redacts them from logs and errors; write-only values are not stored in state. Bump
+  engine_parameters_wo_version when a secret changes.
+  Changing the comment or engine configuration recreates the database. This
+  destroys its contents. ClickHouse exposes the engine name through
+  system.databases, but does not expose engine arguments and settings as
+  structured fields. The provider detects drift of the engine name and retains
+  configured arguments and settings in state.
 ---
 
 # clickhousedbops_database (Resource)
 
 Use the *clickhousedbops_database* resource to create a database in a ClickHouse instance.
 
-Known limitations:
+Database engines can be configured with `engine`, `engine_arguments`, and
+`engine_settings`. Arguments and setting values are ClickHouse SQL expressions,
+so include quotes around string literals. This representation supports database
+engines with different signatures without tying the provider to a fixed engine
+catalog.
 
-- Changing the comment on a `database` resource is unsupported and will cause the database to be destroyed and recreated. WARNING: you will lose any content of the database if you do so!
+For secret engine arguments or settings, reference a write-only string parameter
+such as `{catalog_credential:String}` and provide its value through
+`engine_parameters_wo`. The provider safely quotes these string values and
+redacts them from logs and errors; write-only values are not stored in state. Bump
+`engine_parameters_wo_version` when a secret changes.
+
+Changing the comment or engine configuration recreates the database. **This
+destroys its contents.** ClickHouse exposes the engine name through
+`system.databases`, but does not expose engine arguments and settings as
+structured fields. The provider detects drift of the engine name and retains
+configured arguments and settings in state.
 
 ## Example Usage
 
 ```terraform
 resource "clickhousedbops_database" "logs" {
   cluster_name = "cluster"
-  name = "logs"
+  name         = "logs"
+
+  engine = "Replicated"
+  engine_arguments = [
+    "'/clickhouse/databases/{uuid}'",
+    "'{shard}'",
+    "'{replica}'",
+  ]
 }
 ```
 
@@ -34,10 +68,17 @@ resource "clickhousedbops_database" "logs" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `cluster_name` (String) Name of the cluster to create the database into. If omitted, the database will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 Should be set when hitting a cluster with more than one replica.
 - `comment` (String) Comment associated with the database
+- `engine` (String) Database engine name. When omitted, ClickHouse chooses its default engine. Changing the engine recreates the database.
+- `engine_arguments` (List of String) Ordered SQL expressions passed to the database engine. Include ClickHouse quoting where required. Changing arguments recreates the database.
+- `engine_parameters_wo` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only string parameters referenced by engine arguments or settings, such as {catalog_credential:String}. The provider safely quotes substituted values and redacts them from logs and errors; they are not stored in state. Requires Terraform/OpenTofu >= 1.11.
+- `engine_parameters_wo_version` (Number) Version of engine_parameters_wo. Bump this value to recreate the database with updated write-only parameters.
+- `engine_settings` (Map of String) Database engine settings as setting-name to SQL-expression pairs. Values must include ClickHouse quoting where required. Changing settings recreates the database.
 
 ### Read-Only
 
@@ -50,8 +91,8 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# Databases can be imported by specifying the UUID.
-# Find the UUID of the database by checking system.databases table.
+# Databases can be imported by specifying a unique UUID.
+# Some database engines use the shared zero UUID; import those databases by name.
 terraform import clickhousedbops_database.example xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 # It's also possible to import databases using the name:
@@ -59,6 +100,8 @@ terraform import clickhousedbops_database.example xxxxxxxx-xxxx-xxxx-xxxx-xxxxxx
 terraform import clickhousedbops_database.example databasename
 
 # IMPORTANT: if you have a multi node cluster, you need to specify the cluster name!
+# Name import is recommended for clustered databases because UUIDs can differ
+# between replicas (for example, an Atomic database created independently on each replica).
 
 terraform import clickhousedbops_database.example cluster:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 terraform import clickhousedbops_database.example cluster:databasename
