@@ -20,3 +20,7 @@ func (unknownConfigClient) Select(context.Context, string, func(Row) error) erro
 func (unknownConfigClient) Exec(context.Context, string, ...map[string]string) error {
 	return errConfigUnknown
 }
+
+func (unknownConfigClient) ExecSensitive(context.Context, string, string, []string) error {
+	return errConfigUnknown
+}
