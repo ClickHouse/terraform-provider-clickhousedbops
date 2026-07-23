@@ -76,6 +76,12 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			accessObject = &s
 		}
 
+		var accessObjectFilter *string
+		if attrs["access_object_filter"] != "" {
+			s := attrs["access_object_filter"]
+			accessObjectFilter = &s
+		}
+
 		var granteeUserName, granteeRoleName *string
 		if granteeUser != "" {
 			granteeUserName = &granteeUser
@@ -91,6 +97,7 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			TableName:           table,
 			ColumnName:          column,
 			AccessObject:        accessObject,
+			AccessObjectFilter:  accessObjectFilter,
 			GranteeUserName:     granteeUserName,
 			GranteeRoleName:     granteeRoleName,
 		}
@@ -126,6 +133,12 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			accessObject = &s
 		}
 
+		var accessObjectFilter *string
+		if attrs["access_object_filter"] != nil {
+			s := attrs["access_object_filter"].(string)
+			accessObjectFilter = &s
+		}
+
 		var granteeUserName, granteeRoleName *string
 		if attrs["grantee_user_name"] != nil {
 			granteeUserName = new(attrs["grantee_user_name"].(string))
@@ -152,6 +165,7 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			TableName:           table,
 			ColumnName:          column,
 			AccessObject:        accessObject,
+			AccessObjectFilter:  accessObjectFilter,
 			GranteeUserName:     granteeUserName,
 			GranteeRoleName:     granteeRoleName,
 			GrantOption:         grantOption,
@@ -184,6 +198,10 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 
 		if !nilcompare.NilCompare(grantprivilege.AccessObject, attrs["access_object"]) {
 			return fmt.Errorf("wrong value for access_object attribute")
+		}
+
+		if !nilcompare.NilCompare(grantprivilege.AccessObjectFilter, attrs["access_object_filter"]) {
+			return fmt.Errorf("wrong value for access_object_filter attribute")
 		}
 
 		if !nilcompare.NilCompare(clusterName, attrs["cluster_name"]) {
@@ -406,6 +424,37 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("privilege_name", "NAMED COLLECTION").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
+				AddDependency(granteeRoleResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Grant TABLE_ENGINE-scoped privilege on access object to role using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "TABLE ENGINE").
+				WithStringAttribute("access_object", "Distributed").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
+				AddDependency(granteeRoleResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Grant SOURCE-scoped READ with regexp filter to role using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "READ").
+				WithStringAttribute("access_object", "URL").
+				WithStringAttribute("access_object_filter", `https://example\.com/files/.*`).
 				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(granteeRoleResource.Build()).
 				Build(),

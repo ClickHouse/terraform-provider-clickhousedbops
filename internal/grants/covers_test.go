@@ -45,6 +45,12 @@ func TestCovers(t *testing.T) {
 		{"access object: broader unrestricted covers specific", Grant{AccessType: "CREATE USER"}, Grant{AccessType: "CREATE USER", AccessObject: new("u")}, true},
 		{"access object: prefix covers", Grant{AccessType: "CREATE USER", AccessObject: new("team*")}, Grant{AccessType: "CREATE USER", AccessObject: new("team_a")}, true},
 		{"access object: value without '*' is exact", Grant{AccessType: "CREATE USER", AccessObject: new("team")}, Grant{AccessType: "CREATE USER", AccessObject: new("team_a")}, false},
+
+		// Source filters are regular expressions. Only exact equality is safe to infer.
+		{"filter: unfiltered source covers filtered", Grant{AccessType: "READ", AccessObject: new("URL")}, Grant{AccessType: "READ", AccessObject: new("URL"), AccessObjectFilter: new("https://example\\.com/.*")}, true},
+		{"filter: filtered does not cover unfiltered", Grant{AccessType: "READ", AccessObject: new("URL"), AccessObjectFilter: new("https://example\\.com/.*")}, Grant{AccessType: "READ", AccessObject: new("URL")}, false},
+		{"filter: identical filters", Grant{AccessType: "READ", AccessObject: new("URL"), AccessObjectFilter: new("https://example\\.com/.*")}, Grant{AccessType: "READ", AccessObject: new("URL"), AccessObjectFilter: new("https://example\\.com/.*")}, true},
+		{"filter: do not infer regexp containment", Grant{AccessType: "READ", AccessObject: new("URL"), AccessObjectFilter: new("https://example\\.com/.*")}, Grant{AccessType: "READ", AccessObject: new("URL"), AccessObjectFilter: new("https://example\\.com/private/.*")}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
