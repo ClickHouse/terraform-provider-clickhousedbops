@@ -40,3 +40,26 @@ resource "clickhousedbops_grant_privilege" "team_user_admin" {
   grantee_role_name = "team_provisioner"
   grant_option      = true
 }
+
+# Parameterized privileges use access_object for targets that are not in the
+# database/table hierarchy, including table engines and external sources.
+resource "clickhousedbops_grant_privilege" "distributed_engine" {
+  privilege_name    = "TABLE ENGINE"
+  access_object     = "Distributed"
+  grantee_role_name = "ddl_role"
+}
+
+resource "clickhousedbops_grant_privilege" "read_s3" {
+  privilege_name    = "READ"
+  access_object     = "S3"
+  grantee_role_name = "reader_role"
+}
+
+# ClickHouse 25.8+ can restrict source grants to a URI regexp. The provider
+# quotes the filter as a SQL string; this field does not accept raw SQL.
+resource "clickhousedbops_grant_privilege" "read_public_exports" {
+  privilege_name       = "READ"
+  access_object        = "URL"
+  access_object_filter = "https://example\\.com/public/.*"
+  grantee_role_name    = "reader_role"
+}

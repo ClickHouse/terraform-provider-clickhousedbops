@@ -16,6 +16,10 @@
 
     <mlock_executable>true</mlock_executable>
 
+    <access_control_improvements>
+        <!-- Required for READ/WRITE source grants and source regexp filters. -->
+        <enable_read_write_grants>true</enable_read_write_grants>
+    </access_control_improvements>
 
     <profiles>
         <!-- Default settings. -->

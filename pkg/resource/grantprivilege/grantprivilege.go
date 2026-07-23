@@ -126,13 +126,29 @@ func resourceSchema(version int64) schema.Schema {
 			},
 			"access_object": schema.StringAttribute{
 				Optional:    true,
-				Description: "The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, or a source name (e.g. `S3`) for source READ/WRITE grants. Supports a trailing `*` prefix pattern.",
+				Description: "The parameterized object the privilege applies to, such as a user/role name, named collection, table engine (e.g. `Distributed`), or source (e.g. `S3` or `URL`). Supports a trailing `*` prefix pattern where ClickHouse permits one.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 					stringvalidator.NoneOf("*"),
+					stringvalidator.ConflictsWith(
+						path.MatchRoot("database_name"),
+						path.MatchRoot("table_name"),
+						path.MatchRoot("column_name"),
+					),
+				},
+			},
+			"access_object_filter": schema.StringAttribute{
+				Optional:    true,
+				Description: "A regular-expression filter for a SOURCE-scoped access object. For example, set `access_object = \"URL\"` and this attribute to a URL regexp to emit `READ ON URL('<regexp>')`. The value is encoded as a SQL string; raw SQL is not accepted. Requires ClickHouse 25.8 or newer with read/write source grants enabled.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+					stringvalidator.AlsoRequires(path.MatchRoot("access_object")),
 					stringvalidator.ConflictsWith(
 						path.MatchRoot("database_name"),
 						path.MatchRoot("table_name"),
@@ -289,6 +305,7 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 	checkAttr("table_name", attrs.Table, allAttrs.Table, !config.Table.IsNull())
 	checkAttr("column_name", attrs.Column, allAttrs.Column, !config.Column.IsNull())
 	checkAttr("access_object", attrs.AccessObject, allAttrs.AccessObject, !config.AccessObject.IsNull())
+	checkAttr("access_object_filter", attrs.AccessObjectFilter, allAttrs.AccessObjectFilter, !config.AccessObjectFilter.IsNull())
 
 	if diags.HasError() {
 		return
@@ -296,10 +313,11 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 
 	// Restricting a multi-family group privilege to a scope silently drops members of the other family.
 	requested := grants.ScopeAttributes{
-		Database:     !config.Database.IsNull(),
-		Table:        !config.Table.IsNull(),
-		Column:       !config.Column.IsNull(),
-		AccessObject: !config.AccessObject.IsNull(),
+		Database:           !config.Database.IsNull(),
+		Table:              !config.Table.IsNull(),
+		Column:             !config.Column.IsNull(),
+		AccessObject:       !config.AccessObject.IsNull(),
+		AccessObjectFilter: !config.AccessObjectFilter.IsNull(),
 	}
 	if granted, folds := grants.FoldedMembers(config.Privilege.ValueString(), requested); folds {
 		diags.AddAttributeWarning(
