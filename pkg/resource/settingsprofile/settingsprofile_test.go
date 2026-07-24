@@ -77,6 +77,48 @@ func TestSettingsprofile_acceptance(t *testing.T) {
 		return nil
 	}
 
+	// Adoption regression: a settings profile existing in ClickHouse but missing from terraform state used to fail every apply with code 493; Create now adopts it by name.
+	makeAdoptCase := func(name string, configFile string, protocol string) runner.TestCase {
+		profileName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+		var preCreatedID string
+
+		return runner.TestCase{
+			Name:     name,
+			ChEnv:    map[string]string{"CONFIGFILE": configFile},
+			Protocol: protocol,
+			SetupFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error {
+				profile, err := dbopsClient.CreateSettingsProfile(ctx, dbops.SettingsProfile{Name: profileName}, clusterName)
+				if err != nil {
+					return fmt.Errorf("pre-creating settings profile %q: %w", profileName, err)
+				}
+				preCreatedID = profile.ID
+				return nil
+			},
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", profileName).
+				Build(),
+			ResourceName:       resourceName,
+			ResourceAddress:    fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc: checkNotExistsFunc,
+			CheckAttributesFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
+				id, _ := attrs["id"].(string)
+				if id == "" || id != preCreatedID {
+					return fmt.Errorf("expected terraform to adopt pre-existing settings profile %q, state has id %q", preCreatedID, id)
+				}
+
+				profile, err := dbopsClient.GetSettingsProfile(ctx, id, clusterName)
+				if err != nil {
+					return err
+				}
+				if profile == nil {
+					return fmt.Errorf("settings profile named %q was not found", profileName)
+				}
+
+				return nil
+			},
+		}
+	}
+
 	tests := []runner.TestCase{
 		{
 			Name:     "Create Settings Profile using Native protocol on a single replica",
@@ -157,94 +199,9 @@ func TestSettingsprofile_acceptance(t *testing.T) {
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
-	}
-
-	runner.RunTests(t, tests)
-}
-
-// TestSettingsprofile_adopt_acceptance is a regression test for the state
-// reconciliation failure where a settings profile exists in ClickHouse but is
-// missing from terraform state (a previous apply created it, the post-create
-// lookup missed, and the ID was never saved). Re-applying used to fail
-// permanently with ClickHouse error code 493 (ACCESS_ENTITY_ALREADY_EXISTS);
-// the provider now adopts the existing profile by name and records its ID in
-// state.
-func TestSettingsprofile_adopt_acceptance(t *testing.T) {
-	makeAdoptCase := func(name string, configFile string, protocol string) runner.TestCase {
-		profileName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
-		var preCreatedID string
-
-		return runner.TestCase{
-			Name:     name,
-			ChEnv:    map[string]string{"CONFIGFILE": configFile},
-			Protocol: protocol,
-			// Seed the out-of-band profile before terraform runs, simulating
-			// the "created but never recorded in state" divergence.
-			SetupFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error {
-				profile, err := dbopsClient.CreateSettingsProfile(ctx, dbops.SettingsProfile{Name: profileName}, clusterName)
-				if err != nil {
-					return fmt.Errorf("pre-creating settings profile %q: %w", profileName, err)
-				}
-				preCreatedID = profile.ID
-				return nil
-			},
-			Resource: resourcebuilder.New(resourceType, resourceName).
-				WithStringAttribute("name", profileName).
-				Build(),
-			ResourceName:    resourceName,
-			ResourceAddress: fmt.Sprintf("%s.%s", resourceType, resourceName),
-			CheckNotExistsFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error) {
-				id := attrs["id"]
-				if id == "" {
-					return false, fmt.Errorf("id attribute was not set")
-				}
-				profile, err := dbopsClient.GetSettingsProfile(ctx, id, clusterName)
-				return profile != nil, err
-			},
-			CheckAttributesFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
-				id, _ := attrs["id"].(string)
-				if id == "" {
-					return fmt.Errorf("id attribute was not set")
-				}
-
-				if id != preCreatedID {
-					return fmt.Errorf("expected terraform to adopt pre-existing settings profile %q, but state has id %q", preCreatedID, id)
-				}
-
-				name, _ := attrs["name"].(string)
-				if name != profileName {
-					return fmt.Errorf("expected name %q in state, got %q", profileName, name)
-				}
-
-				profile, err := dbopsClient.GetSettingsProfile(ctx, id, clusterName)
-				if err != nil {
-					return err
-				}
-				if profile == nil {
-					return fmt.Errorf("settings profile named %q was not found", profileName)
-				}
-
-				return nil
-			},
-		}
-	}
-
-	tests := []runner.TestCase{
-		makeAdoptCase(
-			"Adopt existing Settings Profile using HTTP protocol on a cluster using replicated storage",
-			"config-replicated.xml",
-			"http",
-		),
-		makeAdoptCase(
-			"Adopt existing Settings Profile using Native protocol on a cluster using replicated storage",
-			"config-replicated.xml",
-			"native",
-		),
-		makeAdoptCase(
-			"Adopt existing Settings Profile using HTTP protocol on a single replica",
-			"config-single.xml",
-			"http",
-		),
+		makeAdoptCase("Adopt existing Settings Profile using HTTP protocol on a cluster using replicated storage", "config-replicated.xml", "http"),
+		makeAdoptCase("Adopt existing Settings Profile using Native protocol on a cluster using replicated storage", "config-replicated.xml", "native"),
+		makeAdoptCase("Adopt existing Settings Profile using HTTP protocol on a single replica", "config-single.xml", "http"),
 	}
 
 	runner.RunTests(t, tests)

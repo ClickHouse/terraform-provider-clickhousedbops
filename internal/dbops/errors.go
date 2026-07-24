@@ -3,18 +3,13 @@ package dbops
 import (
 	"strings"
 
-	clickhouse "github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/ClickHouse/clickhouse-go/v2"
 )
 
-// accessEntityAlreadyExistsCode is ClickHouse error code 493
-// (ACCESS_ENTITY_ALREADY_EXISTS), returned when creating an access entity
-// (settings profile, user, role, ...) that already exists.
+// ClickHouse error code 493 (ACCESS_ENTITY_ALREADY_EXISTS).
 const accessEntityAlreadyExistsCode = 493
 
-// findInChain walks the error chain looking for a node matching the given
-// predicate. It follows both pingcap/errors wrappers (Cause) and stdlib
-// wrappers (Unwrap); pingcap v0.11.4 wrappers do not implement Unwrap, so
-// stdlib errors.Is/As alone cannot traverse them.
+// findInChain follows both Cause() and Unwrap() chains: pingcap/errors wrappers implement only Cause(), so stdlib errors.Is/As cannot traverse them.
 func findInChain(err error, match func(error) bool) bool {
 	for err != nil {
 		if match(err) {
@@ -34,12 +29,7 @@ func findInChain(err error, match func(error) bool) bool {
 	return false
 }
 
-// isAlreadyExistsError reports whether err represents ClickHouse error code
-// 493 (ACCESS_ENTITY_ALREADY_EXISTS).
-//
-// The native protocol client surfaces a typed *clickhouse.Exception carrying
-// the code. The HTTP client returns the raw response body as an opaque error,
-// so the code has to be matched in the message text.
+// isAlreadyExistsError reports whether err represents ClickHouse error code 493 (ACCESS_ENTITY_ALREADY_EXISTS).
 func isAlreadyExistsError(err error) bool {
 	if err == nil {
 		return false
@@ -53,6 +43,7 @@ func isAlreadyExistsError(err error) bool {
 		return true
 	}
 
+	// The HTTP client returns the raw response body as an opaque error, so the code is only matchable as text.
 	msg := err.Error()
 	return strings.Contains(msg, "Code: 493.") ||
 		strings.Contains(msg, "ACCESS_ENTITY_ALREADY_EXISTS")
