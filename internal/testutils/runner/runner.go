@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
@@ -34,6 +35,28 @@ type TestCase struct {
 	ExpectError         *regexp.Regexp
 	CheckNotExistsFunc  func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error)
 	CheckAttributesFunc func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error
+
+	// SetupFunc runs after ClickHouse is up and before terraform, to seed out-of-band state.
+	SetupFunc func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error
+}
+
+// Compose 'up -d' returns before the socat proxies accept connections, so poll until the server is reachable.
+func waitForClickhouse(ctx context.Context, dbopsClient dbops.Client) error {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	for {
+		_, err := dbopsClient.FindUserByName(ctx, "default", nil)
+		if err == nil {
+			return nil
+		}
+
+		if ctx.Err() != nil {
+			return fmt.Errorf("timed out waiting for clickhouse to be reachable: %w", err)
+		}
+
+		time.Sleep(2 * time.Second)
+	}
 }
 
 func RunTests(t *testing.T, tests []TestCase) {
@@ -71,6 +94,15 @@ func RunTests(t *testing.T, tests []TestCase) {
 			providerCfg, err := providerconfig.ProviderConfig(tc.Protocol, connSettings.Host, connSettings.Port, connSettings.Username, connSettings.Password)
 			if err != nil {
 				t.Fatal(err)
+			}
+
+			if tc.SetupFunc != nil {
+				if err := waitForClickhouse(ctx, dbopsClient); err != nil {
+					t.Fatal(err)
+				}
+				if err := tc.SetupFunc(ctx, dbopsClient, tc.ClusterName); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			t.Run(tc.Name, func(t *testing.T) {

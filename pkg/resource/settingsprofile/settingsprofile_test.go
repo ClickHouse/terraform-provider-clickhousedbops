@@ -77,6 +77,48 @@ func TestSettingsprofile_acceptance(t *testing.T) {
 		return nil
 	}
 
+	// Adoption regression: a settings profile existing in ClickHouse but missing from terraform state used to fail every apply with code 493; Create now adopts it by name.
+	makeAdoptCase := func(name string, configFile string, protocol string) runner.TestCase {
+		profileName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+		var preCreatedID string
+
+		return runner.TestCase{
+			Name:     name,
+			ChEnv:    map[string]string{"CONFIGFILE": configFile},
+			Protocol: protocol,
+			SetupFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error {
+				profile, err := dbopsClient.CreateSettingsProfile(ctx, dbops.SettingsProfile{Name: profileName}, clusterName)
+				if err != nil {
+					return fmt.Errorf("pre-creating settings profile %q: %w", profileName, err)
+				}
+				preCreatedID = profile.ID
+				return nil
+			},
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", profileName).
+				Build(),
+			ResourceName:       resourceName,
+			ResourceAddress:    fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc: checkNotExistsFunc,
+			CheckAttributesFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
+				id, _ := attrs["id"].(string)
+				if id == "" || id != preCreatedID {
+					return fmt.Errorf("expected terraform to adopt pre-existing settings profile %q, state has id %q", preCreatedID, id)
+				}
+
+				profile, err := dbopsClient.GetSettingsProfile(ctx, id, clusterName)
+				if err != nil {
+					return err
+				}
+				if profile == nil {
+					return fmt.Errorf("settings profile named %q was not found", profileName)
+				}
+
+				return nil
+			},
+		}
+	}
+
 	tests := []runner.TestCase{
 		{
 			Name:     "Create Settings Profile using Native protocol on a single replica",
@@ -157,6 +199,9 @@ func TestSettingsprofile_acceptance(t *testing.T) {
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
+		makeAdoptCase("Adopt existing Settings Profile using HTTP protocol on a cluster using replicated storage", "config-replicated.xml", "http"),
+		makeAdoptCase("Adopt existing Settings Profile using Native protocol on a cluster using replicated storage", "config-replicated.xml", "native"),
+		makeAdoptCase("Adopt existing Settings Profile using HTTP protocol on a single replica", "config-single.xml", "http"),
 	}
 
 	runner.RunTests(t, tests)
