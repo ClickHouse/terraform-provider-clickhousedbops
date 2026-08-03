@@ -10,11 +10,30 @@ import (
 )
 
 type User struct {
-	ID                 string   `json:"id"`
-	Name               string   `json:"name"`
-	PasswordSha256Hash string   `json:"-"`
-	SettingsProfiles   []string `json:"-"`
-	HostIPs            []string `json:"-"`
+	ID               string       `json:"id"`
+	Name             string       `json:"name"`
+	AuthMethods      []AuthMethod `json:"-"`
+	SettingsProfiles []string     `json:"-"`
+	HostIPs          []string     `json:"-"`
+}
+
+// AuthMethod is one resolved authentication method. Type is the querybuilder render-key and Args are
+// the positional argument values for that method's keywords.
+type AuthMethod struct {
+	Type string
+	Args []string
+}
+
+func toQuerybuilderAuthMethods(methods []AuthMethod) []querybuilder.AuthMethod {
+	out := make([]querybuilder.AuthMethod, 0, len(methods))
+	for _, m := range methods {
+		out = append(out, querybuilder.AuthMethod{
+			Type: querybuilder.Identification(m.Type),
+			Args: m.Args,
+		})
+	}
+
+	return out
 }
 
 func (u *User) HasSettingProfile(profileName string) bool {
@@ -28,7 +47,8 @@ func (u *User) HasSettingProfile(profileName string) bool {
 }
 
 func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
-	builder := querybuilder.NewCreateUser(user.Name).Identified(querybuilder.IdentificationSHA256Hash, user.PasswordSha256Hash)
+	builder := querybuilder.NewCreateUser(user.Name).
+		Identified(toQuerybuilderAuthMethods(user.AuthMethods))
 
 	// Only set host IP restriction if provided
 	if len(user.HostIPs) > 0 {
@@ -40,7 +60,7 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 		return nil, errors.WithMessage(err, "error building query")
 	}
 
-	err = i.clickhouseClient.Exec(ctx, sql)
+	err = i.clickhouseClient.Exec(ctx, sql, builder.Parameters())
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}
@@ -176,17 +196,21 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 	if err != nil {
 		return nil, errors.WithMessage(err, "Unable to get existing user")
 	}
+	if existing == nil {
+		return nil, errors.Errorf("user %q not found", user.ID)
+	}
 
-	sql, err := querybuilder.
+	builder := querybuilder.
 		NewAlterUser(existing.Name).
 		WithCluster(clusterName).
 		RenameTo(&user.Name).
-		Build()
+		Identified(toQuerybuilderAuthMethods(user.AuthMethods))
+	sql, err := builder.Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
 
-	err = i.clickhouseClient.Exec(ctx, sql)
+	err = i.clickhouseClient.Exec(ctx, sql, builder.Parameters())
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}

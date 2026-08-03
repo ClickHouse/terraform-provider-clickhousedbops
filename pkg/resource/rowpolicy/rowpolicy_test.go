@@ -289,7 +289,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(granteeUserResource.Build()).
 				Build(),
-			UpdateResource: ptr(resourcebuilder.New(resourceType, resourceName).
+			UpdateResource: new(resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", "test_policy").
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
@@ -316,7 +316,7 @@ func TestRowpolicy_acceptance(t *testing.T) {
 				WithListResourceFieldReference("grantee_names", "clickhousedbops_user", granteeUserName, "name").
 				AddDependency(granteeUserResource.Build()).
 				Build(),
-			UpdateResource: ptr(resourcebuilder.New(resourceType, resourceName).
+			UpdateResource: new(resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", "test_policy_renamed").
 				WithStringAttribute("database_name", "system").
 				WithStringAttribute("table_name", "databases").
@@ -610,8 +610,4 @@ func TestRowpolicy_acceptance(t *testing.T) {
 	}
 
 	runner.RunTests(t, tests)
-}
-
-func ptr(s string) *string {
-	return &s
 }

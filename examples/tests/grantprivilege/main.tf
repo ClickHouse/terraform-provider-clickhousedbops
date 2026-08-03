@@ -61,10 +61,27 @@ resource "clickhousedbops_grant_privilege" "grant_sources2" {
   grant_option      = false
 }
 
+resource "clickhousedbops_grant_privilege" "grant_current_grants_to_role" {
+  count = (var.cluster_name == null) ? 1 : 0
+
+  cluster_name      = var.cluster_name
+  privilege_name    = "SELECT"
+  grantee_role_name = clickhousedbops_role.reader.name
+  current_grants    = true
+}
+
 resource "clickhousedbops_grant_privilege" "grant_user_admin_to_role" {
   for_each          = toset(["CREATE USER", "DROP USER", "ALTER USER", "CREATE ROLE"])
   cluster_name      = var.cluster_name
   privilege_name    = each.key
   grantee_role_name = clickhousedbops_role.reader.name
+  grant_option      = true
+}
+
+resource "clickhousedbops_grant_privilege" "grant_create_user_on_object_to_user" {
+  cluster_name      = var.cluster_name
+  privilege_name    = "CREATE USER"
+  access_object     = "team_*"
+  grantee_user_name = clickhousedbops_user.john.name
   grant_option      = true
 }

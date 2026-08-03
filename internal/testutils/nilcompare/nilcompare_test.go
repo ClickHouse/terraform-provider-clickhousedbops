@@ -41,25 +41,25 @@ func TestNilCompare(t *testing.T) {
 		{
 			name:     "first nil pointer, second non-nil pointer",
 			a:        (*int)(nil),
-			b:        intPtr(42),
+			b:        new(42),
 			expected: false,
 		},
 		{
 			name:     "first non-nil pointer, second nil pointer",
-			a:        intPtr(42),
+			a:        new(42),
 			b:        (*int)(nil),
 			expected: false,
 		},
 		{
 			name:     "both non-nil pointers with same values",
-			a:        intPtr(42),
-			b:        intPtr(42),
+			a:        new(42),
+			b:        new(42),
 			expected: true,
 		},
 		{
 			name:     "both non-nil pointers with different values",
-			a:        intPtr(42),
-			b:        intPtr(24),
+			a:        new(42),
+			b:        new(24),
 			expected: false,
 		},
 
@@ -78,26 +78,26 @@ func TestNilCompare(t *testing.T) {
 		},
 		{
 			name:     "non-nil pointer vs matching scalar",
-			a:        intPtr(42),
+			a:        new(42),
 			b:        42,
 			expected: true,
 		},
 		{
 			name:     "non-nil pointer vs non-matching scalar",
-			a:        intPtr(42),
+			a:        new(42),
 			b:        24,
 			expected: false,
 		},
 		{
 			name:     "scalar vs matching non-nil pointer",
 			a:        42,
-			b:        intPtr(42),
+			b:        new(42),
 			expected: true,
 		},
 		{
 			name:     "scalar vs non-matching non-nil pointer",
 			a:        42,
-			b:        intPtr(24),
+			b:        new(24),
 			expected: false,
 		},
 
@@ -130,7 +130,7 @@ func TestNilCompare(t *testing.T) {
 		},
 		{
 			name:     "string pointer vs string scalar",
-			a:        stringPtr("hello"),
+			a:        new("hello"),
 			b:        "hello",
 			expected: true,
 		},
@@ -162,7 +162,7 @@ func TestNilCompare(t *testing.T) {
 		},
 		{
 			name:     "bool pointer vs bool scalar",
-			a:        boolPtr(true),
+			a:        new(true),
 			b:        true,
 			expected: true,
 		},
@@ -176,17 +176,4 @@ func TestNilCompare(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper functions to create pointers
-func intPtr(i int) *int {
-	return &i
-}
-
-func stringPtr(s string) *string {
-	return &s
-}
-
-func boolPtr(b bool) *bool {
-	return &b
 }

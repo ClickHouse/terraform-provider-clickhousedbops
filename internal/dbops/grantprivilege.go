@@ -35,7 +35,7 @@ var sourcesFamily = map[string]bool{
 
 type GrantPrivilege struct {
 	AccessType      string  `json:"access_type"`
-	AccessObject    string  `json:"access_object"`
+	AccessObject    *string `json:"access_object"`
 	DatabaseName    *string `json:"database"`
 	TableName       *string `json:"table"`
 	ColumnName      *string `json:"column"`
@@ -47,16 +47,21 @@ type GrantPrivilege struct {
 	// into its children in system.grants instead of storing a single parent row.
 	// Setting this field allows the matcher to find the grant in either case.
 	ExpandedAccessTypes []string `json:"-"`
+	// CurrentGrants emits `GRANT CURRENT GRANTS(... ON ...)`, copying the grantor's own
+	// privileges. Needed on ClickHouse Cloud for broad grants the default admin holds but
+	// cannot transfer directly (see #190).
+	CurrentGrants bool `json:"-"`
 }
 
 // AsGrant projects the grant onto the neutral grants.Grant used for coverage checks.
 func (g GrantPrivilege) AsGrant() grants.Grant {
 	return grants.Grant{
-		AccessType:  g.AccessType,
-		Database:    g.DatabaseName,
-		Table:       g.TableName,
-		Column:      g.ColumnName,
-		GrantOption: g.GrantOption,
+		AccessType:   g.AccessType,
+		Database:     g.DatabaseName,
+		Table:        g.TableName,
+		Column:       g.ColumnName,
+		AccessObject: g.AccessObject,
+		GrantOption:  g.GrantOption,
 	}
 }
 
@@ -79,8 +84,10 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		WithDatabase(grantPrivilege.DatabaseName).
 		WithTable(grantPrivilege.TableName).
 		WithColumn(grantPrivilege.ColumnName).
+		WithAccessObject(grantPrivilege.AccessObject).
 		WithGrantOption(grantPrivilege.GrantOption).
 		WithCluster(clusterName).
+		WithCurrentGrants(grantPrivilege.CurrentGrants).
 		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
@@ -142,13 +149,16 @@ func ClassicGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName 
 	// See: https://github.com/ClickHouse/ClickHouse/issues/92835
 	dbName := priv.DatabaseName
 	if dbName != nil && strings.HasSuffix(*dbName, "*") {
-		stripped := strings.TrimSuffix(*dbName, "*")
-		dbName = &stripped
+		dbName = new(strings.TrimSuffix(*dbName, "*"))
 	}
 	tblName := priv.TableName
 	if tblName != nil && strings.HasSuffix(*tblName, "*") {
-		stripped := strings.TrimSuffix(*tblName, "*")
-		tblName = &stripped
+		tblName = new(strings.TrimSuffix(*tblName, "*"))
+	}
+	accessName := priv.AccessObject
+	if accessName != nil && strings.HasSuffix(*accessName, "*") {
+		stripped := strings.TrimSuffix(*accessName, "*")
+		accessName = &stripped
 	}
 
 	accessTypes := priv.ExpandedAccessTypes
@@ -161,6 +171,7 @@ func ClassicGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName 
 		querybuilder.WhereEquals("is_partial_revoke", 0),
 		valOrNullWhere("database", dbName),
 		valOrNullWhere("table", tblName),
+		valOrEmptyString("access_object", accessName),
 		valOrNullWhere("column", priv.ColumnName),
 	}
 	if priv.GranteeUserName != nil {
@@ -177,6 +188,8 @@ func ClassicGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName 
 			querybuilder.NewField("database"),
 			querybuilder.NewField("table"),
 			querybuilder.NewField("column"),
+			// Alias must differ from the column name or ClickHouse substitutes it into WHERE.
+			querybuilder.NewRawField("nullIf(access_object, '')", "access_object_nullable"),
 			querybuilder.NewField("user_name"),
 			querybuilder.NewField("role_name"),
 			querybuilder.NewField("grant_option"),
@@ -205,6 +218,10 @@ func ClassicGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName 
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'column' field")
 		}
+		_, err = data.GetNullableString("access_object_nullable")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'access_object_nullable' field")
+		}
 		_, err = data.GetNullableString("user_name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'user_name' field")
@@ -231,11 +248,11 @@ func ClassicGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName 
 // https://clickhouse.com/docs/sql-reference/statements/grant#sources
 // TODO: grants for sources should be refactored to use separate resource.
 func SourcesReadWriteGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName *string, i *impl) (bool, error) {
-	if priv.AccessObject == "" {
-		return false, errors.New("incorrect query: access_object field required for sources matcher")
+	if !sourcesFamily[priv.AccessType] {
+		return false, errors.New("incorrect query: sources matcher requires a source access type")
 	}
 	where := []querybuilder.Where{
-		querybuilder.WhereEquals("access_object", priv.AccessObject),
+		querybuilder.WhereEquals("access_object", priv.AccessType),
 		querybuilder.WhereIn("access_type", []string{"READ", "WRITE"}),
 		querybuilder.WhereEquals("is_partial_revoke", 0),
 		valOrNullWhere("database", priv.DatabaseName),
@@ -284,6 +301,14 @@ func valOrNullWhere(field string, value *string) querybuilder.Where {
 	return querybuilder.IsNull(field)
 }
 
+// Helper function: value or empty-string clause (system.grants stores access_object as ” when unset)
+func valOrEmptyString(field string, value *string) querybuilder.Where {
+	if value != nil {
+		return querybuilder.WhereEquals(field, *value)
+	}
+	return querybuilder.WhereEquals(field, "")
+}
+
 func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string) (*GrantPrivilege, error) {
 	var matcher MatcherFunc
 	capabilityFlags, err := i.GetCapabilityFlags(ctx)
@@ -292,7 +317,6 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivi
 	}
 	// Use sources matcher if capability and accessType is a source, otherwise classic one
 	if capabilityFlags.SourcesGrantReadWriteSeparation && sourcesFamily[grantPrivilege.AccessType] {
-		grantPrivilege.AccessObject = grantPrivilege.AccessType
 		matcher = SourcesReadWriteGrantMatcher
 	} else {
 		matcher = ClassicGrantMatcher
@@ -326,6 +350,7 @@ func (i *impl) RevokeGrantPrivilege(ctx context.Context, grantPrivilege GrantPri
 		WithDatabase(grantPrivilege.DatabaseName).
 		WithTable(grantPrivilege.TableName).
 		WithColumn(grantPrivilege.ColumnName).
+		WithAccessObject(grantPrivilege.AccessObject).
 		WithCluster(clusterName).
 		Build()
 	if err != nil {
@@ -358,6 +383,8 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		querybuilder.NewField("database"),
 		querybuilder.NewField("table"),
 		querybuilder.NewField("column"),
+		// Alias must differ from the column name or ClickHouse substitutes it into WHERE.
+		querybuilder.NewRawField("nullIf(access_object, '')", "access_object_nullable"),
 		querybuilder.NewField("user_name"),
 		querybuilder.NewField("role_name"),
 		querybuilder.NewField("grant_option"),
@@ -388,6 +415,10 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'column' field")
 		}
+		accessObject, err := data.GetNullableString("access_object_nullable")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'access_object_nullable' field")
+		}
 		granteeUserName, err := data.GetNullableString("user_name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'user_name' field")
@@ -403,6 +434,7 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 
 		ret = append(ret, GrantPrivilege{
 			AccessType:      accessType,
+			AccessObject:    accessObject,
 			DatabaseName:    database,
 			TableName:       table,
 			ColumnName:      column,

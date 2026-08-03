@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/tfutils"
 )
 
 type RowPolicy struct {
@@ -25,10 +26,10 @@ type RowPolicy struct {
 func (m *RowPolicy) toDBOps(ctx context.Context) (dbops.RowPolicy, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	granteeNames, d := setToStringSlice(ctx, m.GranteeNames)
+	granteeNames, d := tfutils.SetToStringSlice(ctx, m.GranteeNames)
 	diags.Append(d...)
 
-	granteeAllExcept, d := setToStringSlice(ctx, m.GranteeAllExcept)
+	granteeAllExcept, d := tfutils.SetToStringSlice(ctx, m.GranteeAllExcept)
 	diags.Append(d...)
 
 	return dbops.RowPolicy{
@@ -66,38 +67,8 @@ func (m *RowPolicy) fromDBOps(result *dbops.RowPolicy) diag.Diagnostics {
 		return diags
 	}
 
-	set, d := stringSliceToSet(result.GranteeNames)
+	set, d := tfutils.StringSliceToSet(result.GranteeNames)
 	diags.Append(d...)
 	m.GranteeNames = set
 	return diags
-}
-
-func setToStringSlice(ctx context.Context, tfSet types.Set) ([]string, diag.Diagnostics) {
-	if tfSet.IsNull() || tfSet.IsUnknown() {
-		return []string{}, nil
-	}
-
-	var result []string
-	diags := tfSet.ElementsAs(ctx, &result, false)
-	if diags.HasError() {
-		return nil, diags
-	}
-	return result, diags
-}
-
-func stringSliceToSet(strings []string) (types.Set, diag.Diagnostics) {
-	if len(strings) == 0 {
-		return types.SetNull(types.StringType), nil
-	}
-
-	elements := make([]attr.Value, len(strings))
-	for i, s := range strings {
-		elements[i] = types.StringValue(s)
-	}
-
-	setVal, diags := types.SetValue(types.StringType, elements)
-	if diags.HasError() {
-		return types.SetNull(types.StringType), diags
-	}
-	return setVal, diags
 }

@@ -5,8 +5,6 @@ import (
 )
 
 func Test_createdatabase(t *testing.T) {
-	comment := "this is the comment"
-	clusterName := "default"
 	tests := []struct {
 		name         string
 		action       string
@@ -29,7 +27,7 @@ func Test_createdatabase(t *testing.T) {
 			name:         "Create database with comment",
 			resourceType: resourceTypeDatabase,
 			resourceName: "database",
-			comment:      &comment,
+			comment:      new("this is the comment"),
 			want:         "CREATE DATABASE `database` COMMENT 'this is the comment';",
 			wantErr:      false,
 		},
@@ -37,7 +35,7 @@ func Test_createdatabase(t *testing.T) {
 			name:         "Create database with cluster",
 			resourceType: resourceTypeDatabase,
 			resourceName: "database",
-			clusterName:  &clusterName,
+			clusterName:  new("default"),
 			want:         "CREATE DATABASE `database` ON CLUSTER 'default';",
 			wantErr:      false,
 		},

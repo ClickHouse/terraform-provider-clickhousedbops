@@ -1,17 +1,30 @@
-# Example using password_sha256_hash_wo field 
+# A user with several authentication methods combined.
 resource "clickhousedbops_user" "jane" {
-  cluster_name = "cluster"
-  name         = "jane"
-  # You'll want to generate the password and feed it here instead of hardcoding.
-  password_sha256_hash_wo         = sha256("test")
-  password_sha256_hash_wo_version = 4
+  name = "jane"
+
+  auth {
+    sha256_hash {
+      value_wo         = sha256("changeme")
+      value_wo_version = 1
+    }
+
+    ssl_certificate {
+      common_name = "jane-service"
+    }
+  }
 }
 
-# Example using the new password_sha256_hash field (recommended only for OpenTofu (version < 1.11) compatibility)
+# A passwordless user. no_password cannot be combined with any other method.
+resource "clickhousedbops_user" "readonly" {
+  name = "readonly"
+
+  auth {
+    no_password {}
+  }
+}
+
+# Legacy password field (deprecated), kept for backward compatibility.
 resource "clickhousedbops_user" "john" {
-  cluster_name = "cluster"
-  name         = "john"
-  # You'll want to generate the password and feed it here instead of hardcoding.
-  password_sha256_hash = sha256("test")
+  name                 = "john"
+  password_sha256_hash = sha256("changeme")
 }
-

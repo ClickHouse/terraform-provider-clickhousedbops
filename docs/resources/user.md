@@ -4,53 +4,142 @@ page_title: "clickhousedbops_user Resource - clickhousedbops"
 subcategory: ""
 description: |-
   You can use the clickhousedbops_user resource to create a user in a ClickHouse instance.
-  Password Field Options
-  This resource supports two approaches for setting passwords:
-  password_sha256_hash_wo and password_sha256_hash_wo_version:  field uses the write-only pattern (not stored in state), so you must bump password_sha256_hash_wo_version to trigger password updates.password_sha256_hash: Use this field for OpenTofu (version < 1.11) compatibility. This field uses the standard Sensitive attribute and is stored in state, so OpenTofu can automatically detect password changes. Any change to this field will trigger resource replacement.
-  You must use either password_sha256_hash_wo/password_sha256_hash_wo_version pair
-  OR password_sha256_hash, but not both.
+  Authentication
+  Use the auth block to configure the user's authentication. ClickHouse supports combining several
+  methods, so auth may contain multiple method blocks, and every method block except no_password
+  may be repeated:
+  
+  resource "clickhousedbops_user" "example" {
+    name = "example"
+  
+    auth {
+      sha256_hash {
+        value_wo         = sha256("changeme")
+        value_wo_version = 1
+      }
+      ssl_certificate {
+        common_name = "example-service"
+      }
+    }
+  }
+  
+  Supported method blocks: no_password, plaintext_password, sha256_password, sha256_hash,
+  double_sha1_password, double_sha1_hash, bcrypt_password, bcrypt_hash, ssl_certificate
+  (common_name or subject_alt_name), http (server or scheme), ssh_key (public_key +
+  type), ldap (server) and kerberos (optional realm).
+  
+  At least one authentication method must be configured.
+  no_password is exclusive — it cannot be combined with any other method.
+  The password/hash methods take a secret value; set exactly one of:
+  
+  value_wo (with value_wo_version): write-only, never stored in state (Terraform/OpenTofu >= 1.11).
+  Bump value_wo_version to re-apply the value.
+  value: stored in state, for Terraform/OpenTofu < 1.11.
+  Legacy password fields (deprecated)
+  password_sha256_hash / password_sha256_hash_wo (with password_sha256_hash_wo_version) are kept
+  for backwards compatibility and behave as a single sha256_hash method. They compose additively with
+  the auth block, so existing configurations keep working — but prefer the auth.sha256_hash block
+  for new ones. Changing a legacy password field replaces the user.
   Known limitations:
-  Changing the password will cause the database user to be deleted and recreated.Changing password_sha256_hash_wo alone does not trigger an update. You must also bump password_sha256_hash_wo_version.When importing an existing user, the clickhousedbops_user resource will be lacking the password or the password_sha256_hash_wo_version, and thus the subsequent apply will need to recreate the database User in order to set a password.
+  
+  Authentication values cannot be read back from ClickHouse, so external drift of a secret is not
+  detected; bump the relevant *_version to force a re-apply of a write-only value.
+  Changing a write-only value alone does not trigger an update — you must also bump its *_version.
+  On import only the user identity is read; the configured authentication methods are re-asserted from
+  configuration on the next apply.
 ---
 
 # clickhousedbops_user (Resource)
 
 You can use the `clickhousedbops_user` resource to create a user in a `ClickHouse` instance.
 
-## Password Field Options
+## Authentication
 
-This resource supports two approaches for setting passwords:
+Use the `auth` block to configure the user's authentication. ClickHouse supports combining several
+methods, so `auth` may contain multiple method blocks, and every method block except `no_password`
+may be repeated:
 
-- **`password_sha256_hash_wo` and `password_sha256_hash_wo_version`**:  field uses the write-only pattern (not stored in state), so you must bump `password_sha256_hash_wo_version` to trigger password updates.
-- **`password_sha256_hash`**: Use this field for OpenTofu (version < 1.11) compatibility. This field uses the standard `Sensitive` attribute and is stored in state, so OpenTofu can automatically detect password changes. Any change to this field will trigger resource replacement.
+```terraform
+resource "clickhousedbops_user" "example" {
+  name = "example"
 
-You must use either `password_sha256_hash_wo`/`password_sha256_hash_wo_version` pair
-OR `password_sha256_hash`, but not both.
+  auth {
+    sha256_hash {
+      value_wo         = sha256("changeme")
+      value_wo_version = 1
+    }
+    ssl_certificate {
+      common_name = "example-service"
+    }
+  }
+}
+```
+
+Supported method blocks: `no_password`, `plaintext_password`, `sha256_password`, `sha256_hash`,
+`double_sha1_password`, `double_sha1_hash`, `bcrypt_password`, `bcrypt_hash`, `ssl_certificate`
+(`common_name` or `subject_alt_name`), `http` (`server` or `scheme`), `ssh_key` (`public_key` +
+`type`), `ldap` (`server`) and `kerberos` (optional `realm`).
+
+- At least one authentication method must be configured.
+
+- `no_password` is exclusive — it cannot be combined with any other method.
+
+- The password/hash methods take a secret value; set exactly one of:
+
+  - `value_wo` (with `value_wo_version`): write-only, never stored in state (Terraform/OpenTofu >= 1.11).
+    Bump `value_wo_version` to re-apply the value.
+
+  - `value`: stored in state, for Terraform/OpenTofu < 1.11.
+
+## Legacy password fields (deprecated)
+
+`password_sha256_hash` / `password_sha256_hash_wo` (with `password_sha256_hash_wo_version`) are kept
+for backwards compatibility and behave as a single `sha256_hash` method. They compose additively with
+the `auth` block, so existing configurations keep working — but prefer the `auth.sha256_hash` block
+for new ones. Changing a legacy password field replaces the user.
 
 Known limitations:
 
-- Changing the password will cause the database user to be deleted and recreated.
-- Changing `password_sha256_hash_wo` alone does not trigger an update. You must also bump `password_sha256_hash_wo_version`.
-- When importing an existing user, the `clickhousedbops_user` resource will be lacking the password or the `password_sha256_hash_wo_version`, and thus the subsequent apply will need to recreate the database User in order to set a password.
+- Authentication values cannot be read back from ClickHouse, so external drift of a secret is not
+  detected; bump the relevant `*_version` to force a re-apply of a write-only value.
+
+- Changing a write-only value alone does not trigger an update — you must also bump its `*_version`.
+
+- On import only the user identity is read; the configured authentication methods are re-asserted from
+  configuration on the next apply.
 
 ## Example Usage
 
 ```terraform
-# Example using password_sha256_hash_wo field 
+# A user with several authentication methods combined.
 resource "clickhousedbops_user" "jane" {
-  cluster_name = "cluster"
-  name         = "jane"
-  # You'll want to generate the password and feed it here instead of hardcoding.
-  password_sha256_hash_wo         = sha256("test")
-  password_sha256_hash_wo_version = 4
+  name = "jane"
+
+  auth {
+    sha256_hash {
+      value_wo         = sha256("changeme")
+      value_wo_version = 1
+    }
+
+    ssl_certificate {
+      common_name = "jane-service"
+    }
+  }
 }
 
-# Example using the new password_sha256_hash field (recommended only for OpenTofu (version < 1.11) compatibility)
+# A passwordless user. no_password cannot be combined with any other method.
+resource "clickhousedbops_user" "readonly" {
+  name = "readonly"
+
+  auth {
+    no_password {}
+  }
+}
+
+# Legacy password field (deprecated), kept for backward compatibility.
 resource "clickhousedbops_user" "john" {
-  cluster_name = "cluster"
-  name         = "john"
-  # You'll want to generate the password and feed it here instead of hardcoding.
-  password_sha256_hash = sha256("test")
+  name                 = "john"
+  password_sha256_hash = sha256("changeme")
 }
 ```
 
@@ -65,17 +154,170 @@ resource "clickhousedbops_user" "john" {
 
 > **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
 
+- `auth` (Block, Optional) Authentication methods for the user. Methods may be combined and each block (except no_password) may be repeated. (see [below for nested schema](#nestedblock--auth))
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `host_ips` (Set of String) IP addresses from which the user is allowed to connect. If not specified, user can connect from any host.
 - `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user.
-- `password_sha256_hash_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.
-- `password_sha256_hash_wo_version` (Number) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
+- `password_sha256_hash_wo` (String, Sensitive, Deprecated, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.
+- `password_sha256_hash_wo_version` (Number, Deprecated) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
 
 ### Read-Only
 
 - `id` (String) The system-assigned ID for the user
+
+<a id="nestedblock--auth"></a>
+### Nested Schema for `auth`
+
+Optional:
+
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `bcrypt_hash` (Block List) Bcrypt hash authentication. (see [below for nested schema](#nestedblock--auth--bcrypt_hash))
+- `bcrypt_password` (Block List) Bcrypt password authentication. (see [below for nested schema](#nestedblock--auth--bcrypt_password))
+- `double_sha1_hash` (Block List) Double SHA1 hash authentication. (see [below for nested schema](#nestedblock--auth--double_sha1_hash))
+- `double_sha1_password` (Block List) Double SHA1 password authentication. (see [below for nested schema](#nestedblock--auth--double_sha1_password))
+- `http` (Block List) HTTP authentication. Exactly one of server or scheme. (see [below for nested schema](#nestedblock--auth--http))
+- `kerberos` (Block List) Kerberos authentication. (see [below for nested schema](#nestedblock--auth--kerberos))
+- `ldap` (Block List) LDAP authentication. (see [below for nested schema](#nestedblock--auth--ldap))
+- `no_password` (Block, Optional) Passwordless authentication. Cannot be combined with any other method. (see [below for nested schema](#nestedblock--auth--no_password))
+- `plaintext_password` (Block List) Plaintext password authentication. (see [below for nested schema](#nestedblock--auth--plaintext_password))
+- `sha256_hash` (Block List) SHA256 hash authentication. (see [below for nested schema](#nestedblock--auth--sha256_hash))
+- `sha256_password` (Block List) SHA256 password authentication (ClickHouse computes the hash). (see [below for nested schema](#nestedblock--auth--sha256_password))
+- `ssh_key` (Block List) SSH key authentication. (see [below for nested schema](#nestedblock--auth--ssh_key))
+- `ssl_certificate` (Block List) SSL certificate authentication. Exactly one of common_name or subject_alt_name. (see [below for nested schema](#nestedblock--auth--ssl_certificate))
+
+<a id="nestedblock--auth--bcrypt_hash"></a>
+### Nested Schema for `auth.bcrypt_hash`
+
+Optional:
+
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `value` (String, Sensitive) Authentication value stored in state. Use for Terraform/OpenTofu < 1.11. Exactly one of value or value_wo.
+- `value_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only authentication value, not stored in state. Use for Terraform/OpenTofu >= 1.11.
+- `value_wo_version` (Number) Version of value_wo. Bump to re-apply the write-only value.
+
+
+<a id="nestedblock--auth--bcrypt_password"></a>
+### Nested Schema for `auth.bcrypt_password`
+
+Optional:
+
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `value` (String, Sensitive) Authentication value stored in state. Use for Terraform/OpenTofu < 1.11. Exactly one of value or value_wo.
+- `value_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only authentication value, not stored in state. Use for Terraform/OpenTofu >= 1.11.
+- `value_wo_version` (Number) Version of value_wo. Bump to re-apply the write-only value.
+
+
+<a id="nestedblock--auth--double_sha1_hash"></a>
+### Nested Schema for `auth.double_sha1_hash`
+
+Optional:
+
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `value` (String, Sensitive) Authentication value stored in state. Use for Terraform/OpenTofu < 1.11. Exactly one of value or value_wo.
+- `value_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only authentication value, not stored in state. Use for Terraform/OpenTofu >= 1.11.
+- `value_wo_version` (Number) Version of value_wo. Bump to re-apply the write-only value.
+
+
+<a id="nestedblock--auth--double_sha1_password"></a>
+### Nested Schema for `auth.double_sha1_password`
+
+Optional:
+
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `value` (String, Sensitive) Authentication value stored in state. Use for Terraform/OpenTofu < 1.11. Exactly one of value or value_wo.
+- `value_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only authentication value, not stored in state. Use for Terraform/OpenTofu >= 1.11.
+- `value_wo_version` (Number) Version of value_wo. Bump to re-apply the write-only value.
+
+
+<a id="nestedblock--auth--http"></a>
+### Nested Schema for `auth.http`
+
+Optional:
+
+- `scheme` (String) HTTP authentication scheme (e.g. Basic).
+- `server` (String) HTTP authentication server name.
+
+
+<a id="nestedblock--auth--kerberos"></a>
+### Nested Schema for `auth.kerberos`
+
+Optional:
+
+- `realm` (String) Optional Kerberos realm to restrict authentication to.
+
+
+<a id="nestedblock--auth--ldap"></a>
+### Nested Schema for `auth.ldap`
+
+Required:
+
+- `server` (String) LDAP server name (as defined in ClickHouse config).
+
+
+<a id="nestedblock--auth--no_password"></a>
+### Nested Schema for `auth.no_password`
+
+
+<a id="nestedblock--auth--plaintext_password"></a>
+### Nested Schema for `auth.plaintext_password`
+
+Optional:
+
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `value` (String, Sensitive) Authentication value stored in state. Use for Terraform/OpenTofu < 1.11. Exactly one of value or value_wo.
+- `value_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only authentication value, not stored in state. Use for Terraform/OpenTofu >= 1.11.
+- `value_wo_version` (Number) Version of value_wo. Bump to re-apply the write-only value.
+
+
+<a id="nestedblock--auth--sha256_hash"></a>
+### Nested Schema for `auth.sha256_hash`
+
+Optional:
+
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `salt` (String) Optional salt used with the sha256 hash.
+- `value` (String, Sensitive) Authentication value stored in state. Use for Terraform/OpenTofu < 1.11. Exactly one of value or value_wo.
+- `value_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only authentication value, not stored in state. Use for Terraform/OpenTofu >= 1.11.
+- `value_wo_version` (Number) Version of value_wo. Bump to re-apply the write-only value.
+
+
+<a id="nestedblock--auth--sha256_password"></a>
+### Nested Schema for `auth.sha256_password`
+
+Optional:
+
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
+- `value` (String, Sensitive) Authentication value stored in state. Use for Terraform/OpenTofu < 1.11. Exactly one of value or value_wo.
+- `value_wo` (String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only authentication value, not stored in state. Use for Terraform/OpenTofu >= 1.11.
+- `value_wo_version` (Number) Version of value_wo. Bump to re-apply the write-only value.
+
+
+<a id="nestedblock--auth--ssh_key"></a>
+### Nested Schema for `auth.ssh_key`
+
+Required:
+
+- `public_key` (String) SSH public key.
+- `type` (String) SSH key type (e.g. ssh-rsa, ssh-ed25519).
+
+
+<a id="nestedblock--auth--ssl_certificate"></a>
+### Nested Schema for `auth.ssl_certificate`
+
+Optional:
+
+- `common_name` (String) Certificate Common Name (CN).
+- `subject_alt_name` (String) Certificate Subject Alternative Name (SAN).
 
 ## Import
 
@@ -86,7 +328,6 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 ```shell
 # Users can be imported by specifying the ID.
 # Find the ID of the user by checking system.users table.
-# WARNING: imported users will be recreated during first 'terraform apply' because the password cannot be imported.
 terraform import clickhousedbops_user.example xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 # It's also possible to import users using the username:

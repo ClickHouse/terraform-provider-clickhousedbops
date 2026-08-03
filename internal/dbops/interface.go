@@ -37,7 +37,6 @@ type Client interface {
 	GetRowPolicyByID(ctx context.Context, id string, clusterName *string) (*RowPolicy, error)
 	UpdateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error)
 	DeleteRowPolicy(ctx context.Context, id string, clusterName *string) error
-	NormalizeRowPolicyFilter(ctx context.Context, filter string, clusterName *string) (string, error)
 
 	CreateSettingsProfile(ctx context.Context, profile SettingsProfile, clusterName *string) (*SettingsProfile, error)
 	GetSettingsProfile(ctx context.Context, id string, clusterName *string) (*SettingsProfile, error)
@@ -46,6 +45,12 @@ type Client interface {
 	FindSettingsProfileByName(ctx context.Context, name string, clusterName *string) (*SettingsProfile, error)
 	AssociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error
 	DisassociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error
+
+	CreateMaskingPolicy(ctx context.Context, maskingPolicy MaskingPolicy) (*MaskingPolicy, error)
+	GetMaskingPolicy(ctx context.Context, maskingPolicy *MaskingPolicy) (*MaskingPolicy, error)
+	GetMaskingPolicyByID(ctx context.Context, id string) (*MaskingPolicy, error)
+	UpdateMaskingPolicy(ctx context.Context, maskingPolicy MaskingPolicy) (*MaskingPolicy, error)
+	DeleteMaskingPolicy(ctx context.Context, id string) error
 
 	CreateNamedCollection(ctx context.Context, collection NamedCollection, clusterName *string) (*NamedCollection, error)
 	GetNamedCollection(ctx context.Context, name string, clusterName *string) (*NamedCollection, error)
@@ -58,4 +63,5 @@ type Client interface {
 
 	IsReplicatedStorage(ctx context.Context) (bool, error)
 	GetCapabilityFlags(ctx context.Context) (CapabilityFlags, error)
+	NormalizeExpression(ctx context.Context, expression string) (string, error)
 }

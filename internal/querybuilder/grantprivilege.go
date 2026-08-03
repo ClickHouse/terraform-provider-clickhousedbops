@@ -13,18 +13,22 @@ type GrantPrivilegeQueryBuilder interface {
 	WithDatabase(*string) GrantPrivilegeQueryBuilder
 	WithTable(*string) GrantPrivilegeQueryBuilder
 	WithColumn(*string) GrantPrivilegeQueryBuilder
+	WithAccessObject(*string) GrantPrivilegeQueryBuilder
 	WithGrantOption(bool) GrantPrivilegeQueryBuilder
 	WithCluster(*string) GrantPrivilegeQueryBuilder
+	WithCurrentGrants(bool) GrantPrivilegeQueryBuilder
 }
 
 type grantPrivilegeQueryBuilder struct {
-	accessType  string
-	to          string
-	database    *string
-	table       *string
-	column      *string
-	grantOption bool
-	clusterName *string
+	accessType    string
+	to            string
+	database      *string
+	table         *string
+	column        *string
+	accessObject  *string
+	grantOption   bool
+	clusterName   *string
+	currentGrants bool
 }
 
 func GrantPrivilege(accessType string, to string) GrantPrivilegeQueryBuilder {
@@ -49,6 +53,11 @@ func (q *grantPrivilegeQueryBuilder) WithColumn(column *string) GrantPrivilegeQu
 	return q
 }
 
+func (q *grantPrivilegeQueryBuilder) WithAccessObject(accessObject *string) GrantPrivilegeQueryBuilder {
+	q.accessObject = accessObject
+	return q
+}
+
 func (q *grantPrivilegeQueryBuilder) WithCluster(clusterName *string) GrantPrivilegeQueryBuilder {
 	q.clusterName = clusterName
 	return q
@@ -56,6 +65,11 @@ func (q *grantPrivilegeQueryBuilder) WithCluster(clusterName *string) GrantPrivi
 
 func (q *grantPrivilegeQueryBuilder) WithGrantOption(grantOption bool) GrantPrivilegeQueryBuilder {
 	q.grantOption = grantOption
+	return q
+}
+
+func (q *grantPrivilegeQueryBuilder) WithCurrentGrants(currentGrants bool) GrantPrivilegeQueryBuilder {
+	q.currentGrants = currentGrants
 	return q
 }
 
@@ -76,25 +90,33 @@ func (q *grantPrivilegeQueryBuilder) Build() (string, error) {
 	}
 
 	// Privilege
+	var privilege string
 	if q.column != nil && *q.column != "" {
-		tokens = append(tokens, fmt.Sprintf("%s(%s)", q.accessType, backtick(*q.column)))
+		privilege = fmt.Sprintf("%s(%s)", q.accessType, backtick(*q.column))
 	} else {
-		tokens = append(tokens, q.accessType)
+		privilege = q.accessType
 	}
 
-	// Target database/table
-	{
-		tokens = append(tokens, "ON")
+	// Target database/table/access object
+	var target string
+	switch {
+	case q.accessObject != nil:
+		target = identifierOrPattern(*q.accessObject)
+	case q.database != nil && q.table != nil:
+		target = fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table))
+	case q.database != nil:
+		target = fmt.Sprintf("%s.*", identifierOrPattern(*q.database))
+	default:
+		target = "*.*"
+	}
 
-		if q.database != nil {
-			if q.table != nil {
-				tokens = append(tokens, fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table)))
-			} else {
-				tokens = append(tokens, fmt.Sprintf("%s.*", identifierOrPattern(*q.database)))
-			}
-		} else {
-			tokens = append(tokens, "*.*")
-		}
+	// CURRENT GRANTS copies the grantor's own privileges. ClickHouse Cloud requires it for
+	// broad grants (e.g. ALL, SELECT ON *.*) the default admin holds but cannot transfer
+	// directly. See ClickHouse/terraform-provider-clickhousedbops#190.
+	if q.currentGrants {
+		tokens = append(tokens, fmt.Sprintf("CURRENT GRANTS(%s ON %s)", privilege, target))
+	} else {
+		tokens = append(tokens, privilege, "ON", target)
 	}
 
 	// Grantee

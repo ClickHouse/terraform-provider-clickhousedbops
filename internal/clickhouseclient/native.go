@@ -131,9 +131,13 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 	return nil
 }
 
-func (i *nativeClient) Exec(ctx context.Context, qry string) error {
+func (i *nativeClient) Exec(ctx context.Context, qry string, params ...map[string]string) error {
 	ctx = tflog.SetField(ctx, "Query", qry)
 	tflog.Debug(ctx, "Running Query")
+
+	if len(params) > 0 {
+		ctx = clickhouse.Context(ctx, clickhouse.WithParameters(params[0]))
+	}
 
 	err := i.connection.Exec(ctx, qry)
 	if err != nil {

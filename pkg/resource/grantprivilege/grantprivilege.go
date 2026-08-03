@@ -11,10 +11,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
@@ -26,6 +28,7 @@ var grantPrivilegeDescription string
 var (
 	_ resource.Resource                   = &Resource{}
 	_ resource.ResourceWithConfigure      = &Resource{}
+	_ resource.ResourceWithUpgradeState   = &Resource{}
 	_ resource.ResourceWithValidateConfig = &Resource{}
 )
 
@@ -44,6 +47,10 @@ func (r *Resource) Metadata(_ context.Context, req resource.MetadataRequest, res
 }
 
 func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = resourceSchema(1)
+}
+
+func resourceSchema(version int64) schema.Schema {
 	validPrivileges := make([]string, 0)
 
 	upstrGrts := grants.Parsed()
@@ -60,7 +67,8 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 		validPrivileges = append(validPrivileges, groupName)
 	}
 
-	resp.Schema = schema.Schema{
+	return schema.Schema{
+		Version: version,
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Optional:    true,
@@ -116,6 +124,22 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					),
 				},
 			},
+			"access_object": schema.StringAttribute{
+				Optional:    true,
+				Description: "The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, or a source name (e.g. `S3`) for source READ/WRITE grants. Supports a trailing `*` prefix pattern.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+					stringvalidator.NoneOf("*"),
+					stringvalidator.ConflictsWith(
+						path.MatchRoot("database_name"),
+						path.MatchRoot("table_name"),
+						path.MatchRoot("column_name"),
+					),
+				},
+			},
 			"grantee_user_name": schema.StringAttribute{
 				Optional:    true,
 				Description: "Name of the `user` to grant privileges to.",
@@ -152,8 +176,45 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					boolplanmodifier.RequiresReplace(),
 				},
 			},
+			"current_grants": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+				Description: "If true, emit `GRANT CURRENT GRANTS(...)` so the privilege is copied from the grantor's own grants instead of granted directly. Required on ClickHouse Cloud for broad privileges (e.g. `ALL`, or `SELECT` on `*.*`) that the admin user holds but cannot transfer directly. Note: the effective grants depend on what the grantor holds at apply time, so drift on a `current_grants` grant is not reconciled. On destroy the privilege is revoked in full from the grantee on the target.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
+			},
 		},
 		MarkdownDescription: grantPrivilegeDescription,
+	}
+}
+
+func (r *Resource) UpgradeState(_ context.Context) map[int64]resource.StateUpgrader {
+	// Reusing the current schema as the version 0 prior schema is safe:
+	// attributes missing from an old raw state (e.g. `current_grants` before
+	// v1.11.0) are decoded as null. Both pre-v1.11.0 and v1.11.0 states are
+	// version 0; only v1.11.0 states may already carry a `current_grants`
+	// value, which is preserved as-is below.
+	priorSchema := resourceSchema(0)
+
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema: &priorSchema,
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				var state GrantPrivilege
+				resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				if state.CurrentGrants.IsNull() {
+					state.CurrentGrants = types.BoolValue(false)
+				}
+
+				resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+			},
+		},
 	}
 }
 
@@ -169,6 +230,15 @@ func (r *Resource) Configure(_ context.Context, req resource.ConfigureRequest, _
 func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 	if config.Privilege.IsUnknown() {
 		return
+	}
+
+	// GRANT CURRENT GRANTS cannot be executed ON CLUSTER, so current_grants and cluster_name are mutually exclusive.
+	if config.CurrentGrants.ValueBool() && !config.ClusterName.IsUnknown() && config.ClusterName.ValueString() != "" {
+		diags.AddAttributeError(
+			path.Root("current_grants"),
+			"Invalid Grant Privilege",
+			"'current_grants' cannot be used together with 'cluster_name': GRANT CURRENT GRANTS cannot be executed ON CLUSTER.",
+		)
 	}
 
 	upstrGrts := grants.Parsed()
@@ -218,6 +288,26 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 	checkAttr("database_name", attrs.Database, allAttrs.Database, !config.Database.IsNull())
 	checkAttr("table_name", attrs.Table, allAttrs.Table, !config.Table.IsNull())
 	checkAttr("column_name", attrs.Column, allAttrs.Column, !config.Column.IsNull())
+	checkAttr("access_object", attrs.AccessObject, allAttrs.AccessObject, !config.AccessObject.IsNull())
+
+	if diags.HasError() {
+		return
+	}
+
+	// Restricting a multi-family group privilege to a scope silently drops members of the other family.
+	requested := grants.ScopeAttributes{
+		Database:     !config.Database.IsNull(),
+		Table:        !config.Table.IsNull(),
+		Column:       !config.Column.IsNull(),
+		AccessObject: !config.AccessObject.IsNull(),
+	}
+	if granted, folds := grants.FoldedMembers(config.Privilege.ValueString(), requested); folds {
+		diags.AddAttributeWarning(
+			path.Root("privilege_name"),
+			"Privilege granted on a subset of its members",
+			fmt.Sprintf("%q groups privileges with different scopes. At the requested scope ClickHouse only grants %s; its members that require a different scope are silently not granted.", config.Privilege.ValueString(), strings.Join(granted, ", ")),
+		)
+	}
 }
 
 func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
@@ -325,6 +415,8 @@ This is a configuration error that prevents further actions. Please note that th
 	}
 
 	state := toState(*createdGrant, plan.ClusterName)
+	// current_grants is config-only: ClickHouse does not return it, so carry it forward.
+	state.CurrentGrants = plan.CurrentGrants
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
@@ -341,9 +433,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	grantPrivilege := state.toGrant()
-
-	grant, err := r.client.GetGrantPrivilege(ctx, &grantPrivilege, state.ClusterName.ValueStringPointer())
+	grant, err := r.client.GetGrantPrivilege(ctx, new(state.toGrant()), state.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse Privilege Grant",
@@ -354,6 +444,8 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 
 	if grant != nil {
 		newState := toState(*grant, state.ClusterName)
+		// current_grants is config-only: ClickHouse does not return it, so carry it forward.
+		newState.CurrentGrants = state.CurrentGrants
 		diags = resp.State.Set(ctx, &newState)
 		resp.Diagnostics.Append(diags...)
 	} else {
