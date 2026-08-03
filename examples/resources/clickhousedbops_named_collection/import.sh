@@ -5,6 +5,7 @@ terraform import clickhousedbops_named_collection.example collection_name
 
 terraform import clickhousedbops_named_collection.example cluster:collection_name
 
-# NOTE: values are imported as the literal '[HIDDEN]' placeholder unless the
-# clickhouse user is granted 'SHOW NAMED COLLECTIONS SECRETS'.
-# Write the real values in your terraform config and run one apply to converge.
+# NOTE: every key lands in 'keys', with the literal '[HIDDEN]' placeholder as its
+# value unless the clickhouse user is granted 'SHOW NAMED COLLECTIONS SECRETS'.
+# Write the real values in your terraform config, moving the secrets to
+# 'secret_keys_wo', and run one apply to converge.

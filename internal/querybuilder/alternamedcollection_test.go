@@ -27,8 +27,8 @@ func Test_alterNamedCollectionQueryBuilder_Build(t *testing.T) {
 			name:           "Set keys with flags",
 			collectionName: "collection1",
 			setKeys: []namedCollectionKeyData{
-				{Name: "url", Value: "https://example.com/", Overridable: boolPtr(true)},
-				{Name: "secret", Value: "topsecret", Overridable: boolPtr(false)},
+				{Name: "url", Value: "https://example.com/", Overridable: new(true)},
+				{Name: "secret", Value: "topsecret", Overridable: new(false)},
 			},
 			want:    "ALTER NAMED COLLECTION `collection1` SET `url` = 'https://example.com/' OVERRIDABLE, `secret` = 'topsecret' NOT OVERRIDABLE;",
 			wantErr: false,
@@ -41,19 +41,19 @@ func Test_alterNamedCollectionQueryBuilder_Build(t *testing.T) {
 			wantErr:        false,
 		},
 		{
-			name:           "Set and delete combined",
+			name:           "Fail when combining set and delete",
 			collectionName: "collection1",
 			setKeys: []namedCollectionKeyData{
 				{Name: "url", Value: "https://new.example.com/"},
 			},
 			deleteKeys: []string{"old1"},
-			want:       "ALTER NAMED COLLECTION `collection1` SET `url` = 'https://new.example.com/', DELETE `old1`;",
-			wantErr:    false,
+			want:       "",
+			wantErr:    true,
 		},
 		{
 			name:           "On cluster",
 			collectionName: "collection1",
-			clusterName:    strPtr("cluster1"),
+			clusterName:    new("cluster1"),
 			setKeys: []namedCollectionKeyData{
 				{Name: "url", Value: "https://example.com/"},
 			},

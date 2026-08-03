@@ -26,8 +26,8 @@ func Test_createNamedCollectionQueryBuilder_Build(t *testing.T) {
 			name:           "Multiple keys with flags",
 			collectionName: "collection1",
 			keys: []namedCollectionKeyData{
-				{Name: "url", Value: "https://example.com/", Overridable: boolPtr(true)},
-				{Name: "secret_access_key", Value: "topsecret", Overridable: boolPtr(false)},
+				{Name: "url", Value: "https://example.com/", Overridable: new(true)},
+				{Name: "secret_access_key", Value: "topsecret", Overridable: new(false)},
 				{Name: "format", Value: "CSV"},
 			},
 			want:    "CREATE NAMED COLLECTION `collection1` AS `url` = 'https://example.com/' OVERRIDABLE, `secret_access_key` = 'topsecret' NOT OVERRIDABLE, `format` = 'CSV';",
@@ -36,7 +36,7 @@ func Test_createNamedCollectionQueryBuilder_Build(t *testing.T) {
 		{
 			name:           "On cluster",
 			collectionName: "collection1",
-			clusterName:    strPtr("cluster1"),
+			clusterName:    new("cluster1"),
 			keys: []namedCollectionKeyData{
 				{Name: "url", Value: "https://example.com/"},
 			},
@@ -95,8 +95,4 @@ func Test_createNamedCollectionQueryBuilder_Build(t *testing.T) {
 			}
 		})
 	}
-}
-
-func boolPtr(val bool) *bool {
-	return &val
 }

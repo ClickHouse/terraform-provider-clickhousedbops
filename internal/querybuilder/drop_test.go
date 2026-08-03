@@ -98,7 +98,7 @@ func Test_drop(t *testing.T) {
 			name:         "Drop named collection on cluster",
 			resourceType: resourceTypeNamedCollection,
 			resourceName: "collection1",
-			clusterName:  &cluster,
+			clusterName:  new("cluster1"),
 			want:         "DROP NAMED COLLECTION `collection1` ON CLUSTER 'cluster1';",
 			wantErr:      false,
 		},

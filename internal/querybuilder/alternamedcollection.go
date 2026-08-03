@@ -7,6 +7,9 @@ import (
 )
 
 // AlterNamedCollectionQueryBuilder is an interface to build ALTER NAMED COLLECTION SQL queries (already interpolated).
+// A query either sets keys or deletes them, never both: resetting a key's
+// overridable flag needs the DELETE to run before the SET, and ClickHouse gives
+// no ordering guarantee within a single statement.
 type AlterNamedCollectionQueryBuilder interface {
 	QueryBuilder
 	WithCluster(clusterName *string) AlterNamedCollectionQueryBuilder
@@ -55,6 +58,9 @@ func (q *alterNamedCollectionQueryBuilder) Build() (string, error) {
 	if len(q.setKeys) == 0 && len(q.deleteKeys) == 0 {
 		return "", errors.New("at least one SET or DELETE key is required for ALTER NAMED COLLECTION queries")
 	}
+	if len(q.setKeys) > 0 && len(q.deleteKeys) > 0 {
+		return "", errors.New("cannot SET and DELETE keys in the same ALTER NAMED COLLECTION query")
+	}
 
 	tokens := []string{
 		"ALTER",
@@ -78,9 +84,6 @@ func (q *alterNamedCollectionQueryBuilder) Build() (string, error) {
 	}
 
 	if len(q.deleteKeys) > 0 {
-		if len(q.setKeys) > 0 {
-			tokens[len(tokens)-1] = tokens[len(tokens)-1] + ","
-		}
 		tokens = append(tokens, "DELETE", strings.Join(backtickAll(q.deleteKeys), ", "))
 	}
 
