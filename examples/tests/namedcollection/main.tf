@@ -3,11 +3,15 @@ resource "clickhousedbops_named_collection" "s3_prod" {
   name         = "s3_prod"
 
   keys = {
-    url               = "https://s3.amazonaws.com/bucket/"
-    format            = "CSV"
-    access_key_id     = "AKIAEXAMPLE"
+    url           = "https://s3.amazonaws.com/bucket/"
+    format        = "CSV"
+    access_key_id = "AKIAEXAMPLE"
+  }
+
+  secret_keys_wo = {
     secret_access_key = "topsecret"
   }
+  secret_keys_wo_version = 1
 
   overridable_keys     = ["url"]
   not_overridable_keys = ["secret_access_key"]

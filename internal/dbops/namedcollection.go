@@ -10,6 +10,10 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/querybuilder"
 )
 
+// HiddenNamedCollectionValue is what ClickHouse returns instead of a named
+// collection value when the current user lacks SHOW NAMED COLLECTIONS SECRETS.
+const HiddenNamedCollectionValue = "[HIDDEN]"
+
 type NamedCollectionKey struct {
 	Value       string
 	Overridable *bool
@@ -17,8 +21,7 @@ type NamedCollectionKey struct {
 
 type NamedCollection struct {
 	Name string
-	// On Get, values can be the literal "[HIDDEN]" unless the current user
-	// is granted SHOW NAMED COLLECTIONS SECRETS.
+	// On Get, values can be HiddenNamedCollectionValue.
 	Keys map[string]NamedCollectionKey
 }
 
@@ -45,53 +48,41 @@ func (i *impl) CreateNamedCollection(ctx context.Context, collection NamedCollec
 }
 
 func (i *impl) GetNamedCollection(ctx context.Context, name string, clusterName *string) (*NamedCollection, error) {
-	// Check existence first: a collection could in theory have no keys, and the
-	// keys query below would return no rows for it.
-	var found bool
-	{
-		sql, err := querybuilder.
-			NewSelect(
-				[]querybuilder.Field{
-					querybuilder.NewField("name"),
-				},
-				"system.named_collections",
-			).
-			WithCluster(clusterName).
-			Where(querybuilder.WhereEquals("name", name)).
-			Build()
-		if err != nil {
-			return nil, errors.WithMessage(err, "error building query")
-		}
-
-		err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-			found = true
-			return nil
-		})
-		if err != nil {
-			return nil, errors.WithMessage(err, "error running query")
-		}
-	}
-
-	if !found {
-		// NamedCollection not found
-		return nil, nil
-	}
-
-	collection := &NamedCollection{
-		Name: name,
-		Keys: make(map[string]NamedCollectionKey),
-	}
-
-	sql, err := querybuilder.NewSelectNamedCollectionKeys(name).WithCluster(clusterName).Build()
+	// system.named_collections stores the keys in a Map(String, String), which the
+	// clickhouse clients can't decode, so LEFT ARRAY JOIN unrolls it into one row
+	// per key. LEFT keeps a row for a collection with no keys, which is how
+	// existence is detected without a second query.
+	sql, err := querybuilder.
+		NewSelect(
+			[]querybuilder.Field{
+				querybuilder.NewRawField("kv.1", "key_name"),
+				querybuilder.NewRawField("kv.2", "key_value"),
+			},
+			"system.named_collections",
+		).
+		WithCluster(clusterName).
+		LeftArrayJoin("collection", "kv").
+		Where(querybuilder.WhereEquals("name", name)).
+		Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
 
+	var found bool
+	keys := make(map[string]NamedCollectionKey)
+
 	// When querying a cluster, each key appears once per replica; the map dedupes.
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
+		found = true
+
 		keyName, err := data.GetString("key_name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'key_name' field")
+		}
+
+		if keyName == "" {
+			// Collection exists but has no keys.
+			return nil
 		}
 
 		keyValue, err := data.GetString("key_value")
@@ -99,7 +90,7 @@ func (i *impl) GetNamedCollection(ctx context.Context, name string, clusterName 
 			return errors.WithMessage(err, "error scanning query result, missing 'key_value' field")
 		}
 
-		collection.Keys[keyName] = NamedCollectionKey{Value: keyValue}
+		keys[keyName] = NamedCollectionKey{Value: keyValue}
 
 		return nil
 	})
@@ -107,7 +98,15 @@ func (i *impl) GetNamedCollection(ctx context.Context, name string, clusterName 
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	return collection, nil
+	if !found {
+		// NamedCollection not found
+		return nil, nil
+	}
+
+	return &NamedCollection{
+		Name: name,
+		Keys: keys,
+	}, nil
 }
 
 func (i *impl) UpdateNamedCollection(ctx context.Context, name string, set map[string]NamedCollectionKey, deleteKeys []string, clusterName *string) (*NamedCollection, error) {
