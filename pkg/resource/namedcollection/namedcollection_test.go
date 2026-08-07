@@ -3,12 +3,15 @@ package namedcollection_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/zclconf/go-cty/cty"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/factories"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/resourcebuilder"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/runner"
@@ -42,8 +45,8 @@ func TestNamedcollection_acceptance(t *testing.T) {
 	// must NOT be in the terraform state. Their values are not compared, they are
 	// never in state and ClickHouse hides them from users without
 	// SHOW NAMED COLLECTIONS SECRETS.
-	checkAttributes := func(secretKeyNames ...string) func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
-		return func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
+	checkAttributes := func(secretKeyNames ...string) func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]any) error {
+		return func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]any) error {
 			name := attrs["name"]
 			if name == nil {
 				return fmt.Errorf("name was nil")
@@ -68,7 +71,7 @@ func TestNamedcollection_acceptance(t *testing.T) {
 
 			stateKeys := make(map[string]string)
 			if attrs["keys"] != nil {
-				for k, v := range attrs["keys"].(map[string]interface{}) {
+				for k, v := range attrs["keys"].(map[string]any) {
 					stateKeys[k] = v.(string)
 				}
 			}
@@ -264,4 +267,105 @@ func TestNamedcollection_acceptance(t *testing.T) {
 	}
 
 	runner.RunTests(t, tests)
+}
+
+func TestNamedcollection_validation_acceptance(t *testing.T) {
+	providers := factories.ProviderFactories()
+
+	configs := []struct {
+		name        string
+		config      string
+		expectError *regexp.Regexp
+	}{
+		{
+			name: "at least one of keys and secret_keys_wo is required",
+			config: `
+			resource "clickhousedbops_named_collection" "test" {
+				name = "test"
+			}
+			`,
+			expectError: regexp.MustCompile(`(?s)At least one attribute out of \[secret_keys_wo,keys\] must be\s+specified`),
+		},
+		{
+			name: "secret_keys_wo requires secret_keys_wo_version",
+			config: `
+			resource "clickhousedbops_named_collection" "test" {
+				name           = "test"
+				secret_keys_wo = { password = "secret" }
+			}
+			`,
+			expectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*secret_keys_wo_version.*must be specified when.*secret_keys_wo.*is\s+specified`),
+		},
+		{
+			name: "secret_keys_wo_version requires secret_keys_wo",
+			config: `
+			resource "clickhousedbops_named_collection" "test" {
+				name                   = "test"
+				keys                   = { host = "localhost" }
+				secret_keys_wo_version = 1
+			}
+			`,
+			expectError: regexp.MustCompile(`(?s)Invalid Attribute Combination.*secret_keys_wo.*must be specified when.*secret_keys_wo_version.*is\s+specified`),
+		},
+		{
+			name: "a key cannot be in both keys and secret_keys_wo",
+			config: `
+			resource "clickhousedbops_named_collection" "test" {
+				name                   = "test"
+				keys                   = { password = "plain" }
+				secret_keys_wo         = { password = "secret" }
+				secret_keys_wo_version = 1
+			}
+			`,
+			expectError: regexp.MustCompile(`(?s)Invalid Named Collection.*can't be set in both 'keys' and 'secret_keys_wo'`),
+		},
+		{
+			name: "a key cannot be in both overridable_keys and not_overridable_keys",
+			config: `
+			resource "clickhousedbops_named_collection" "test" {
+				name                 = "test"
+				keys                 = { host = "localhost" }
+				overridable_keys     = ["host"]
+				not_overridable_keys = ["host"]
+			}
+			`,
+			expectError: regexp.MustCompile(`(?s)Invalid Named Collection.*can't be set in both 'overridable_keys' and 'not_overridable_keys'`),
+		},
+		{
+			name: "overridable_keys must reference a defined key",
+			config: `
+			resource "clickhousedbops_named_collection" "test" {
+				name             = "test"
+				keys             = { host = "localhost" }
+				overridable_keys = ["port"]
+			}
+			`,
+			expectError: regexp.MustCompile(`(?s)Invalid Named Collection.*is not defined in 'keys' or 'secret_keys_wo'`),
+		},
+		{
+			name: "blank key names are rejected",
+			config: `
+			resource "clickhousedbops_named_collection" "test" {
+				name = "test"
+				keys = { " " = "value" }
+			}
+			`,
+			expectError: regexp.MustCompile(`(?s)must not be blank`),
+		},
+	}
+
+	for _, cfg := range configs {
+		t.Run(cfg.name, func(t *testing.T) {
+			resource.Test(t, resource.TestCase{
+				ProtoV6ProviderFactories: providers,
+				Steps: []resource.TestStep{
+					{
+						Config:      cfg.config,
+						PlanOnly:    true,
+						ExpectError: cfg.expectError,
+					},
+				},
+			})
+		})
+	}
 }
