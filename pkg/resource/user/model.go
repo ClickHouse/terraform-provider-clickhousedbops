@@ -31,6 +31,26 @@ type AuthModel struct {
 	Kerberos           []KerberosModel       `tfsdk:"kerberos"`
 }
 
+// hasMethods reports whether at least one authentication method is declared.
+func (a *AuthModel) hasMethods() bool {
+	if a == nil {
+		return false
+	}
+	return a.NoPassword != nil ||
+		len(a.PlaintextPassword) > 0 ||
+		len(a.Sha256Password) > 0 ||
+		len(a.Sha256Hash) > 0 ||
+		len(a.DoubleSha1Password) > 0 ||
+		len(a.DoubleSha1Hash) > 0 ||
+		len(a.BcryptPassword) > 0 ||
+		len(a.BcryptHash) > 0 ||
+		len(a.SSLCertificate) > 0 ||
+		len(a.HTTP) > 0 ||
+		len(a.SSHKey) > 0 ||
+		len(a.LDAP) > 0 ||
+		len(a.Kerberos) > 0
+}
+
 // NoPasswordModel is an empty presence block: set when passwordless auth is desired.
 type NoPasswordModel struct{}
 

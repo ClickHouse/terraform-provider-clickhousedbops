@@ -18,10 +18,30 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 )
+
+const legacyReplaceDescription = "Changing this attribute replaces the user, unless it is removed while an auth block is configured: that is the migration path from the deprecated password fields and is applied in place."
+
+// legacyFieldRemovedForAuth reports whether a legacy password attribute is being
+// removed from configuration while the auth block declares at least one method.
+// That is the migration path from the deprecated fields to auth: Update
+// re-asserts the configured methods, so no replacement is needed.
+func legacyFieldRemovedForAuth(ctx context.Context, planIsNull bool, stateIsNull bool, cfg tfsdk.Config) bool {
+	if !planIsNull || stateIsNull {
+		return false
+	}
+
+	var config User
+	if diags := cfg.Get(ctx, &config); diags.HasError() {
+		return false
+	}
+
+	return config.Auth.hasMethods()
+}
 
 //go:embed user.md
 var userResourceDescription string
@@ -66,9 +86,14 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"password_sha256_hash": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user.",
+				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user, except removing it in favor of an auth block, which updates the user in place.",
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.RequiresReplaceIf(
+						func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+							resp.RequiresReplace = !legacyFieldRemovedForAuth(ctx, req.PlanValue.IsNull(), req.StateValue.IsNull(), req.Config)
+						},
+						legacyReplaceDescription, legacyReplaceDescription,
+					),
 				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
@@ -93,9 +118,14 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 			"password_sha256_hash_wo_version": schema.Int32Attribute{
 				Optional:    true,
-				Description: "Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.",
+				Description: "Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user. Removing it together with password_sha256_hash_wo in favor of an auth block updates the user in place.",
 				PlanModifiers: []planmodifier.Int32{
-					int32planmodifier.RequiresReplace(),
+					int32planmodifier.RequiresReplaceIf(
+						func(ctx context.Context, req planmodifier.Int32Request, resp *int32planmodifier.RequiresReplaceIfFuncResponse) {
+							resp.RequiresReplace = !legacyFieldRemovedForAuth(ctx, req.PlanValue.IsNull(), req.StateValue.IsNull(), req.Config)
+						},
+						legacyReplaceDescription, legacyReplaceDescription,
+					),
 				},
 				Validators: []validator.Int32{
 					int32validator.AlsoRequires(path.MatchRoot("password_sha256_hash_wo")),

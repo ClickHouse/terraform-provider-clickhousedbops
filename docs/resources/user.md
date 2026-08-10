@@ -40,6 +40,25 @@ description: |-
   for backwards compatibility and behave as a single sha256_hash method. They compose additively with
   the auth block, so existing configurations keep working — but prefer the auth.sha256_hash block
   for new ones. Changing a legacy password field replaces the user.
+  To migrate, replace the legacy fields with an auth.sha256_hash block carrying the same hash:
+  that plans as an in-place update (the configured methods are re-asserted with ALTER USER),
+  not a replacement, so grants and dependent resources are untouched.
+  
+  resource "clickhousedbops_user" "example" {
+    name = "example"
+  
+    # Before (deprecated):
+    # password_sha256_hash_wo         = sha256("changeme")
+    # password_sha256_hash_wo_version = 1
+  
+    auth {
+      sha256_hash {
+        value_wo         = sha256("changeme")
+        value_wo_version = 1
+      }
+    }
+  }
+  
   Known limitations:
   
   Authentication values cannot be read back from ClickHouse, so external drift of a secret is not
@@ -97,6 +116,27 @@ Supported method blocks: `no_password`, `plaintext_password`, `sha256_password`,
 for backwards compatibility and behave as a single `sha256_hash` method. They compose additively with
 the `auth` block, so existing configurations keep working — but prefer the `auth.sha256_hash` block
 for new ones. Changing a legacy password field replaces the user.
+
+To migrate, replace the legacy fields with an `auth.sha256_hash` block carrying the same hash:
+that plans as an in-place update (the configured methods are re-asserted with `ALTER USER`),
+not a replacement, so grants and dependent resources are untouched.
+
+```terraform
+resource "clickhousedbops_user" "example" {
+  name = "example"
+
+  # Before (deprecated):
+  # password_sha256_hash_wo         = sha256("changeme")
+  # password_sha256_hash_wo_version = 1
+
+  auth {
+    sha256_hash {
+      value_wo         = sha256("changeme")
+      value_wo_version = 1
+    }
+  }
+}
+```
 
 Known limitations:
 
@@ -159,9 +199,9 @@ resource "clickhousedbops_user" "john" {
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `host_ips` (Set of String) IP addresses from which the user is allowed to connect. If not specified, user can connect from any host.
-- `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user.
+- `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user, except removing it in favor of an auth block, which updates the user in place.
 - `password_sha256_hash_wo` (String, Sensitive, Deprecated, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.
-- `password_sha256_hash_wo_version` (Number, Deprecated) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
+- `password_sha256_hash_wo_version` (Number, Deprecated) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user. Removing it together with password_sha256_hash_wo in favor of an auth block updates the user in place.
 
 ### Read-Only
 
