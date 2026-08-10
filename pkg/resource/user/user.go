@@ -26,15 +26,12 @@ import (
 
 const legacyReplaceDescription = "Changing this attribute replaces the user, unless it is removed while an auth block is configured: that is the migration path from the deprecated password fields and is applied in place."
 
-// legacyFieldRemovedForAuth reports whether a legacy password attribute is being
-// removed from configuration while the auth block declares at least one method.
-// That is the migration path from the deprecated fields to auth: Update
-// re-asserts the configured methods, so no replacement is needed.
-func legacyFieldRemovedForAuth(ctx context.Context, planIsNull bool, stateIsNull bool, cfg tfsdk.Config) bool {
-	if !planIsNull || stateIsNull {
-		return false
-	}
-
+// configHasAuthMethods reports whether the configuration declares at least one
+// method in the auth block. A null plan value here means the legacy attribute is
+// being removed (RequiresReplaceIf only runs when plan and state differ), and
+// removal with auth methods configured is the migration path off the deprecated
+// fields: Update re-asserts the configured methods, so no replacement is needed.
+func configHasAuthMethods(ctx context.Context, cfg tfsdk.Config) bool {
 	var config User
 	if diags := cfg.Get(ctx, &config); diags.HasError() {
 		return false
@@ -90,7 +87,8 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplaceIf(
 						func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-							resp.RequiresReplace = !legacyFieldRemovedForAuth(ctx, req.PlanValue.IsNull(), req.StateValue.IsNull(), req.Config)
+							migratingToAuth := req.PlanValue.IsNull() && configHasAuthMethods(ctx, req.Config)
+							resp.RequiresReplace = !migratingToAuth
 						},
 						legacyReplaceDescription, legacyReplaceDescription,
 					),
@@ -122,7 +120,8 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				PlanModifiers: []planmodifier.Int32{
 					int32planmodifier.RequiresReplaceIf(
 						func(ctx context.Context, req planmodifier.Int32Request, resp *int32planmodifier.RequiresReplaceIfFuncResponse) {
-							resp.RequiresReplace = !legacyFieldRemovedForAuth(ctx, req.PlanValue.IsNull(), req.StateValue.IsNull(), req.Config)
+							migratingToAuth := req.PlanValue.IsNull() && configHasAuthMethods(ctx, req.Config)
+							resp.RequiresReplace = !migratingToAuth
 						},
 						legacyReplaceDescription, legacyReplaceDescription,
 					),
