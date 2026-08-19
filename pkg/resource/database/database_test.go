@@ -22,32 +22,36 @@ func TestDatabase_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
 	checkNotExistsFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error) {
-		uuid := attrs["uuid"]
-		if uuid == "" {
-			return false, fmt.Errorf("uuid attribute was not set")
+		name := attrs["name"]
+		if name == "" {
+			return false, fmt.Errorf("name attribute was not set")
 		}
-		database, err := dbopsClient.GetDatabase(ctx, uuid, clusterName)
+		database, err := dbopsClient.FindDatabaseByName(ctx, name, clusterName)
 		return database != nil, err
 	}
 
 	checkAttributesFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
-		uuid := attrs["uuid"]
-		if uuid == nil {
-			return fmt.Errorf("uuid was nil")
+		name := attrs["name"]
+		if name == nil {
+			return fmt.Errorf("name was nil")
 		}
 
-		database, err := dbopsClient.GetDatabase(ctx, uuid.(string), clusterName)
+		database, err := dbopsClient.FindDatabaseByName(ctx, name.(string), clusterName)
 		if err != nil {
 			return err
 		}
 
 		if database == nil {
-			return fmt.Errorf("database with uuid %q was not found", uuid)
+			return fmt.Errorf("database with name %q was not found", name)
 		}
 
 		// Check state fields are aligned with the database we retrieved from CH.
 		if attrs["name"].(string) != database.Name {
 			return fmt.Errorf("expected name to be %q, was %q", database.Name, attrs["name"].(string))
+		}
+
+		if attrs["engine"].(string) != database.Engine {
+			return fmt.Errorf("expected engine to be %q, was %q", database.Engine, attrs["engine"].(string))
 		}
 
 		var comment *string
@@ -72,6 +76,7 @@ func TestDatabase_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithStringAttribute("engine", "Memory").
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
