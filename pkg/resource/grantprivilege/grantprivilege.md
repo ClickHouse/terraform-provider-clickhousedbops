@@ -9,4 +9,5 @@ Known limitations:
 - A group of privileges (such as `ALL`) can't be granted directly: grant each member of the group individually, or set `current_grants = true` to copy the group from the grantor.
 - It's not possible to grant the same `clickhousedbops_grant_privilege` to both a `clickhousedbops_user` and a `clickhousedbops_role` using a single `clickhousedbops_grant_privilege` stanza. You can do that using two different stanzas, one with `grantee_user_name` and the other with `grantee_role_name` fields set.
 - It's not possible to grant the same privilege (example 'SELECT') to multiple entities (for example tables) with a single stanza. You can do that my creating one stanza for each entity you want to grant privileges on.
+- It's not possible to grant privileges to a role when a user with the same name exists: ClickHouse resolves grantee names to users first, so the grant would silently target the user instead. The provider rejects such grants.
 - Importing `clickhousedbops_grant_privilege` resources into terraform is not supported.

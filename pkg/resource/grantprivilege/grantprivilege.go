@@ -365,6 +365,50 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	if !plan.GranteeUserName.IsNull() {
+		user, err := r.client.FindUserByName(ctx, plan.GranteeUserName.ValueString(), plan.ClusterName.ValueStringPointer())
+		if err != nil {
+			resp.Diagnostics.AddError("Error Validating Grantee user", fmt.Sprintf("%+v\n", err))
+			return
+		}
+		if user == nil {
+			resp.Diagnostics.AddError("Grantee User Does Not Exist", fmt.Sprintf(
+				"User %q does not exist. Please create the user before granting privileges to it.",
+				plan.GranteeUserName.ValueString(),
+			))
+			return
+		}
+	}
+
+	if !plan.GranteeRoleName.IsNull() {
+		role, err := r.client.FindRoleByName(ctx, plan.GranteeRoleName.ValueString(), plan.ClusterName.ValueStringPointer())
+		if err != nil {
+			resp.Diagnostics.AddError("Error Validating Grantee Role", fmt.Sprintf("%+v\n", err))
+			return
+		}
+		if role == nil {
+			resp.Diagnostics.AddError("Grantee Role Does Not Exist", fmt.Sprintf(
+				"Role %q does not exist. Please create the role before granting privileges to it.",
+				plan.GranteeRoleName.ValueString(),
+			))
+			return
+		}
+
+		// ClickHouse resolves an ambiguous grantee name to a user before a role, so a grant meant for a shadowed role would silently target the user.
+		user, err := r.client.FindUserByName(ctx, plan.GranteeRoleName.ValueString(), plan.ClusterName.ValueStringPointer())
+		if err != nil {
+			resp.Diagnostics.AddError("Error Validating Grantee Role", fmt.Sprintf("%+v\n", err))
+			return
+		}
+		if user != nil {
+			resp.Diagnostics.AddError("Ambiguous Grantee Name", fmt.Sprintf(
+				"Cannot grant to role %q: a user with the same name exists and ClickHouse would grant to the user instead. Rename or drop one of the two entities.",
+				plan.GranteeRoleName.ValueString(),
+			))
+			return
+		}
+	}
+
 	grant := plan.toGrant()
 
 	createdGrant, err := r.client.GrantPrivilege(ctx, grant, plan.ClusterName.ValueStringPointer())
