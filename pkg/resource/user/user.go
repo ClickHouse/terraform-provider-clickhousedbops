@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -66,10 +65,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"password_sha256_hash": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
+				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field update the user in place.",
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
 					stringvalidator.ConflictsWith(path.MatchRoot("password_sha256_hash_wo")),
@@ -80,9 +76,6 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Optional:    true,
 				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.",
 				Sensitive:   true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
 					stringvalidator.AlsoRequires(path.MatchRoot("password_sha256_hash_wo_version")),
@@ -93,10 +86,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 			"password_sha256_hash_wo_version": schema.Int32Attribute{
 				Optional:    true,
-				Description: "Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.",
-				PlanModifiers: []planmodifier.Int32{
-					int32planmodifier.RequiresReplace(),
-				},
+				Description: "Version of the password_sha256_hash_wo field. Bump this value to update the password on the user.",
 				Validators: []validator.Int32{
 					int32validator.AlsoRequires(path.MatchRoot("password_sha256_hash_wo")),
 				},
