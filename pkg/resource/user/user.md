@@ -43,28 +43,8 @@ Supported method blocks: `no_password`, `plaintext_password`, `sha256_password`,
 `password_sha256_hash` / `password_sha256_hash_wo` (with `password_sha256_hash_wo_version`) are kept
 for backwards compatibility and behave as a single `sha256_hash` method. They compose additively with
 the `auth` block, so existing configurations keep working — but prefer the `auth.sha256_hash` block
-for new ones. Changing a legacy password field replaces the user.
-
-To migrate, replace the legacy fields with an `auth.sha256_hash` block carrying the same hash:
-that plans as an in-place update (the configured methods are re-asserted with `ALTER USER`),
-not a replacement, so grants and dependent resources are untouched.
-
-```terraform
-resource "clickhousedbops_user" "example" {
-  name = "example"
-
-  # Before (deprecated):
-  # password_sha256_hash_wo         = sha256("changeme")
-  # password_sha256_hash_wo_version = 1
-
-  auth {
-    sha256_hash {
-      value_wo         = sha256("changeme")
-      value_wo_version = 1
-    }
-  }
-}
-```
+for new ones. Replacing them with an `auth.sha256_hash` block carrying the same hash updates the
+user in place.
 
 Known limitations:
 

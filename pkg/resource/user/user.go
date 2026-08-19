@@ -13,32 +13,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 )
-
-const legacyReplaceDescription = "Changing this attribute replaces the user, unless it is removed while an auth block is configured: that is the migration path from the deprecated password fields and is applied in place."
-
-// configHasAuthMethods reports whether the configuration declares at least one
-// method in the auth block. A null plan value here means the legacy attribute is
-// being removed (RequiresReplaceIf only runs when plan and state differ), and
-// removal with auth methods configured is the migration path off the deprecated
-// fields: Update re-asserts the configured methods, so no replacement is needed.
-func configHasAuthMethods(ctx context.Context, cfg tfsdk.Config) bool {
-	var config User
-	if diags := cfg.Get(ctx, &config); diags.HasError() {
-		return false
-	}
-
-	return config.Auth.hasMethods()
-}
 
 //go:embed user.md
 var userResourceDescription string
@@ -83,16 +65,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"password_sha256_hash": schema.StringAttribute{
 				Optional:    true,
 				Sensitive:   true,
-				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user, except removing it in favor of an auth block, which updates the user in place.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplaceIf(
-						func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
-							migratingToAuth := req.PlanValue.IsNull() && configHasAuthMethods(ctx, req.Config)
-							resp.RequiresReplace = !migratingToAuth
-						},
-						legacyReplaceDescription, legacyReplaceDescription,
-					),
-				},
+				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field update the user in place.",
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
 					stringvalidator.ConflictsWith(path.MatchRoot("password_sha256_hash_wo")),
@@ -103,9 +76,6 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Optional:    true,
 				Description: "SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.",
 				Sensitive:   true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-fA-F0-9]{64}$`), "password_sha256_hash must be a valid SHA256 hash"),
 					stringvalidator.AlsoRequires(path.MatchRoot("password_sha256_hash_wo_version")),
@@ -116,16 +86,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			},
 			"password_sha256_hash_wo_version": schema.Int32Attribute{
 				Optional:    true,
-				Description: "Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user. Removing it together with password_sha256_hash_wo in favor of an auth block updates the user in place.",
-				PlanModifiers: []planmodifier.Int32{
-					int32planmodifier.RequiresReplaceIf(
-						func(ctx context.Context, req planmodifier.Int32Request, resp *int32planmodifier.RequiresReplaceIfFuncResponse) {
-							migratingToAuth := req.PlanValue.IsNull() && configHasAuthMethods(ctx, req.Config)
-							resp.RequiresReplace = !migratingToAuth
-						},
-						legacyReplaceDescription, legacyReplaceDescription,
-					),
-				},
+				Description: "Version of the password_sha256_hash_wo field. Bump this value to update the password on the user.",
 				Validators: []validator.Int32{
 					int32validator.AlsoRequires(path.MatchRoot("password_sha256_hash_wo")),
 				},
