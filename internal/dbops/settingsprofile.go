@@ -2,8 +2,8 @@ package dbops
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pingcap/errors"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
@@ -28,7 +28,14 @@ func (i *impl) CreateSettingsProfile(ctx context.Context, profile SettingsProfil
 
 	err = i.clickhouseClient.Exec(ctx, sql)
 	if err != nil {
-		return nil, errors.WithMessage(err, "error running query")
+		if !isAlreadyExistsError(err) {
+			return nil, errors.WithMessage(err, "error running query")
+		}
+
+		// The settings profile already exists in ClickHouse, importing it instead of failing.
+		tflog.Warn(ctx, "settings profile already exists, adopting it instead of failing", map[string]any{
+			"name": profile.Name,
+		})
 	}
 
 	return retryWithBackoff(ctx, "settings profile", profile.Name, func() (*SettingsProfile, error) {
@@ -321,7 +328,8 @@ func (i *impl) FindSettingsProfileByName(ctx context.Context, name string, clust
 	}
 
 	if settingsProfileID == "" {
-		return nil, errors.New(fmt.Sprintf("settings profile with name %s not found", name))
+		// Not found: (nil, nil) keeps retryWithBackoff callers retrying.
+		return nil, nil
 	}
 
 	return i.GetSettingsProfile(ctx, settingsProfileID, clusterName)

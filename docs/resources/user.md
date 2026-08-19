@@ -39,7 +39,8 @@ description: |-
   password_sha256_hash / password_sha256_hash_wo (with password_sha256_hash_wo_version) are kept
   for backwards compatibility and behave as a single sha256_hash method. They compose additively with
   the auth block, so existing configurations keep working — but prefer the auth.sha256_hash block
-  for new ones. Changing a legacy password field replaces the user.
+  for new ones. Replacing them with an auth.sha256_hash block carrying the same hash updates the
+  user in place.
   Known limitations:
   
   Authentication values cannot be read back from ClickHouse, so external drift of a secret is not
@@ -96,7 +97,8 @@ Supported method blocks: `no_password`, `plaintext_password`, `sha256_password`,
 `password_sha256_hash` / `password_sha256_hash_wo` (with `password_sha256_hash_wo_version`) are kept
 for backwards compatibility and behave as a single `sha256_hash` method. They compose additively with
 the `auth` block, so existing configurations keep working — but prefer the `auth.sha256_hash` block
-for new ones. Changing a legacy password field replaces the user.
+for new ones. Replacing them with an `auth.sha256_hash` block carrying the same hash updates the
+user in place.
 
 Known limitations:
 
@@ -159,9 +161,9 @@ resource "clickhousedbops_user" "john" {
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `host_ips` (Set of String) IP addresses from which the user is allowed to connect. If not specified, user can connect from any host.
-- `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field will replace the user.
+- `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field update the user in place.
 - `password_sha256_hash_wo` (String, Sensitive, Deprecated, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.
-- `password_sha256_hash_wo_version` (Number, Deprecated) Version of the password_sha256_hash_wo field. Bump this value to require a force update of the password on the user.
+- `password_sha256_hash_wo_version` (Number, Deprecated) Version of the password_sha256_hash_wo field. Bump this value to update the password on the user.
 
 ### Read-Only
 

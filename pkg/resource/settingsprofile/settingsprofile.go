@@ -277,6 +277,14 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 			return
 		}
 
+		if settingsProfile == nil {
+			resp.Diagnostics.AddError(
+				"Cannot find settings profile",
+				fmt.Sprintf("no settings profile named %q was found", ref),
+			)
+			return
+		}
+
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), settingsProfile.ID)...)
 	} else {
 		// User passed a UUID
