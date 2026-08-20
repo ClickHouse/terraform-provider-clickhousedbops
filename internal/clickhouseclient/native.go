@@ -88,6 +88,9 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 	if err != nil {
 		return errors.WithMessage(err, "error executing query")
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	// Prepare a slice of variable pointers dynamically typed based on the query result's column types.
 	columnTypes := rows.ColumnTypes()
@@ -98,10 +101,6 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 
 	// Scan each row of the result.
 	for i := 0; rows.Next(); i++ {
-		if err := rows.Err(); err != nil {
-			return errors.WithMessage(rows.Err(), "error iterating over rows")
-		}
-
 		// Read the columns using the dynamically created variables.
 		if err := rows.Scan(vars...); err != nil {
 			return errors.WithMessage(err, "error scanning row")
@@ -132,6 +131,13 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 		if err != nil {
 			return errors.WithMessage(err, "error populating Row from query result")
 		}
+	}
+	// Next() returns false both when the result set is exhausted and when the
+	// stream fails mid-flight (e.g. connection reset); only Err() tells them
+	// apart. Without this check a failed read is indistinguishable from an
+	// empty result, so callers would treat existing resources as absent.
+	if err := rows.Err(); err != nil {
+		return errors.WithMessage(err, "error iterating over rows")
 	}
 
 	return nil
