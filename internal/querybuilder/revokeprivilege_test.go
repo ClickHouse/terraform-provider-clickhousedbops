@@ -48,6 +48,12 @@ func Test_revokePrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Grant option only on single column",
+			builder: RevokePrivilege("SELECT", "role1").WithDatabase(new("db1")).WithTable(new("tbl1")).WithColumn(new("secret")).WithGrantOptionOnly(true),
+			want:    "REVOKE GRANT OPTION FOR SELECT(`secret`) ON `db1`.`tbl1` FROM `role1`;",
+			wantErr: false,
+		},
+		{
 			name:    "Access object on named user",
 			builder: RevokePrivilege("CREATE USER", "admin").WithAccessObject(new("bob")),
 			want:    "REVOKE CREATE USER ON `bob` FROM `admin`;",
