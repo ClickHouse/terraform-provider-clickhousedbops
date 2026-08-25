@@ -194,6 +194,9 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, createTimeout)
+	defer cancel()
+
 	createdSetting, err := r.client.CreateSetting(ctx, plan.SettingsProfileID.ValueString(), setting, plan.ClusterName.ValueStringPointer(), createTimeout)
 	if err != nil {
 		resp.Diagnostics.AddError(
