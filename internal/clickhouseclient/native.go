@@ -146,3 +146,13 @@ func (i *nativeClient) Exec(ctx context.Context, qry string, params ...map[strin
 
 	return nil
 }
+
+func (i *nativeClient) ExecSensitive(ctx context.Context, qry string, redactedQry string, sensitiveValues []string) error {
+	ctx = tflog.SetField(ctx, "Query", redactedQry)
+	tflog.Debug(ctx, "Running Query")
+
+	if err := i.connection.Exec(ctx, qry); err != nil {
+		return errors.New("error executing query: " + redactSensitiveValues(err.Error(), sensitiveValues))
+	}
+	return nil
+}
