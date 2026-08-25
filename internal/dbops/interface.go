@@ -31,6 +31,10 @@ type Client interface {
 	GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string) (*GrantPrivilege, error)
 	RevokeGrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege, clusterName *string) error
 	GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string, clusterName *string) ([]GrantPrivilege, error)
+	CreatePartialRevoke(ctx context.Context, partialRevoke PartialRevoke, clusterName *string) (*PartialRevoke, error)
+	GetPartialRevoke(ctx context.Context, partialRevoke *PartialRevoke, clusterName *string) (*PartialRevoke, error)
+	DeletePartialRevoke(ctx context.Context, partialRevoke PartialRevoke, clusterName *string) error
+	GetAllPartialRevokesForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string, clusterName *string) ([]PartialRevoke, error)
 
 	CreateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error)
 	GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *string) (*RowPolicy, error)
