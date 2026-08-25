@@ -39,6 +39,8 @@ const (
 
 	authStrategyPassword  = "password"
 	authStrategyBasicAuth = "basicauth"
+
+	defaultQueryTimeout = 300 * time.Second
 )
 
 var (
@@ -126,7 +128,14 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 			},
 			"dial_timeout": schema.Int64Attribute{
 				Optional:    true,
-				Description: "Timeout in seconds for establishing connections to ClickHouse. Only applies to the native and nativesecure protocols. Useful when the ClickHouse instance takes time to start up from an idle state.",
+				Description: "Timeout in seconds for establishing connections to ClickHouse. Useful when the ClickHouse instance takes time to start up from an idle state.",
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+			},
+			"query_timeout": schema.Int64Attribute{
+				Optional:    true,
+				Description: "Timeout in seconds for each query ran against ClickHouse. Defaults to 300.",
 				Validators: []validator.Int64{
 					int64validator.AtLeast(1),
 				},
@@ -148,6 +157,16 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	if data.Host.IsUnknown() || data.Protocol.IsUnknown() || data.Port.IsUnknown() || data.AuthConfig.Strategy.IsUnknown() || data.AuthConfig.Username.IsUnknown() {
 		// We don't know the service data yet.
 		return
+	}
+
+	var dialTimeout time.Duration
+	if !data.DialTimeout.IsNull() {
+		dialTimeout = time.Duration(data.DialTimeout.ValueInt64()) * time.Second
+	}
+
+	queryTimeout := defaultQueryTimeout
+	if !data.QueryTimeout.IsNull() {
+		queryTimeout = time.Duration(data.QueryTimeout.ValueInt64()) * time.Second
 	}
 
 	var clickhouseClient clickhouseclient.ClickhouseClient
@@ -213,9 +232,9 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				UserPasswordAuth: auth,
 				TLSConfig:        nativeTLSConfig,
 			}
-			if !data.DialTimeout.IsNull() {
-				nativeConfig.DialTimeout = time.Duration(data.DialTimeout.ValueInt64()) * time.Second
-			}
+
+			nativeConfig.DialTimeout = dialTimeout
+			nativeConfig.QueryTimeout = queryTimeout
 			clickhouseClient, err = clickhouseclient.NewNativeClient(nativeConfig)
 		case protocolHTTP:
 			fallthrough
@@ -273,13 +292,17 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 				}
 			}
 
-			clickhouseClient, err = clickhouseclient.NewHTTPClient(clickhouseclient.HTTPClientConfig{
+			httpConfig := clickhouseclient.HTTPClientConfig{
 				Protocol:  protocol,
 				Host:      data.Host.ValueString(),
 				Port:      port,
 				BasicAuth: auth,
 				TLSConfig: tlsConfig,
-			})
+			}
+
+			httpConfig.DialTimeout = dialTimeout
+			httpConfig.QueryTimeout = queryTimeout
+			clickhouseClient, err = clickhouseclient.NewHTTPClient(httpConfig)
 		}
 	}
 
