@@ -1,6 +1,10 @@
-You can use the `clickhousedbops_grant_privilege` resource to grant privileges on databases and tables to either a `clickhousedbops_user` or a `clickhousedbops_role`.
+You can use the `clickhousedbops_grant_privilege` resource to grant privileges on databases, tables, and parameterized ClickHouse objects to either a `clickhousedbops_user` or a `clickhousedbops_role`.
 
 Please note that in order to grant privileges to all database and/or all tables, the `database` and/or `table` fields must be set to null, and not to "*".
+
+For global-with-parameter privileges, use `access_object` for the parameter. This includes user and role names, named collections, table engines, and external sources. Leaving `access_object` null grants the privilege on every parameter (`ON *`).
+
+Source `READ` and `WRITE` privileges can additionally use `access_object_filter` to restrict the source URI with a regular expression. ClickHouse treats this value as a regexp, not a literal URI, so escape regexp metacharacters such as `.` when an exact match is intended. Source filters require ClickHouse 25.8 or newer and `access_control_improvements.enable_read_write_grants`.
 
 Known limitations:
 
