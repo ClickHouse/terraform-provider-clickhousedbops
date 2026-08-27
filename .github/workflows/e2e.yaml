@@ -89,6 +89,7 @@ jobs:
 
   database:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -110,6 +111,7 @@ jobs:
 
   role:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -131,6 +133,7 @@ jobs:
 
   user:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -152,6 +155,7 @@ jobs:
 
   grantrole:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -173,6 +177,7 @@ jobs:
 
   grantprivilege:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -194,6 +199,7 @@ jobs:
 
   settingsprofile:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false
@@ -215,6 +221,7 @@ jobs:
 
   rowpolicy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false

@@ -17,7 +17,8 @@ import (
 const defaultDatabase = "default"
 
 type nativeClient struct {
-	connection driver.Conn
+	connection   driver.Conn
+	queryTimeout time.Duration
 }
 
 type NativeClientConfig struct {
@@ -26,6 +27,7 @@ type NativeClientConfig struct {
 	UserPasswordAuth *UserPasswordAuth
 	TLSConfig        *tls.Config
 	DialTimeout      time.Duration
+	QueryTimeout     time.Duration
 }
 
 func NewNativeClient(config NativeClientConfig) (ClickhouseClient, error) {
@@ -70,11 +72,15 @@ func NewNativeClient(config NativeClientConfig) (ClickhouseClient, error) {
 	}
 
 	return &nativeClient{
-		connection: conn,
+		connection:   conn,
+		queryTimeout: config.QueryTimeout,
 	}, nil
 }
 
 func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row) error) error {
+	ctx, cancel := queryContext(ctx, i.queryTimeout)
+	defer cancel()
+
 	ctx = tflog.SetField(ctx, "Query", qry)
 	tflog.Debug(ctx, "Running Query")
 
@@ -138,6 +144,9 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 }
 
 func (i *nativeClient) Exec(ctx context.Context, qry string, params ...map[string]string) error {
+	ctx, cancel := queryContext(ctx, i.queryTimeout)
+	defer cancel()
+
 	ctx = tflog.SetField(ctx, "Query", qry)
 	tflog.Debug(ctx, "Running Query")
 

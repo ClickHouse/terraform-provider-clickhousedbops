@@ -48,7 +48,8 @@ provider "clickhousedbops" {
 
 ### Optional
 
-- `dial_timeout` (Number) Timeout in seconds for establishing connections to ClickHouse. Only applies to the native and nativesecure protocols. Useful when the ClickHouse instance takes time to start up from an idle state.
+- `dial_timeout` (Number) Timeout in seconds for establishing connections to ClickHouse. Useful when the ClickHouse instance takes time to start up from an idle state.
+- `query_timeout` (Number) Timeout in seconds for each query ran against ClickHouse. Defaults to 300.
 - `read_after_write_timeout` (Number) Timeout in seconds for read-after-write verification of created resources. ClickHouse Cloud services with multiple replicas may need higher values due to replication lag. Defaults to 30.
 - `tls_config` (Attributes) TLS configuration options (see [below for nested schema](#nestedatt--tls_config))
 
