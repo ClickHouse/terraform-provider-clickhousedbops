@@ -11,6 +11,7 @@ const (
 	resourceTypeRole            = "ROLE"
 	resourceTypeUser            = "USER"
 	resourceTypeSettingsProfile = "SETTINGS PROFILE"
+	resourceTypeNamedCollection = "NAMED COLLECTION"
 )
 
 type DropQueryBuilder interface {
@@ -38,6 +39,10 @@ func NewDropUser(resourceName string) DropQueryBuilder {
 
 func NewDropSettingsProfile(resourceName string) DropQueryBuilder {
 	return newDrop(resourceTypeSettingsProfile, resourceName)
+}
+
+func NewDropNamedCollection(resourceName string) DropQueryBuilder {
+	return newDrop(resourceTypeNamedCollection, resourceName)
 }
 
 func (q *dropQueryBuilder) WithCluster(clusterName *string) DropQueryBuilder {

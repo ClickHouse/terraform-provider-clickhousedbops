@@ -52,6 +52,11 @@ type Client interface {
 	UpdateMaskingPolicy(ctx context.Context, maskingPolicy MaskingPolicy) (*MaskingPolicy, error)
 	DeleteMaskingPolicy(ctx context.Context, id string) error
 
+	CreateNamedCollection(ctx context.Context, collection NamedCollection, clusterName *string) (*NamedCollection, error)
+	GetNamedCollection(ctx context.Context, name string, clusterName *string) (*NamedCollection, error)
+	UpdateNamedCollection(ctx context.Context, name string, set map[string]NamedCollectionKey, deleteKeys []string, clusterName *string) (*NamedCollection, error)
+	DeleteNamedCollection(ctx context.Context, name string, clusterName *string) error
+
 	CreateSetting(ctx context.Context, settingsProfileID string, setting Setting, clusterName *string, timeout time.Duration) (*Setting, error)
 	GetSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) (*Setting, error)
 	DeleteSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) error
