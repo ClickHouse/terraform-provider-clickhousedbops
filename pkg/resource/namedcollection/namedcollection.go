@@ -30,9 +30,7 @@ var namedCollectionResourceDescription string
 // nonBlank rejects empty and whitespace-only key names, which ClickHouse cannot store.
 var nonBlank = regexp.MustCompile(`\S`)
 
-// secretKeyNamesKey names the private-state entry holding the names of the keys
-// written from secret_keys_wo. Write-only values are absent from state, so
-// without this Read would see them as added out of band and plan their removal.
+// Private-state entry listing the secret_keys_wo key names, so Read can tell them apart from keys added out of band.
 const secretKeyNamesKey = "secret_key_names"
 
 var (
@@ -442,16 +440,12 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	}
 
 	if len(set) > 0 || len(deleteKeys) > 0 {
-		collection, err := r.client.UpdateNamedCollection(ctx, state.Name.ValueString(), set, deleteKeys, plan.ClusterName.ValueStringPointer())
+		_, err := r.client.UpdateNamedCollection(ctx, state.Name.ValueString(), set, deleteKeys, plan.ClusterName.ValueStringPointer())
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Error Updating ClickHouse NamedCollection",
 				fmt.Sprintf("%+v\n", err),
 			)
-			return
-		}
-		if collection == nil {
-			resp.State.RemoveResource(ctx)
 			return
 		}
 	}
@@ -557,8 +551,7 @@ func flagResolver(model NamedCollection) func(string) *bool {
 	}
 }
 
-// privateState is the subset of the framework's private state used here. The
-// concrete type lives in an internal package, so it can't be named directly.
+// The framework's concrete private state type is in an internal package, so it can't be named directly.
 type privateState interface {
 	GetKey(ctx context.Context, key string) ([]byte, diag.Diagnostics)
 	SetKey(ctx context.Context, key string, value []byte) diag.Diagnostics

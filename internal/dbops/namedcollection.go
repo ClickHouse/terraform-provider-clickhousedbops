@@ -116,7 +116,7 @@ func (i *impl) UpdateNamedCollection(ctx context.Context, name string, set map[s
 	}
 
 	if existing == nil {
-		return nil, nil
+		return nil, errors.Errorf("named collection %q not found", name)
 	}
 
 	// DELETE runs before SET: resetting a key's overridable flag to the server

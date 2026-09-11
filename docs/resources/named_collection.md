@@ -4,7 +4,7 @@ page_title: "clickhousedbops_named_collection Resource - clickhousedbops"
 subcategory: ""
 description: |-
   You can use the clickhousedbops_named_collection resource to create a Named Collection https://clickhouse.com/docs/operations/named-collections in a ClickHouse instance.
-  Named collections are not available on ClickHouse Cloud. Managing them with DDL needs the named_collection_control privilege, which is not granted with GRANT: it is enabled per user in the server config, usually a file in /etc/clickhouse-server/users.d/.
+  On ClickHouse Cloud, DDL named collections are only enabled on select services: contact ClickHouse support to confirm availability. On self-hosted instances, managing them with DDL needs the named_collection_control privilege, which is not granted with GRANT: it is enabled per user in the server config, usually a file in /etc/clickhouse-server/users.d/.
   Secrets
   Named collections usually hold credentials, so there are two ways to write a key:
   secret_keys_wo is write-only: the value goes to ClickHouse and is never stored in the terraform state. It needs Terraform/OpenTofu >= 1.11. ClickHouse never returns these values, so the provider cannot tell when one changes: bump secret_keys_wo_version to re-apply all of them.keys is stored in the state. Values coming from variables marked sensitive = true are redacted from CLI output, but they are in the state file in clear text, like every terraform secret.
@@ -17,7 +17,7 @@ description: |-
 
 You can use the `clickhousedbops_named_collection` resource to create a [Named Collection](https://clickhouse.com/docs/operations/named-collections) in a `ClickHouse` instance.
 
-Named collections are not available on ClickHouse Cloud. Managing them with DDL needs the `named_collection_control` privilege, which is not granted with `GRANT`: it is enabled per user in the server config, usually a file in `/etc/clickhouse-server/users.d/`.
+On ClickHouse Cloud, DDL named collections are only enabled on select services: contact ClickHouse support to confirm availability. On self-hosted instances, managing them with DDL needs the `named_collection_control` privilege, which is not granted with `GRANT`: it is enabled per user in the server config, usually a file in `/etc/clickhouse-server/users.d/`.
 
 ## Secrets
 

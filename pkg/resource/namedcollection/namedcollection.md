@@ -1,6 +1,6 @@
 You can use the `clickhousedbops_named_collection` resource to create a [Named Collection](https://clickhouse.com/docs/operations/named-collections) in a `ClickHouse` instance.
 
-Named collections are not available on ClickHouse Cloud. Managing them with DDL needs the `named_collection_control` privilege, which is not granted with `GRANT`: it is enabled per user in the server config, usually a file in `/etc/clickhouse-server/users.d/`.
+On ClickHouse Cloud, DDL named collections are only enabled on select services: contact ClickHouse support to confirm availability. On self-hosted instances, managing them with DDL needs the `named_collection_control` privilege, which is not granted with `GRANT`: it is enabled per user in the server config, usually a file in `/etc/clickhouse-server/users.d/`.
 
 ## Secrets
 
