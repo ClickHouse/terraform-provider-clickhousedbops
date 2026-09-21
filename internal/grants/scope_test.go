@@ -12,13 +12,13 @@ func TestScopeAttributesFor(t *testing.T) {
 		// Leaves: own scope equals the descendant union.
 		{"SELECT", ScopeAttributes{Database: true, Table: true, Column: true}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
 		{"CREATE DATABASE", ScopeAttributes{Database: true}, ScopeAttributes{Database: true}, true},
-		{"CREATE USER", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
+		{"CREATE USER", ScopeAttributes{AccessObject: true, Parameterized: true}, ScopeAttributes{AccessObject: true, Parameterized: true}, true},
 		{"CREATE", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true}, true},
-		{"ACCESS MANAGEMENT", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, AccessObject: true}, true},
-		{"ALL", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, Column: true, AccessObject: true}, true},
-		{"TABLE ENGINE", ScopeAttributes{}, ScopeAttributes{}, true},
-		{"READ", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
-		{"CREATE NAMED COLLECTION", ScopeAttributes{}, ScopeAttributes{}, false},
+		{"ACCESS MANAGEMENT", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, AccessObject: true, Parameterized: true}, true},
+		{"ALL", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, Column: true, AccessObject: true, AccessObjectFilter: true, Parameterized: true}, true},
+		{"TABLE ENGINE", ScopeAttributes{AccessObject: true, Parameterized: true}, ScopeAttributes{AccessObject: true, Parameterized: true}, true},
+		{"READ", ScopeAttributes{AccessObject: true, AccessObjectFilter: true, Parameterized: true}, ScopeAttributes{AccessObject: true, AccessObjectFilter: true, Parameterized: true}, true},
+		{"CREATE NAMED COLLECTION", ScopeAttributes{AccessObject: true, Parameterized: true}, ScopeAttributes{AccessObject: true, Parameterized: true}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.privilege, func(t *testing.T) {

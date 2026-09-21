@@ -7,12 +7,13 @@ import (
 
 // Grant is a privilege grant reduced to the fields that determine coverage.
 type Grant struct {
-	AccessType   string
-	Database     *string
-	Table        *string
-	Column       *string
-	AccessObject *string
-	GrantOption  bool
+	AccessType         string
+	Database           *string
+	Table              *string
+	Column             *string
+	AccessObject       *string
+	AccessObjectFilter *string
+	GrantOption        bool
 }
 
 // Covers reports whether broader already conveys at least narrower. Both are
@@ -29,7 +30,21 @@ func Covers(broader, narrower Grant) bool {
 	return objectCovers(broader.Database, narrower.Database) &&
 		objectCovers(broader.Table, narrower.Table) &&
 		objectCovers(broader.Column, narrower.Column) &&
-		objectCovers(broader.AccessObject, narrower.AccessObject)
+		objectCovers(broader.AccessObject, narrower.AccessObject) &&
+		filterCovers(broader.AccessObjectFilter, narrower.AccessObjectFilter)
+}
+
+// filterCovers deliberately performs no regular-expression containment analysis.
+// An unfiltered source grant covers every filter, while filtered grants only cover
+// an identical filter.
+func filterCovers(broader, narrower *string) bool {
+	if broader == nil {
+		return true
+	}
+	if narrower == nil {
+		return false
+	}
+	return *broader == *narrower
 }
 
 // objectCovers reports whether broader covers narrower on a single dimension; nil means wildcard.

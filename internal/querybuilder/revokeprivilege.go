@@ -14,17 +14,21 @@ type RevokePrivilegeQueryBuilder interface {
 	WithTable(*string) RevokePrivilegeQueryBuilder
 	WithColumn(*string) RevokePrivilegeQueryBuilder
 	WithAccessObject(*string) RevokePrivilegeQueryBuilder
+	WithAccessObjectFilter(*string) RevokePrivilegeQueryBuilder
+	WithParameterizedTarget(bool) RevokePrivilegeQueryBuilder
 	WithCluster(*string) RevokePrivilegeQueryBuilder
 }
 
 type revokePrivilegeQueryBuilder struct {
-	accessType   string
-	from         string
-	database     *string
-	table        *string
-	column       *string
-	accessObject *string
-	clusterName  *string
+	accessType          string
+	from                string
+	database            *string
+	table               *string
+	column              *string
+	accessObject        *string
+	accessObjectFilter  *string
+	parameterizedTarget bool
+	clusterName         *string
 }
 
 func RevokePrivilege(accessType string, from string) RevokePrivilegeQueryBuilder {
@@ -51,6 +55,16 @@ func (q *revokePrivilegeQueryBuilder) WithColumn(column *string) RevokePrivilege
 
 func (q *revokePrivilegeQueryBuilder) WithAccessObject(accessObject *string) RevokePrivilegeQueryBuilder {
 	q.accessObject = accessObject
+	return q
+}
+
+func (q *revokePrivilegeQueryBuilder) WithAccessObjectFilter(filter *string) RevokePrivilegeQueryBuilder {
+	q.accessObjectFilter = filter
+	return q
+}
+
+func (q *revokePrivilegeQueryBuilder) WithParameterizedTarget(parameterized bool) RevokePrivilegeQueryBuilder {
+	q.parameterizedTarget = parameterized
 	return q
 }
 
@@ -82,21 +96,11 @@ func (q *revokePrivilegeQueryBuilder) Build() (string, error) {
 		tokens = append(tokens, q.accessType)
 	}
 
-	// Target database/table
-	{
-		tokens = append(tokens, "ON")
-
-		switch {
-		case q.accessObject != nil:
-			tokens = append(tokens, identifierOrPattern(*q.accessObject))
-		case q.database != nil && q.table != nil:
-			tokens = append(tokens, fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table)))
-		case q.database != nil:
-			tokens = append(tokens, fmt.Sprintf("%s.*", identifierOrPattern(*q.database)))
-		default:
-			tokens = append(tokens, "*.*")
-		}
+	target, err := privilegeTarget(q.database, q.table, q.accessObject, q.accessObjectFilter, q.parameterizedTarget)
+	if err != nil {
+		return "", err
 	}
+	tokens = append(tokens, "ON", target)
 
 	// Grantee
 	{

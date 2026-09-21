@@ -108,6 +108,49 @@ func Test_grantPrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Table engine target",
+			builder: GrantPrivilege("TABLE ENGINE", "builder").WithAccessObject(new("Distributed")).WithParameterizedTarget(true),
+			want:    "GRANT TABLE ENGINE ON `Distributed` TO `builder`;",
+			wantErr: false,
+		},
+		{
+			name:    "All table engines",
+			builder: GrantPrivilege("TABLE ENGINE", "builder").WithParameterizedTarget(true),
+			want:    "GRANT TABLE ENGINE ON * TO `builder`;",
+			wantErr: false,
+		},
+		{
+			name:    "Named source target",
+			builder: GrantPrivilege("READ", "reader").WithAccessObject(new("S3")).WithParameterizedTarget(true),
+			want:    "GRANT READ ON `S3` TO `reader`;",
+			wantErr: false,
+		},
+		{
+			name: "Filtered source target",
+			builder: GrantPrivilege("READ", "reader").
+				WithAccessObject(new("URL")).
+				WithAccessObjectFilter(new(`https://example\.com/files/.*`)).
+				WithParameterizedTarget(true),
+			want:    "GRANT READ ON `URL`('https://example\\\\.com/files/.*') TO `reader`;",
+			wantErr: false,
+		},
+		{
+			name: "Filtered source target escapes SQL string",
+			builder: GrantPrivilege("READ", "reader").
+				WithAccessObject(new("URL")).
+				WithAccessObjectFilter(new(`https://example.com/o'hare\\.*`)).
+				WithParameterizedTarget(true),
+			want:    "GRANT READ ON `URL`('https://example.com/o\\'hare\\\\\\\\.*') TO `reader`;",
+			wantErr: false,
+		},
+		{
+			name: "Filter requires an access object",
+			builder: GrantPrivilege("READ", "reader").
+				WithAccessObjectFilter(new(".*")).
+				WithParameterizedTarget(true),
+			wantErr: true,
+		},
+		{
 			name:    "Missing access type",
 			builder: GrantPrivilege("", "user1"),
 			want:    "",

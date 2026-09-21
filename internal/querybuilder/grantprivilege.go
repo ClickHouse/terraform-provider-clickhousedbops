@@ -14,21 +14,25 @@ type GrantPrivilegeQueryBuilder interface {
 	WithTable(*string) GrantPrivilegeQueryBuilder
 	WithColumn(*string) GrantPrivilegeQueryBuilder
 	WithAccessObject(*string) GrantPrivilegeQueryBuilder
+	WithAccessObjectFilter(*string) GrantPrivilegeQueryBuilder
+	WithParameterizedTarget(bool) GrantPrivilegeQueryBuilder
 	WithGrantOption(bool) GrantPrivilegeQueryBuilder
 	WithCluster(*string) GrantPrivilegeQueryBuilder
 	WithCurrentGrants(bool) GrantPrivilegeQueryBuilder
 }
 
 type grantPrivilegeQueryBuilder struct {
-	accessType    string
-	to            string
-	database      *string
-	table         *string
-	column        *string
-	accessObject  *string
-	grantOption   bool
-	clusterName   *string
-	currentGrants bool
+	accessType          string
+	to                  string
+	database            *string
+	table               *string
+	column              *string
+	accessObject        *string
+	accessObjectFilter  *string
+	parameterizedTarget bool
+	grantOption         bool
+	clusterName         *string
+	currentGrants       bool
 }
 
 func GrantPrivilege(accessType string, to string) GrantPrivilegeQueryBuilder {
@@ -55,6 +59,16 @@ func (q *grantPrivilegeQueryBuilder) WithColumn(column *string) GrantPrivilegeQu
 
 func (q *grantPrivilegeQueryBuilder) WithAccessObject(accessObject *string) GrantPrivilegeQueryBuilder {
 	q.accessObject = accessObject
+	return q
+}
+
+func (q *grantPrivilegeQueryBuilder) WithAccessObjectFilter(filter *string) GrantPrivilegeQueryBuilder {
+	q.accessObjectFilter = filter
+	return q
+}
+
+func (q *grantPrivilegeQueryBuilder) WithParameterizedTarget(parameterized bool) GrantPrivilegeQueryBuilder {
+	q.parameterizedTarget = parameterized
 	return q
 }
 
@@ -97,17 +111,9 @@ func (q *grantPrivilegeQueryBuilder) Build() (string, error) {
 		privilege = q.accessType
 	}
 
-	// Target database/table/access object
-	var target string
-	switch {
-	case q.accessObject != nil:
-		target = identifierOrPattern(*q.accessObject)
-	case q.database != nil && q.table != nil:
-		target = fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table))
-	case q.database != nil:
-		target = fmt.Sprintf("%s.*", identifierOrPattern(*q.database))
-	default:
-		target = "*.*"
+	target, err := privilegeTarget(q.database, q.table, q.accessObject, q.accessObjectFilter, q.parameterizedTarget)
+	if err != nil {
+		return "", err
 	}
 
 	// CURRENT GRANTS copies the grantor's own privileges. ClickHouse Cloud requires it for
