@@ -23,6 +23,11 @@ var attributesByScope = map[string]ScopeAttributes{
 	"TABLE_ENGINE": {},
 }
 
+// ScopeFor returns the ClickHouse scope family for a privilege.
+func ScopeFor(privilege string) string {
+	return Parsed().Scopes[privilege]
+}
+
 // ScopeAttributesFor returns the attributes supported by the privilege's own
 // scope, the union over all its descendants, and whether the privilege (or any
 // descendant) has a supported scope at all.

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 )
 
 func TestProviderSchema_HasTimeoutAttribute(t *testing.T) {
@@ -66,4 +67,17 @@ func TestProviderSchema_RequiredAttributes(t *testing.T) {
 			t.Errorf("attribute %q should be required", name)
 		}
 	}
+}
+
+func TestProviderResources_IncludesRevokePrivilege(t *testing.T) {
+	p := &Provider{}
+	for _, factory := range p.Resources(context.Background()) {
+		r := factory()
+		var resp resource.MetadataResponse
+		r.Metadata(context.Background(), resource.MetadataRequest{ProviderTypeName: "clickhousedbops"}, &resp)
+		if resp.TypeName == "clickhousedbops_revoke_privilege" {
+			return
+		}
+	}
+	t.Fatal("clickhousedbops_revoke_privilege resource is not registered")
 }
