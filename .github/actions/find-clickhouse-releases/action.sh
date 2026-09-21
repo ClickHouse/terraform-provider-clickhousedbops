@@ -4,8 +4,15 @@ set -euo pipefail
 
 versions=()
 
+# Authenticate when possible: authenticated requests have higher rate limits.
+CURL_ARGS=(-s -L -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+if [ -n "${GITHUB_TOKEN:-}" ]
+then
+  CURL_ARGS+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+fi
+
 # Get list of most recent clickhouse OS version.
-RELEASES="$(curl -s -L -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/ClickHouse/clickhouse/releases?per_page=200|jq -r '.[] |.tag_name')"
+RELEASES="$(curl "${CURL_ARGS[@]}" https://api.github.com/repos/ClickHouse/clickhouse/releases?per_page=200|jq -r '.[] |.tag_name')"
 
 # Get major.minor of latest LTS and latest Stable releases.
 LATEST_LTS="$(echo "$RELEASES" | grep lts | sort -Vr |head -n1 | cut -d "." -f 1,2 | sed 's/v//')"

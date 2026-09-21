@@ -70,6 +70,16 @@ func TestUser_acceptance(t *testing.T) {
 		}).
 		Build()
 
+	legacyWOMigrationName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	legacyWOMigrationUpdate := resourcebuilder.New(resourceType, resourceName).
+		WithStringAttribute("name", legacyWOMigrationName).
+		WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+			auth.WithBlock("sha256_hash", func(m *resourcebuilder.BlockBuilder) {
+				m.WithFunction("value_wo", "sha256", "changeme").WithIntAttribute("value_wo_version", 1)
+			})
+		}).
+		Build()
+
 	sslName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
 	sslUpdate := resourcebuilder.New(resourceType, resourceName).
 		WithStringAttribute("name", sslName).
@@ -308,6 +318,23 @@ func TestUser_acceptance(t *testing.T) {
 				}).
 				Build(),
 			UpdateResource:        &sslUpdate,
+			UpdateExpectNoReplace: true,
+			ResourceName:          resourceName,
+			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:    checkNotExistsFunc,
+			CheckAttributesFunc:   checkAttributesFunc,
+		},
+		{
+			Name:        "Migrate legacy password_sha256_hash_wo to the auth block in place",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:    "native",
+			ClusterName: nil,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", legacyWOMigrationName).
+				WithFunction("password_sha256_hash_wo", "sha256", "changeme").
+				WithIntAttribute("password_sha256_hash_wo_version", 1).
+				Build(),
+			UpdateResource:        &legacyWOMigrationUpdate,
 			UpdateExpectNoReplace: true,
 			ResourceName:          resourceName,
 			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),

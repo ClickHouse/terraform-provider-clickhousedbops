@@ -5,7 +5,7 @@ subcategory: ""
 description: |-
   You can use the clickhousedbops_grant_role resource to grant a clickhousedbops_role to either a clickhousedbops_user or to another clickhousedbops_role.
   Known limitations:
-  It's not possible to grant the same clickhousedbops_role to both a clickhousedbops_user and a clickhousedbops_role using a single clickhousedbops_grant_role stanza. You can do that using two different stanzas, one with grantee_user_name and the other with grantee_role_name fields set.Importing clickhousedbops_grant_role resources into terraform is not supported.
+  It's not possible to grant the same clickhousedbops_role to both a clickhousedbops_user and a clickhousedbops_role using a single clickhousedbops_grant_role stanza. You can do that using two different stanzas, one with grantee_user_name and the other with grantee_role_name fields set.It's not possible to grant a role to a grantee role when a user with the same name exists: ClickHouse resolves grantee names to users first, so the grant would silently target the user instead. The provider rejects such grants.Importing clickhousedbops_grant_role resources into terraform is not supported.
 ---
 
 # clickhousedbops_grant_role (Resource)
@@ -15,6 +15,7 @@ You can use the `clickhousedbops_grant_role` resource to grant a `clickhousedbop
 Known limitations:
 
 - It's not possible to grant the same `clickhousedbops_role` to both a `clickhousedbops_user` and a `clickhousedbops_role` using a single `clickhousedbops_grant_role` stanza. You can do that using two different stanzas, one with `grantee_user_name` and the other with `grantee_role_name` fields set.
+- It's not possible to grant a role to a grantee role when a user with the same name exists: ClickHouse resolves grantee names to users first, so the grant would silently target the user instead. The provider rejects such grants.
 - Importing `clickhousedbops_grant_role` resources into terraform is not supported.
 
 ## Example Usage

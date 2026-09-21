@@ -7,25 +7,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pingcap/errors"
 )
 
 type httpClient struct {
-	client  *http.Client
-	baseUrl url.URL
+	client       *http.Client
+	baseUrl      url.URL
+	queryTimeout time.Duration
 }
 
 type HTTPClientConfig struct {
-	Protocol  string
-	Host      string
-	Port      uint16
-	BasicAuth *BasicAuth
-	TLSConfig *tls.Config
+	Protocol     string
+	Host         string
+	Port         uint16
+	BasicAuth    *BasicAuth
+	TLSConfig    *tls.Config
+	DialTimeout  time.Duration
+	QueryTimeout time.Duration
 }
 
 func NewHTTPClient(config HTTPClientConfig) (ClickhouseClient, error) {
@@ -64,10 +69,17 @@ func NewHTTPClient(config HTTPClientConfig) (ClickhouseClient, error) {
 		}
 	}
 
+	var dialContext func(ctx context.Context, network, addr string) (net.Conn, error)
+	if config.DialTimeout > 0 {
+		dialContext = (&net.Dialer{Timeout: config.DialTimeout}).DialContext
+	}
+
 	return &httpClient{
-		baseUrl: *baseUrl,
+		baseUrl:      *baseUrl,
+		queryTimeout: config.QueryTimeout,
 		client: &http.Client{
 			Transport: &http.Transport{
+				DialContext:     dialContext,
 				TLSClientConfig: config.TLSConfig,
 			},
 		},
@@ -113,6 +125,9 @@ func (i *httpClient) Exec(ctx context.Context, qry string, params ...map[string]
 }
 
 func (i *httpClient) runQuery(ctx context.Context, qry string, params map[string]string) (string, error) {
+	ctx, cancel := queryContext(ctx, i.queryTimeout)
+	defer cancel()
+
 	ctx = tflog.SetField(ctx, "Query", qry)
 
 	reqURL := i.baseUrl
@@ -124,7 +139,7 @@ func (i *httpClient) runQuery(ctx context.Context, qry string, params map[string
 		reqURL.RawQuery = q.Encode()
 	}
 
-	req, err := http.NewRequest(http.MethodPost, reqURL.String(), strings.NewReader(qry))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), strings.NewReader(qry))
 	if err != nil {
 		return "", errors.WithMessage(err, "error preparing HTTP request")
 	}

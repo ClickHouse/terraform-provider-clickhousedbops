@@ -40,7 +40,14 @@ then
   exit 1
 fi
 
-all="$(curl -s -L -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "https://api.github.com/repos/${REPO}/releases?per_page=100"| jq -r '.[]|.name'|sort -V -r)"
+# Authenticate when possible: authenticated requests have higher rate limits.
+CURL_ARGS=(-s -L -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+if [ -n "${GITHUB_TOKEN:-}" ]
+then
+  CURL_ARGS+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+fi
+
+all="$(curl "${CURL_ARGS[@]}" "https://api.github.com/repos/${REPO}/releases?per_page=100"| jq -r '.[]|.name'|sort -V -r)"
 
 min="${MIN}"
 min="${min#v}"
