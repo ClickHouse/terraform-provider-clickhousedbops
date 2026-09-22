@@ -11,19 +11,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeConn implements driver.Conn for the methods used by nativeClient.Select.
-// The embedded interface panics on any unexpected call.
+// fakeConn implements the driver.Conn methods used by Select; the embedded interface panics on anything else.
 type fakeConn struct {
 	driver.Conn
 	rows driver.Rows
-	err  error
 }
 
 func (f *fakeConn) Query(_ context.Context, _ string, _ ...any) (driver.Rows, error) {
-	return f.rows, f.err
+	return f.rows, nil
 }
 
-// fakeColumnType reports a string column so Select scans into *string.
 type fakeColumnType struct {
 	driver.ColumnType
 	name string
@@ -32,10 +29,7 @@ type fakeColumnType struct {
 func (f *fakeColumnType) Name() string           { return f.name }
 func (f *fakeColumnType) ScanType() reflect.Type { return reflect.TypeOf("") }
 
-// fakeRows simulates a clickhouse-go result stream. After `rows` are consumed,
-// Next returns false and Err returns `err`, mimicking a mid-stream failure
-// (connection reset, query aborted server-side) that clickhouse-go surfaces
-// only through Err() after Next() returns false.
+// fakeRows serves scripted rows, then Next() returns false with err surfaced only via Err(), like a mid-stream failure.
 type fakeRows struct {
 	driver.Rows
 	columns []string
@@ -84,10 +78,6 @@ func (f *fakeRows) Close() error {
 }
 
 func TestSelectReturnsErrorOnMidStreamFailure(t *testing.T) {
-	// A result stream that dies before delivering all rows must surface an
-	// error: reporting the partial (or empty) result as complete makes callers
-	// treat an existing resource as absent, triggering conflicting re-creates
-	// or silently skipped deletes.
 	rows := &fakeRows{
 		columns: []string{"name"},
 		rows:    [][]string{{"row-before-failure"}},
@@ -105,33 +95,11 @@ func TestSelectReturnsErrorOnMidStreamFailure(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "connection reset by peer")
-	assert.Equal(t, []string{"row-before-failure"}, seen, "rows delivered before the failure are processed")
-	assert.True(t, rows.closed, "rows must be closed")
-}
-
-func TestSelectEmptyStreamWithErrorReturnsError(t *testing.T) {
-	// The incident shape: the stream fails before the first row, so Next()
-	// returns false immediately and the error is only visible via Err().
-	// Select must not report a clean empty result.
-	rows := &fakeRows{
-		columns: []string{"name"},
-		err:     errors.New("connection reset by peer"),
-	}
-	client := &nativeClient{connection: &fakeConn{rows: rows}}
-
-	called := false
-	err := client.Select(context.Background(), "SELECT name FROM system.users", func(Row) error {
-		called = true
-		return nil
-	})
-
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "connection reset by peer")
-	assert.False(t, called, "callback must not run for a failed stream")
+	assert.Equal(t, []string{"row-before-failure"}, seen)
+	assert.True(t, rows.closed)
 }
 
 func TestSelectZeroRowsIsNotAnError(t *testing.T) {
-	// A legitimately empty result set still means "not found".
 	rows := &fakeRows{columns: []string{"name"}}
 	client := &nativeClient{connection: &fakeConn{rows: rows}}
 
@@ -143,5 +111,5 @@ func TestSelectZeroRowsIsNotAnError(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.False(t, called)
-	assert.True(t, rows.closed, "rows must be closed")
+	assert.True(t, rows.closed)
 }

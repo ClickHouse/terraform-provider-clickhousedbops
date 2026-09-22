@@ -132,10 +132,7 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 			return errors.WithMessage(err, "error populating Row from query result")
 		}
 	}
-	// Next() returns false both when the result set is exhausted and when the
-	// stream fails mid-flight (e.g. connection reset); only Err() tells them
-	// apart. Without this check a failed read is indistinguishable from an
-	// empty result, so callers would treat existing resources as absent.
+	// Next() returns false on both exhaustion and mid-stream failure; only Err() tells them apart.
 	if err := rows.Err(); err != nil {
 		return errors.WithMessage(err, "error iterating over rows")
 	}
