@@ -29,6 +29,7 @@ type TestCase struct {
 	Resource              string
 	UpdateResource        *string
 	UpdateExpectNoReplace bool
+	UpdateExpectReplace   bool
 	ResourceName          string
 	ResourceAddress       string
 
@@ -131,10 +132,17 @@ func RunTests(t *testing.T, tests []TestCase) {
 							}),
 						},
 					}
-					if tc.UpdateExpectNoReplace {
+					var expectedAction plancheck.ResourceActionType
+					switch {
+					case tc.UpdateExpectNoReplace:
+						expectedAction = plancheck.ResourceActionUpdate
+					case tc.UpdateExpectReplace:
+						expectedAction = plancheck.ResourceActionReplace
+					}
+					if expectedAction != "" {
 						updateStep.ConfigPlanChecks = resource.ConfigPlanChecks{
 							PreApply: []plancheck.PlanCheck{
-								plancheck.ExpectResourceAction(tc.ResourceAddress, plancheck.ResourceActionUpdate),
+								plancheck.ExpectResourceAction(tc.ResourceAddress, expectedAction),
 							},
 						}
 					}
