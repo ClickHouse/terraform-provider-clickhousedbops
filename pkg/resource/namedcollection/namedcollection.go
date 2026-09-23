@@ -173,16 +173,16 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
-	var plan, config NamedCollection
+	var plan NamedCollection
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	if !req.State.Raw.IsNull() && req.Plan.Raw.IsFullyKnown() && req.Config.Raw.IsFullyKnown() {
-		var state NamedCollection
+		var state, config NamedCollection
 		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+		resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -394,26 +394,24 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	stateKeys, diags := tfutils.MapToStringMap(ctx, state.Keys)
 	resp.Diagnostics.Append(diags...)
 
-	stateSecretNames, diags := getSecretKeyNames(ctx, req.Private)
+	// Keys currently in ClickHouse: the plain ones from state plus the write-only names from private state.
+	stateNames, diags := getSecretKeyNames(ctx, req.Private)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+	for name := range stateKeys {
+		stateNames[name] = struct{}{}
 	}
 
 	// Terraform already found a diff, so every planned key is re-asserted with
 	// its value and flag. Only keys that left the config need a DELETE.
 	deleteKeys := make([]string, 0)
-	for name := range stateKeys {
+	for _, name := range slices.Sorted(maps.Keys(stateNames)) {
 		if _, ok := plannedKeys[name]; !ok {
 			deleteKeys = append(deleteKeys, name)
 		}
 	}
-	for name := range stateSecretNames {
-		if _, ok := plannedKeys[name]; !ok {
-			deleteKeys = append(deleteKeys, name)
-		}
-	}
-	slices.Sort(deleteKeys)
 
 	collection := dbops.NamedCollection{
 		Name: state.Name.ValueString(),

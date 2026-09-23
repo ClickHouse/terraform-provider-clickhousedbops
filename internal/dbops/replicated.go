@@ -47,10 +47,9 @@ func (i *impl) IsReplicatedStorage(ctx context.Context) (bool, error) {
 	return currentType == "replicated", nil
 }
 
-// IsNamedCollectionsStorageReplicated reports whether named collections are stored in Keeper/ZooKeeper,
-// which is independent from the RBAC storage checked by IsReplicatedStorage.
-// The 'named_collections_storage.type' server setting only exists since ClickHouse 26.3.26,
-// so older servers report false.
+// IsNamedCollectionsStorageReplicated reports whether named collections are stored in Keeper/ZooKeeper.
+// This is independent from the RBAC storage checked by IsReplicatedStorage.
+// The setting only exists since ClickHouse 26.3.26, older servers report false.
 func (i *impl) IsNamedCollectionsStorageReplicated(ctx context.Context) (bool, error) {
 	sql, err := querybuilder.
 		NewSelect([]querybuilder.Field{querybuilder.NewField("value")}, "system.server_settings").
@@ -60,20 +59,21 @@ func (i *impl) IsNamedCollectionsStorageReplicated(ctx context.Context) (bool, e
 		return false, errors.WithMessage(err, "error building query")
 	}
 
+	// One of: local, local_encrypted, keeper, keeper_encrypted, zookeeper, zookeeper_encrypted.
 	storageType := ""
 
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-		storageType, err = data.GetString("value")
+		value, err := data.GetString("value")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'value' field")
 		}
 
+		storageType = value
 		return nil
 	})
 	if err != nil {
 		return false, errors.WithMessage(err, "error running query")
 	}
 
-	// Possible values: local, local_encrypted, keeper, keeper_encrypted, zookeeper, zookeeper_encrypted.
 	return strings.HasPrefix(storageType, "keeper") || strings.HasPrefix(storageType, "zookeeper"), nil
 }
