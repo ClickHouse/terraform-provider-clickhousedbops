@@ -104,8 +104,8 @@ func TestNamedcollection_acceptance(t *testing.T) {
 		}
 	}
 
-	// Changes a value, adds a key, removes a key, resets the OVERRIDABLE flag on
-	// 'url' back to the server default and marks the new key NOT OVERRIDABLE.
+	// Changes a value, adds a key, removes a key, flips 'url' from OVERRIDABLE to
+	// NOT OVERRIDABLE and marks the new key NOT OVERRIDABLE.
 	updateName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
 	updateResource := resourcebuilder.New(resourceType, resourceName).
 		WithStringAttribute("name", updateName).
@@ -114,7 +114,15 @@ func TestNamedcollection_acceptance(t *testing.T) {
 			"format": cty.StringVal("CSV"),
 			"region": cty.StringVal("us-east-1"),
 		}).
-		WithListAttribute("not_overridable_keys", []cty.Value{cty.StringVal("region")}).
+		WithListAttribute("not_overridable_keys", []cty.Value{cty.StringVal("url"), cty.StringVal("region")}).
+		Build()
+
+	// Drops 'url' from overridable_keys without removing the key: ClickHouse
+	// can't reset a flag to the server default, so the collection is recreated.
+	resetFlagName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	resetFlagResource := resourcebuilder.New(resourceType, resourceName).
+		WithStringAttribute("name", resetFlagName).
+		WithMapAttribute("keys", keys).
 		Build()
 
 	// Rotates the write-only value by bumping the version.
@@ -124,6 +132,7 @@ func TestNamedcollection_acceptance(t *testing.T) {
 		WithMapAttribute("keys", map[string]cty.Value{"host": cty.StringVal("127.0.0.1")}).
 		WithMapAttribute("secret_keys_wo", map[string]cty.Value{"password": cty.StringVal("rotated")}).
 		WithIntAttribute("secret_keys_wo_version", 2).
+		WithListAttribute("not_overridable_keys", []cty.Value{cty.StringVal("password")}).
 		Build()
 
 	tests := []runner.TestCase{
@@ -228,6 +237,22 @@ func TestNamedcollection_acceptance(t *testing.T) {
 			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:    checkNotExistsFunc,
 			CheckAttributesFunc:   checkAttributes(),
+		},
+		{
+			Name:     "Reset an overridable flag to the server default by replacing the collection",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", resetFlagName).
+				WithMapAttribute("keys", keys).
+				WithListAttribute("overridable_keys", []cty.Value{cty.StringVal("url")}).
+				Build(),
+			UpdateResource:      &resetFlagResource,
+			UpdateExpectReplace: true,
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributes(),
 		},
 		{
 			Name:     "Rotate write-only secret keys via version bump in place",
@@ -343,14 +368,14 @@ func TestNamedcollection_validation_acceptance(t *testing.T) {
 			expectError: regexp.MustCompile(`(?s)Invalid Named Collection.*is not defined in 'keys' or 'secret_keys_wo'`),
 		},
 		{
-			name: "blank key names are rejected",
+			name: "empty key names are rejected",
 			config: `
 			resource "clickhousedbops_named_collection" "test" {
 				name = "test"
-				keys = { " " = "value" }
+				keys = { "" = "value" }
 			}
 			`,
-			expectError: regexp.MustCompile(`(?s)must not be blank`),
+			expectError: regexp.MustCompile(`(?s)string length must be at least 1`),
 		},
 	}
 

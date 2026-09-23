@@ -15,5 +15,6 @@ Both maps write into the same set of keys in ClickHouse, so a key name can only 
 
 - ClickHouse hides named collection values in system tables unless the current user is granted `SHOW NAMED COLLECTIONS SECRETS`. Without that grant the provider only detects drift on the set of key names, not on the values of `keys`.
 - The `OVERRIDABLE`/`NOT OVERRIDABLE` flags are never returned by ClickHouse, so changing them outside terraform is not detected.
+- ClickHouse can't reset a key's flag back to the server default. Removing a key from `overridable_keys` or `not_overridable_keys` while keeping it in the collection destroys and recreates the collection. Moving it to the other list is done in place.
 - Renaming a collection is not supported by ClickHouse, so changing `name` (or `cluster_name`) destroys and recreates the collection.
 - When importing an existing collection, values are imported as the literal `[HIDDEN]` placeholder unless the user can see secrets. Write the real values in your terraform config and run one apply to converge.

@@ -10,7 +10,7 @@ description: |-
   secret_keys_wo is write-only: the value goes to ClickHouse and is never stored in the terraform state. It needs Terraform/OpenTofu >= 1.11. ClickHouse never returns these values, so the provider cannot tell when one changes: bump secret_keys_wo_version to re-apply all of them.keys is stored in the state. Values coming from variables marked sensitive = true are redacted from CLI output, but they are in the state file in clear text, like every terraform secret.
   Both maps write into the same set of keys in ClickHouse, so a key name can only appear in one of them.
   Known limitations
-  ClickHouse hides named collection values in system tables unless the current user is granted SHOW NAMED COLLECTIONS SECRETS. Without that grant the provider only detects drift on the set of key names, not on the values of keys.The OVERRIDABLE/NOT OVERRIDABLE flags are never returned by ClickHouse, so changing them outside terraform is not detected.Renaming a collection is not supported by ClickHouse, so changing name (or cluster_name) destroys and recreates the collection.When importing an existing collection, values are imported as the literal [HIDDEN] placeholder unless the user can see secrets. Write the real values in your terraform config and run one apply to converge.
+  ClickHouse hides named collection values in system tables unless the current user is granted SHOW NAMED COLLECTIONS SECRETS. Without that grant the provider only detects drift on the set of key names, not on the values of keys.The OVERRIDABLE/NOT OVERRIDABLE flags are never returned by ClickHouse, so changing them outside terraform is not detected.ClickHouse can't reset a key's flag back to the server default. Removing a key from overridable_keys or not_overridable_keys while keeping it in the collection destroys and recreates the collection. Moving it to the other list is done in place.Renaming a collection is not supported by ClickHouse, so changing name (or cluster_name) destroys and recreates the collection.When importing an existing collection, values are imported as the literal [HIDDEN] placeholder unless the user can see secrets. Write the real values in your terraform config and run one apply to converge.
 ---
 
 # clickhousedbops_named_collection (Resource)
@@ -32,6 +32,7 @@ Both maps write into the same set of keys in ClickHouse, so a key name can only 
 
 - ClickHouse hides named collection values in system tables unless the current user is granted `SHOW NAMED COLLECTIONS SECRETS`. Without that grant the provider only detects drift on the set of key names, not on the values of `keys`.
 - The `OVERRIDABLE`/`NOT OVERRIDABLE` flags are never returned by ClickHouse, so changing them outside terraform is not detected.
+- ClickHouse can't reset a key's flag back to the server default. Removing a key from `overridable_keys` or `not_overridable_keys` while keeping it in the collection destroys and recreates the collection. Moving it to the other list is done in place.
 - Renaming a collection is not supported by ClickHouse, so changing `name` (or `cluster_name`) destroys and recreates the collection.
 - When importing an existing collection, values are imported as the literal `[HIDDEN]` placeholder unless the user can see secrets. Write the real values in your terraform config and run one apply to converge.
 
@@ -77,7 +78,7 @@ resource "clickhousedbops_named_collection" "s3_prod" {
 
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
-When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
+When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and 'named_collections_storage' is not 'keeper' or 'zookeeper'.
 - `keys` (Map of String) Map of key/value pairs stored in the named collection, in the terraform state. Values from variables marked 'sensitive = true' are redacted from CLI output. For secrets you don't want in state at all, use 'secret_keys_wo'.
 - `not_overridable_keys` (Set of String) Names of keys to mark as NOT OVERRIDABLE.
 - `overridable_keys` (Set of String) Names of keys to mark as OVERRIDABLE. Keys listed in neither 'overridable_keys' nor 'not_overridable_keys' use the server default, which comes from the 'allow_named_collection_override_by_default' setting.

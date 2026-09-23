@@ -5,8 +5,8 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"regexp"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
@@ -22,13 +22,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/tfutils"
 )
 
 //go:embed namedcollection.md
 var namedCollectionResourceDescription string
-
-// nonBlank rejects empty and whitespace-only key names, which ClickHouse cannot store.
-var nonBlank = regexp.MustCompile(`\S`)
 
 // Private-state entry listing the secret_keys_wo key names, so Read can tell them apart from keys added out of band.
 const secretKeyNamesKey = "secret_key_names"
@@ -58,7 +56,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 		Attributes: map[string]schema.Attribute{
 			"cluster_name": schema.StringAttribute{
 				Optional:    true,
-				Description: "Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.\nThis field must be left null when using a ClickHouse Cloud cluster.\nWhen using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.\n",
+				Description: "Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.\nThis field must be left null when using a ClickHouse Cloud cluster.\nWhen using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and 'named_collections_storage' is not 'keeper' or 'zookeeper'.\n",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -76,7 +74,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Description: "Map of key/value pairs stored in the named collection, in the terraform state. Values from variables marked 'sensitive = true' are redacted from CLI output. For secrets you don't want in state at all, use 'secret_keys_wo'.",
 				Validators: []validator.Map{
 					mapvalidator.SizeAtLeast(1),
-					mapvalidator.KeysAre(stringvalidator.RegexMatches(nonBlank, "must not be blank")),
+					mapvalidator.KeysAre(stringvalidator.LengthAtLeast(1)),
 					mapvalidator.AtLeastOneOf(path.MatchRoot("secret_keys_wo")),
 				},
 			},
@@ -88,7 +86,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Description: "Map of key/value pairs stored in the named collection but never written to the terraform state. Requires Terraform/OpenTofu >= 1.11. Bump 'secret_keys_wo_version' to re-apply the values, ClickHouse never returns them so the provider cannot detect that they changed.",
 				Validators: []validator.Map{
 					mapvalidator.SizeAtLeast(1),
-					mapvalidator.KeysAre(stringvalidator.RegexMatches(nonBlank, "must not be blank")),
+					mapvalidator.KeysAre(stringvalidator.LengthAtLeast(1)),
 					mapvalidator.AlsoRequires(path.MatchRoot("secret_keys_wo_version")),
 				},
 			},
@@ -175,32 +173,52 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
-	if r.client != nil {
-		var config NamedCollection
-		diags := req.Config.Get(ctx, &config)
-		resp.Diagnostics.Append(diags...)
+	var plan, config NamedCollection
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if !req.State.Raw.IsNull() && req.Plan.Raw.IsFullyKnown() && req.Config.Raw.IsFullyKnown() {
+		var state NamedCollection
+		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
 
-		// Only check replicated storage when cluster_name is set, to avoid
-		// unnecessary connections (e.g. during terraform plan -refresh=false).
-		if !config.ClusterName.IsNull() {
-			isReplicatedStorage, err := r.client.IsReplicatedStorage(ctx)
-			if err != nil {
-				resp.Diagnostics.AddWarning(
-					"Could not check if service is using replicated storage",
-					fmt.Sprintf("Skipping validation. If you are using replicated storage, please remove the 'cluster_name' attribute from your resource definition. Error: %+v", err),
-				)
-				return
-			}
+		// ALTER NAMED COLLECTION cannot reset a key's overridable flag to the
+		// server default: SET without a flag keeps the current one. Only
+		// recreating the collection clears it.
+		plannedNames := mapAttributeKeyNames(plan.Keys)
+		maps.Copy(plannedNames, mapAttributeKeyNames(config.SecretKeysWO))
+		planFlagFor := flagResolver(plan)
 
-			if isReplicatedStorage {
-				resp.Diagnostics.AddWarning(
-					"Invalid configuration",
-					"Your ClickHouse cluster is using Replicated storage, please remove the 'cluster_name' attribute from your NamedCollection resource definition if you encounter any errors.",
-				)
-			}
+		if flagReset(setAttributeValues(state.OverridableKeys), plannedNames, planFlagFor) {
+			resp.RequiresReplace = append(resp.RequiresReplace, path.Root("overridable_keys"))
+		}
+		if flagReset(setAttributeValues(state.NotOverridableKeys), plannedNames, planFlagFor) {
+			resp.RequiresReplace = append(resp.RequiresReplace, path.Root("not_overridable_keys"))
+		}
+	}
+
+	if r.client != nil && !plan.ClusterName.IsNull() {
+		// Only check the storage type when cluster_name is set, to avoid
+		// unnecessary connections (e.g. during terraform plan -refresh=false).
+		isReplicated, err := r.client.IsNamedCollectionsStorageReplicated(ctx)
+		if err != nil {
+			resp.Diagnostics.AddWarning(
+				"Could not check if named collections are using replicated storage",
+				fmt.Sprintf("Skipping validation. If 'named_collections_storage' is 'keeper' or 'zookeeper', please remove the 'cluster_name' attribute from your resource definition. Error: %+v", err),
+			)
+			return
+		}
+
+		if isReplicated {
+			resp.Diagnostics.AddWarning(
+				"Invalid configuration",
+				"Your ClickHouse cluster stores named collections in Keeper, please remove the 'cluster_name' attribute from your NamedCollection resource definition if you encounter any errors.",
+			)
 		}
 	}
 }
@@ -283,7 +301,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	stateKeys, diags := mapAttributeToGoMap(ctx, state.Keys)
+	stateKeys, diags := tfutils.MapToStringMap(ctx, state.Keys)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -333,7 +351,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		}
 	}
 
-	state.Keys, diags = goMapToMapAttribute(ctx, newKeys)
+	state.Keys, diags = tfutils.StringMapToMap(ctx, newKeys)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -373,7 +391,7 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 	plannedKeys, plannedSecretNames, diags := resolveKeys(ctx, plan, config)
 	resp.Diagnostics.Append(diags...)
 
-	statePlainValues, diags := mapAttributeToGoMap(ctx, state.Keys)
+	stateKeys, diags := tfutils.MapToStringMap(ctx, state.Keys)
 	resp.Diagnostics.Append(diags...)
 
 	stateSecretNames, diags := getSecretKeyNames(ctx, req.Private)
@@ -382,22 +400,10 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
-	stateFlagFor := flagResolver(state)
-	statePlainKeys := keysWithFlags(statePlainValues, stateFlagFor)
-
-	plannedSecret := make(map[string]struct{}, len(plannedSecretNames))
-	for _, name := range plannedSecretNames {
-		plannedSecret[name] = struct{}{}
-	}
-
-	// Write-only values never reach the state, so a bumped version is the only
-	// signal that they changed.
-	versionChanged := !plan.SecretKeysWOVersion.Equal(state.SecretKeysWOVersion)
-
-	set := make(map[string]dbops.NamedCollectionKey)
+	// Terraform already found a diff, so every planned key is re-asserted with
+	// its value and flag. Only keys that left the config need a DELETE.
 	deleteKeys := make([]string, 0)
-
-	for name := range statePlainKeys {
+	for name := range stateKeys {
 		if _, ok := plannedKeys[name]; !ok {
 			deleteKeys = append(deleteKeys, name)
 		}
@@ -407,47 +413,20 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 			deleteKeys = append(deleteKeys, name)
 		}
 	}
+	slices.Sort(deleteKeys)
 
-	for name, plannedKey := range plannedKeys {
-		var (
-			exists   bool
-			changed  bool
-			prevFlag *bool
-		)
-
-		if _, isSecret := plannedSecret[name]; isSecret {
-			_, exists = stateSecretNames[name]
-			prevFlag = stateFlagFor(name)
-			changed = !exists || versionChanged || !equalFlags(prevFlag, plannedKey.Overridable)
-		} else {
-			var stateKey dbops.NamedCollectionKey
-			stateKey, exists = statePlainKeys[name]
-			prevFlag = stateKey.Overridable
-			changed = !exists || stateKey.Value != plannedKey.Value || !equalFlags(prevFlag, plannedKey.Overridable)
-		}
-
-		if !changed {
-			continue
-		}
-
-		set[name] = plannedKey
-
-		// Resetting a key's overridable flag to the server default requires
-		// deleting the key and re-adding it.
-		if exists && prevFlag != nil && plannedKey.Overridable == nil {
-			deleteKeys = append(deleteKeys, name)
-		}
+	collection := dbops.NamedCollection{
+		Name: state.Name.ValueString(),
+		Keys: plannedKeys,
 	}
 
-	if len(set) > 0 || len(deleteKeys) > 0 {
-		_, err := r.client.UpdateNamedCollection(ctx, state.Name.ValueString(), set, deleteKeys, plan.ClusterName.ValueStringPointer())
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error Updating ClickHouse NamedCollection",
-				fmt.Sprintf("%+v\n", err),
-			)
-			return
-		}
+	_, err := r.client.UpdateNamedCollection(ctx, collection, deleteKeys, plan.ClusterName.ValueStringPointer())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Updating ClickHouse NamedCollection",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
 	}
 
 	resp.Diagnostics.Append(setSecretKeyNames(ctx, resp.Private, plannedSecretNames)...)
@@ -500,10 +479,10 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 func resolveKeys(ctx context.Context, plan NamedCollection, config NamedCollection) (map[string]dbops.NamedCollectionKey, []string, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
-	plainValues, d := mapAttributeToGoMap(ctx, plan.Keys)
+	plainValues, d := tfutils.MapToStringMap(ctx, plan.Keys)
 	diags.Append(d...)
 
-	secretValues, d := mapAttributeToGoMap(ctx, config.SecretKeysWO)
+	secretValues, d := tfutils.MapToStringMap(ctx, config.SecretKeysWO)
 	diags.Append(d...)
 
 	if diags.HasError() {
@@ -513,15 +492,8 @@ func resolveKeys(ctx context.Context, plan NamedCollection, config NamedCollecti
 	flagFor := flagResolver(plan)
 
 	keys := keysWithFlags(plainValues, flagFor)
-	for name, key := range keysWithFlags(secretValues, flagFor) {
-		keys[name] = key
-	}
-
-	secretNames := make([]string, 0, len(secretValues))
-	for name := range secretValues {
-		secretNames = append(secretNames, name)
-	}
-	sort.Strings(secretNames)
+	maps.Copy(keys, keysWithFlags(secretValues, flagFor))
+	secretNames := slices.Sorted(maps.Keys(secretValues))
 
 	return keys, secretNames, diags
 }
@@ -532,6 +504,17 @@ func keysWithFlags(values map[string]string, flagFor func(string) *bool) map[str
 		ret[name] = dbops.NamedCollectionKey{Value: value, Overridable: flagFor(name)}
 	}
 	return ret
+}
+
+// flagReset reports whether a key flagged in the state stays in the collection
+// but falls back to the server default in the plan.
+func flagReset(stateFlagged map[string]struct{}, plannedNames map[string]struct{}, planFlagFor func(string) *bool) bool {
+	for name := range stateFlagged {
+		if _, kept := plannedNames[name]; kept && planFlagFor(name) == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // flagResolver reports the OVERRIDABLE flag a model configures for a key name,
@@ -590,24 +573,9 @@ func getSecretKeyNames(ctx context.Context, private privateState) (map[string]st
 	return ret, diags
 }
 
-func mapAttributeToGoMap(ctx context.Context, m types.Map) (map[string]string, diag.Diagnostics) {
-	ret := make(map[string]string)
-	if m.IsNull() || m.IsUnknown() {
-		return ret, nil
-	}
-	diags := m.ElementsAs(ctx, &ret, false)
-	return ret, diags
-}
-
-func goMapToMapAttribute(ctx context.Context, m map[string]string) (types.Map, diag.Diagnostics) {
-	if len(m) == 0 {
-		return types.MapNull(types.StringType), nil
-	}
-	return types.MapValueFrom(ctx, types.StringType, m)
-}
-
-// mapAttributeKeyNames returns the key names of a map attribute, ignoring
-// element values so it's safe to call on maps with unknown values.
+// mapAttributeKeyNames returns the key names of a map attribute. Unlike
+// tfutils.MapToStringMap it never fails on unknown values, which is what
+// ValidateConfig sees for keys whose value comes from an unresolved variable.
 func mapAttributeKeyNames(m types.Map) map[string]struct{} {
 	ret := make(map[string]struct{})
 	if m.IsNull() || m.IsUnknown() {
@@ -630,11 +598,4 @@ func setAttributeValues(s types.Set) map[string]struct{} {
 		}
 	}
 	return ret
-}
-
-func equalFlags(a *bool, b *bool) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
 }
