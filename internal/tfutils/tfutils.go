@@ -42,7 +42,7 @@ func MapToStringMap(ctx context.Context, m types.Map) (map[string]string, diag.D
 	if m.IsNull() || m.IsUnknown() {
 		return nil, nil
 	}
-	out := make(map[string]string, len(m.Elements()))
+	var out map[string]string
 	diags := m.ElementsAs(ctx, &out, false)
 	if diags.HasError() {
 		return nil, diags

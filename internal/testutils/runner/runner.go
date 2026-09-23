@@ -132,17 +132,17 @@ func RunTests(t *testing.T, tests []TestCase) {
 							}),
 						},
 					}
-					if tc.UpdateExpectNoReplace {
-						updateStep.ConfigPlanChecks = resource.ConfigPlanChecks{
-							PreApply: []plancheck.PlanCheck{
-								plancheck.ExpectResourceAction(tc.ResourceAddress, plancheck.ResourceActionUpdate),
-							},
-						}
+					var expectedAction plancheck.ResourceActionType
+					switch {
+					case tc.UpdateExpectNoReplace:
+						expectedAction = plancheck.ResourceActionUpdate
+					case tc.UpdateExpectReplace:
+						expectedAction = plancheck.ResourceActionReplace
 					}
-					if tc.UpdateExpectReplace {
+					if expectedAction != "" {
 						updateStep.ConfigPlanChecks = resource.ConfigPlanChecks{
 							PreApply: []plancheck.PlanCheck{
-								plancheck.ExpectResourceAction(tc.ResourceAddress, plancheck.ResourceActionReplace),
+								plancheck.ExpectResourceAction(tc.ResourceAddress, expectedAction),
 							},
 						}
 					}
