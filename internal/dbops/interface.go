@@ -54,7 +54,7 @@ type Client interface {
 
 	CreateNamedCollection(ctx context.Context, collection NamedCollection, clusterName *string) (*NamedCollection, error)
 	GetNamedCollection(ctx context.Context, name string, clusterName *string) (*NamedCollection, error)
-	UpdateNamedCollection(ctx context.Context, name string, set map[string]NamedCollectionKey, deleteKeys []string, clusterName *string) (*NamedCollection, error)
+	UpdateNamedCollection(ctx context.Context, collection NamedCollection, deleteKeys []string, clusterName *string) (*NamedCollection, error)
 	DeleteNamedCollection(ctx context.Context, name string, clusterName *string) error
 
 	CreateSetting(ctx context.Context, settingsProfileID string, setting Setting, clusterName *string, timeout time.Duration) (*Setting, error)
@@ -62,6 +62,7 @@ type Client interface {
 	DeleteSetting(ctx context.Context, settingsProfileID string, name string, clusterName *string) error
 
 	IsReplicatedStorage(ctx context.Context) (bool, error)
+	IsNamedCollectionsStorageReplicated(ctx context.Context) (bool, error)
 	GetCapabilityFlags(ctx context.Context) (CapabilityFlags, error)
 	NormalizeExpression(ctx context.Context, expression string) (string, error)
 }

@@ -36,3 +36,28 @@ func StringSliceToSet(values []string) (types.Set, diag.Diagnostics) {
 	}
 	return set, diags
 }
+
+// MapToStringMap converts a Terraform string map to a Go map.
+func MapToStringMap(ctx context.Context, m types.Map) (map[string]string, diag.Diagnostics) {
+	if m.IsNull() || m.IsUnknown() {
+		return nil, nil
+	}
+	out := make(map[string]string, len(m.Elements()))
+	diags := m.ElementsAs(ctx, &out, false)
+	if diags.HasError() {
+		return nil, diags
+	}
+	return out, diags
+}
+
+// StringMapToMap converts a Go map to a Terraform string map.
+func StringMapToMap(ctx context.Context, values map[string]string) (types.Map, diag.Diagnostics) {
+	if len(values) == 0 {
+		return types.MapNull(types.StringType), nil
+	}
+	m, diags := types.MapValueFrom(ctx, types.StringType, values)
+	if diags.HasError() {
+		return types.MapNull(types.StringType), diags
+	}
+	return m, diags
+}

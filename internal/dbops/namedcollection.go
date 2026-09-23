@@ -2,7 +2,8 @@ package dbops
 
 import (
 	"context"
-	"sort"
+	"maps"
+	"slices"
 
 	"github.com/pingcap/errors"
 
@@ -27,7 +28,7 @@ type NamedCollection struct {
 
 func (i *impl) CreateNamedCollection(ctx context.Context, collection NamedCollection, clusterName *string) (*NamedCollection, error) {
 	builder := querybuilder.NewCreateNamedCollection(collection.Name).WithCluster(clusterName)
-	for _, name := range sortedKeyNames(collection.Keys) {
+	for _, name := range slices.Sorted(maps.Keys(collection.Keys)) {
 		key := collection.Keys[name]
 		builder = builder.WithKey(name, key.Value, key.Overridable)
 	}
@@ -109,54 +110,40 @@ func (i *impl) GetNamedCollection(ctx context.Context, name string, clusterName 
 	}, nil
 }
 
-func (i *impl) UpdateNamedCollection(ctx context.Context, name string, set map[string]NamedCollectionKey, deleteKeys []string, clusterName *string) (*NamedCollection, error) {
-	existing, err := i.GetNamedCollection(ctx, name, clusterName)
+// UpdateNamedCollection sets every key in collection.Keys and deletes deleteKeys, in a single ALTER.
+func (i *impl) UpdateNamedCollection(ctx context.Context, collection NamedCollection, deleteKeys []string, clusterName *string) (*NamedCollection, error) {
+	existing, err := i.GetNamedCollection(ctx, collection.Name, clusterName)
 	if err != nil {
 		return nil, errors.WithMessage(err, "unable to get existing named collection")
 	}
 
 	if existing == nil {
-		return nil, errors.Errorf("named collection %q not found", name)
+		return nil, errors.Errorf("named collection %q not found", collection.Name)
 	}
 
-	// DELETE runs before SET: resetting a key's overridable flag to the server
-	// default requires deleting the key and re-adding it.
-	if len(deleteKeys) > 0 {
-		builder := querybuilder.NewAlterNamedCollection(name).WithCluster(clusterName)
-		for _, keyName := range deleteKeys {
-			builder = builder.Delete(keyName)
-		}
-
-		sql, err := builder.Build()
-		if err != nil {
-			return nil, errors.WithMessage(err, "error building query")
-		}
-
-		err = i.clickhouseClient.Exec(ctx, sql)
-		if err != nil {
-			return nil, errors.WithMessage(err, "error running query")
+	builder := querybuilder.NewAlterNamedCollection(collection.Name).WithCluster(clusterName)
+	for _, name := range slices.Sorted(maps.Keys(collection.Keys)) {
+		key := collection.Keys[name]
+		builder = builder.Set(name, key.Value, key.Overridable)
+	}
+	for _, name := range deleteKeys {
+		// ClickHouse rejects a DELETE for a key that does not exist.
+		if _, ok := existing.Keys[name]; ok {
+			builder = builder.Delete(name)
 		}
 	}
 
-	if len(set) > 0 {
-		builder := querybuilder.NewAlterNamedCollection(name).WithCluster(clusterName)
-		for _, keyName := range sortedKeyNames(set) {
-			key := set[keyName]
-			builder = builder.Set(keyName, key.Value, key.Overridable)
-		}
-
-		sql, err := builder.Build()
-		if err != nil {
-			return nil, errors.WithMessage(err, "error building query")
-		}
-
-		err = i.clickhouseClient.Exec(ctx, sql)
-		if err != nil {
-			return nil, errors.WithMessage(err, "error running query")
-		}
+	sql, err := builder.Build()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building query")
 	}
 
-	return i.GetNamedCollection(ctx, name, clusterName)
+	err = i.clickhouseClient.Exec(ctx, sql)
+	if err != nil {
+		return nil, errors.WithMessage(err, "error running query")
+	}
+
+	return i.GetNamedCollection(ctx, collection.Name, clusterName)
 }
 
 func (i *impl) DeleteNamedCollection(ctx context.Context, name string, clusterName *string) error {
@@ -181,13 +168,4 @@ func (i *impl) DeleteNamedCollection(ctx context.Context, name string, clusterNa
 	}
 
 	return nil
-}
-
-func sortedKeyNames(keys map[string]NamedCollectionKey) []string {
-	names := make([]string, 0, len(keys))
-	for name := range keys {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
 }

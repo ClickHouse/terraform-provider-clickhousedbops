@@ -41,12 +41,23 @@ func Test_alterNamedCollectionQueryBuilder_Build(t *testing.T) {
 			wantErr:        false,
 		},
 		{
-			name:           "Fail when combining set and delete",
+			name:           "Set and delete keys in one query",
+			collectionName: "collection1",
+			setKeys: []namedCollectionKeyData{
+				{Name: "url", Value: "https://new.example.com/"},
+				{Name: "region", Value: "us-east-1", Overridable: new(false)},
+			},
+			deleteKeys: []string{"old1"},
+			want:       "ALTER NAMED COLLECTION `collection1` SET `url` = 'https://new.example.com/', `region` = 'us-east-1' NOT OVERRIDABLE DELETE `old1`;",
+			wantErr:    false,
+		},
+		{
+			name:           "Fail when the same key is set and deleted",
 			collectionName: "collection1",
 			setKeys: []namedCollectionKeyData{
 				{Name: "url", Value: "https://new.example.com/"},
 			},
-			deleteKeys: []string{"old1"},
+			deleteKeys: []string{"url"},
 			want:       "",
 			wantErr:    true,
 		},

@@ -1,15 +1,13 @@
 package querybuilder
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/pingcap/errors"
 )
 
 // AlterNamedCollectionQueryBuilder is an interface to build ALTER NAMED COLLECTION SQL queries (already interpolated).
-// A query either sets keys or deletes them, never both: resetting a key's
-// overridable flag needs the DELETE to run before the SET, and ClickHouse gives
-// no ordering guarantee within a single statement.
 type AlterNamedCollectionQueryBuilder interface {
 	QueryBuilder
 	WithCluster(clusterName *string) AlterNamedCollectionQueryBuilder
@@ -58,8 +56,10 @@ func (q *alterNamedCollectionQueryBuilder) Build() (string, error) {
 	if len(q.setKeys) == 0 && len(q.deleteKeys) == 0 {
 		return "", errors.New("at least one SET or DELETE key is required for ALTER NAMED COLLECTION queries")
 	}
-	if len(q.setKeys) > 0 && len(q.deleteKeys) > 0 {
-		return "", errors.New("cannot SET and DELETE keys in the same ALTER NAMED COLLECTION query")
+	for _, k := range q.setKeys {
+		if slices.Contains(q.deleteKeys, k.Name) {
+			return "", errors.Errorf("key %q cannot be both SET and DELETEd in the same ALTER NAMED COLLECTION query", k.Name)
+		}
 	}
 
 	tokens := []string{
