@@ -119,12 +119,8 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 		return
 	}
 
-	if config.Keys.IsUnknown() || config.SecretKeysWO.IsUnknown() || config.OverridableKeys.IsUnknown() || config.NotOverridableKeys.IsUnknown() {
-		return
-	}
-
-	plainNames := mapAttributeKeyNames(config.Keys)
-	secretNames := mapAttributeKeyNames(config.SecretKeysWO)
+	plainNames := tfutils.StringMapKeys(config.Keys)
+	secretNames := tfutils.StringMapKeys(config.SecretKeysWO)
 
 	// Both maps write into the same ClickHouse key namespace.
 	for name := range secretNames {
@@ -137,8 +133,8 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 		}
 	}
 
-	overridable := setAttributeValues(config.OverridableKeys)
-	notOverridable := setAttributeValues(config.NotOverridableKeys)
+	overridable := tfutils.StringSetToMap(config.OverridableKeys)
+	notOverridable := tfutils.StringSetToMap(config.NotOverridableKeys)
 
 	for name := range notOverridable {
 		if _, ok := overridable[name]; ok {
@@ -163,8 +159,11 @@ func (r *Resource) ValidateConfig(ctx context.Context, req resource.ValidateConf
 			}
 		}
 	}
-	checkKeyExists("overridable_keys", overridable)
-	checkKeyExists("not_overridable_keys", notOverridable)
+	// An unknown map hides its key names, which would make every flagged key look undefined.
+	if !config.Keys.IsUnknown() && !config.SecretKeysWO.IsUnknown() {
+		checkKeyExists("overridable_keys", overridable)
+		checkKeyExists("not_overridable_keys", notOverridable)
+	}
 }
 
 func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
@@ -173,16 +172,21 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
-	var plan NamedCollection
+	var plan, config NamedCollection
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	if !req.State.Raw.IsNull() && req.Plan.Raw.IsFullyKnown() && req.Config.Raw.IsFullyKnown() {
-		var state, config NamedCollection
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if !req.State.Raw.IsNull() && !plan.OverridableKeys.IsUnknown() && !plan.NotOverridableKeys.IsUnknown() &&
+		(!plan.Keys.IsUnknown() || !config.SecretKeysWO.IsUnknown()) {
+		var state NamedCollection
 		resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-		resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -190,14 +194,15 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		// ALTER NAMED COLLECTION cannot reset a key's overridable flag to the
 		// server default: SET without a flag keeps the current one. Only
 		// recreating the collection clears it.
-		plannedNames := mapAttributeKeyNames(plan.Keys)
-		maps.Copy(plannedNames, mapAttributeKeyNames(config.SecretKeysWO))
+		plannedNames := tfutils.StringMapKeys(plan.Keys)
+		maps.Copy(plannedNames, tfutils.StringMapKeys(config.SecretKeysWO))
 		planFlagFor := flagResolver(plan)
 
-		if flagReset(setAttributeValues(state.OverridableKeys), plannedNames, planFlagFor) {
+		if flagReset(tfutils.StringSetToMap(state.OverridableKeys), plannedNames, planFlagFor) {
 			resp.RequiresReplace = append(resp.RequiresReplace, path.Root("overridable_keys"))
 		}
-		if flagReset(setAttributeValues(state.NotOverridableKeys), plannedNames, planFlagFor) {
+
+		if flagReset(tfutils.StringSetToMap(state.NotOverridableKeys), plannedNames, planFlagFor) {
 			resp.RequiresReplace = append(resp.RequiresReplace, path.Root("not_overridable_keys"))
 		}
 	}
@@ -318,7 +323,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	for name, value := range stateKeys {
 		key, ok := collection.Keys[name]
 		if !ok {
-			// Key was deleted outside of terraform, dropping it from state makes
+			// Key was deleted outside terraform, dropping it from state makes
 			// the next plan add it back.
 			continue
 		}
@@ -332,7 +337,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		}
 	}
 
-	// Keys added outside of terraform show up so the next plan removes them. Keys
+	// Keys added outside terraform show up so the next plan removes them. Keys
 	// written from secret_keys_wo are ours even though they are absent from state.
 	for name, key := range collection.Keys {
 		if _, ok := stateKeys[name]; ok {
@@ -418,7 +423,7 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		Keys: plannedKeys,
 	}
 
-	_, err := r.client.UpdateNamedCollection(ctx, collection, deleteKeys, plan.ClusterName.ValueStringPointer())
+	err := r.client.UpdateNamedCollection(ctx, collection, deleteKeys, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating ClickHouse NamedCollection",
@@ -468,6 +473,20 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	if clusterName != nil {
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
 	}
+
+	nc, err := r.client.GetNamedCollection(ctx, name, clusterName)
+	if err != nil {
+		resp.Diagnostics.AddError("Cannot import named collection", fmt.Sprintf("%+v", err))
+		return
+	}
+	if nc == nil {
+		resp.Diagnostics.AddError("Named collection not found", name)
+		return
+	}
+
+	// No key has its value in state yet, so Read must not adopt any of them: the
+	// imported collection may hold secrets the config manages through secret_keys_wo.
+	resp.Diagnostics.Append(setSecretKeyNames(ctx, resp.Private, slices.Sorted(maps.Keys(nc.Keys)))...)
 }
 
 // resolveKeys merges the plain 'keys' from the plan with the write-only
@@ -518,8 +537,8 @@ func flagReset(stateFlagged map[string]struct{}, plannedNames map[string]struct{
 // flagResolver reports the OVERRIDABLE flag a model configures for a key name,
 // nil when the key is in neither set and the server default applies.
 func flagResolver(model NamedCollection) func(string) *bool {
-	overridable := setAttributeValues(model.OverridableKeys)
-	notOverridable := setAttributeValues(model.NotOverridableKeys)
+	overridable := tfutils.StringSetToMap(model.OverridableKeys)
+	notOverridable := tfutils.StringSetToMap(model.NotOverridableKeys)
 
 	return func(name string) *bool {
 		if _, ok := overridable[name]; ok {
@@ -569,31 +588,4 @@ func getSecretKeyNames(ctx context.Context, private privateState) (map[string]st
 	}
 
 	return ret, diags
-}
-
-// mapAttributeKeyNames returns the key names of a map attribute. Unlike
-// tfutils.MapToStringMap it never fails on unknown values, which is what
-// ValidateConfig sees for keys whose value comes from an unresolved variable.
-func mapAttributeKeyNames(m types.Map) map[string]struct{} {
-	ret := make(map[string]struct{})
-	if m.IsNull() || m.IsUnknown() {
-		return ret
-	}
-	for name := range m.Elements() {
-		ret[name] = struct{}{}
-	}
-	return ret
-}
-
-func setAttributeValues(s types.Set) map[string]struct{} {
-	ret := make(map[string]struct{})
-	if s.IsNull() || s.IsUnknown() {
-		return ret
-	}
-	for _, elem := range s.Elements() {
-		if str, ok := elem.(types.String); ok && !str.IsNull() && !str.IsUnknown() {
-			ret[str.ValueString()] = struct{}{}
-		}
-	}
-	return ret
 }

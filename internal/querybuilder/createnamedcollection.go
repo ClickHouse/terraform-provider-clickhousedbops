@@ -8,7 +8,7 @@ import (
 
 // CreateNamedCollectionQueryBuilder is an interface to build CREATE NAMED COLLECTION SQL queries (already interpolated).
 type CreateNamedCollectionQueryBuilder interface {
-	QueryBuilder
+	MaskedQueryBuilder
 	WithCluster(clusterName *string) CreateNamedCollectionQueryBuilder
 	WithKey(name string, value string, overridable *bool) CreateNamedCollectionQueryBuilder
 }
@@ -19,12 +19,17 @@ type namedCollectionKeyData struct {
 	Overridable *bool
 }
 
-func (k *namedCollectionKeyData) SQLDef() (string, error) {
+func (k *namedCollectionKeyData) SQLDef(masked bool) (string, error) {
 	if k.Name == "" {
 		return "", errors.New("Name can't be empty")
 	}
 
-	tokens := []string{backtick(k.Name), "=", quote(k.Value)}
+	value := k.Value
+	if masked {
+		value = HiddenValue
+	}
+
+	tokens := []string{backtick(k.Name), "=", quote(value)}
 	if k.Overridable != nil {
 		if *k.Overridable {
 			tokens = append(tokens, "OVERRIDABLE")
@@ -64,6 +69,14 @@ func (q *createNamedCollectionQueryBuilder) WithKey(name string, value string, o
 }
 
 func (q *createNamedCollectionQueryBuilder) Build() (string, error) {
+	return q.build(false)
+}
+
+func (q *createNamedCollectionQueryBuilder) BuildMasked() (string, error) {
+	return q.build(true)
+}
+
+func (q *createNamedCollectionQueryBuilder) build(masked bool) (string, error) {
 	if q.collectionName == "" {
 		return "", errors.New("collectionName cannot be empty for CREATE NAMED COLLECTION queries")
 	}
@@ -82,7 +95,7 @@ func (q *createNamedCollectionQueryBuilder) Build() (string, error) {
 
 	each := make([]string, 0)
 	for _, k := range q.keys {
-		sql, err := k.SQLDef()
+		sql, err := k.SQLDef(masked)
 		if err != nil {
 			return "", errors.WithMessage(err, "invalid key")
 		}

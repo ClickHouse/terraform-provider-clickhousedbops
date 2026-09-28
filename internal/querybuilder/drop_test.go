@@ -13,6 +13,7 @@ func Test_drop(t *testing.T) {
 		comment      string
 		identified   string
 		clusterName  *string
+		ifExists     bool
 		want         string
 		wantErr      bool
 	}{
@@ -102,6 +103,23 @@ func Test_drop(t *testing.T) {
 			want:         "DROP NAMED COLLECTION `collection1` ON CLUSTER 'cluster1';",
 			wantErr:      false,
 		},
+		{
+			name:         "Drop named collection if exists",
+			resourceType: resourceTypeNamedCollection,
+			resourceName: "collection1",
+			ifExists:     true,
+			want:         "DROP NAMED COLLECTION IF EXISTS `collection1`;",
+			wantErr:      false,
+		},
+		{
+			name:         "Drop named collection if exists on cluster",
+			resourceType: resourceTypeNamedCollection,
+			resourceName: "collection1",
+			clusterName:  new("cluster1"),
+			ifExists:     true,
+			want:         "DROP NAMED COLLECTION IF EXISTS `collection1` ON CLUSTER 'cluster1';",
+			wantErr:      false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -109,6 +127,7 @@ func Test_drop(t *testing.T) {
 				resourceTypeName: tt.resourceType,
 				resourceName:     tt.resourceName,
 				clusterName:      tt.clusterName,
+				ifExists:         tt.ifExists,
 			}
 
 			got, err := q.Build()

@@ -48,7 +48,7 @@ func (i *impl) IsReplicatedStorage(ctx context.Context) (bool, error) {
 }
 
 // IsNamedCollectionsStorageReplicated reports whether named collections are stored in Keeper/ZooKeeper.
-// This is independent from the RBAC storage checked by IsReplicatedStorage.
+// This is independent of the RBAC storage checked by IsReplicatedStorage.
 // The setting only exists since ClickHouse 26.3.26, older servers report false.
 func (i *impl) IsNamedCollectionsStorageReplicated(ctx context.Context) (bool, error) {
 	sql, err := querybuilder.

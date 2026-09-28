@@ -54,7 +54,7 @@ type Client interface {
 
 	CreateNamedCollection(ctx context.Context, collection NamedCollection, clusterName *string) (*NamedCollection, error)
 	GetNamedCollection(ctx context.Context, name string, clusterName *string) (*NamedCollection, error)
-	UpdateNamedCollection(ctx context.Context, collection NamedCollection, deleteKeys []string, clusterName *string) (*NamedCollection, error)
+	UpdateNamedCollection(ctx context.Context, collection NamedCollection, deleteKeys []string, clusterName *string) error
 	DeleteNamedCollection(ctx context.Context, name string, clusterName *string) error
 
 	CreateSetting(ctx context.Context, settingsProfileID string, setting Setting, clusterName *string, timeout time.Duration) (*Setting, error)

@@ -1,6 +1,7 @@
 package querybuilder
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -102,6 +103,17 @@ func Test_alterNamedCollectionQueryBuilder_Build(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("Build() got = %v, want %v", got, tt.want)
+			}
+
+			masked, err := q.BuildMasked()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("BuildMasked() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			for _, key := range tt.setKeys {
+				if key.Value != "" && strings.Contains(masked, key.Value) {
+					t.Errorf("BuildMasked() leaked the value of key %q: %v", key.Name, masked)
+				}
 			}
 		})
 	}

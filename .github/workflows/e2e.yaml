@@ -243,6 +243,7 @@ jobs:
 
   namedcollection:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: ['build', 'prepare-matrix']
     strategy:
       fail-fast: false

@@ -9,7 +9,7 @@ import (
 
 // AlterNamedCollectionQueryBuilder is an interface to build ALTER NAMED COLLECTION SQL queries (already interpolated).
 type AlterNamedCollectionQueryBuilder interface {
-	QueryBuilder
+	MaskedQueryBuilder
 	WithCluster(clusterName *string) AlterNamedCollectionQueryBuilder
 	Set(name string, value string, overridable *bool) AlterNamedCollectionQueryBuilder
 	Delete(name string) AlterNamedCollectionQueryBuilder
@@ -50,6 +50,14 @@ func (q *alterNamedCollectionQueryBuilder) Delete(name string) AlterNamedCollect
 }
 
 func (q *alterNamedCollectionQueryBuilder) Build() (string, error) {
+	return q.build(false)
+}
+
+func (q *alterNamedCollectionQueryBuilder) BuildMasked() (string, error) {
+	return q.build(true)
+}
+
+func (q *alterNamedCollectionQueryBuilder) build(masked bool) (string, error) {
 	if q.collectionName == "" {
 		return "", errors.New("collectionName cannot be empty for ALTER NAMED COLLECTION queries")
 	}
@@ -74,7 +82,7 @@ func (q *alterNamedCollectionQueryBuilder) Build() (string, error) {
 	if len(q.setKeys) > 0 {
 		each := make([]string, 0)
 		for _, k := range q.setKeys {
-			sql, err := k.SQLDef()
+			sql, err := k.SQLDef(masked)
 			if err != nil {
 				return "", errors.WithMessage(err, "invalid key")
 			}

@@ -38,7 +38,12 @@ func (i *impl) CreateNamedCollection(ctx context.Context, collection NamedCollec
 		return nil, errors.WithMessage(err, "error building query")
 	}
 
-	err = i.clickhouseClient.Exec(ctx, sql)
+	masked, err := builder.BuildMasked()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error building masked query")
+	}
+
+	err = i.clickhouseClient.Exec(clickhouseclient.WithMaskedQuery(ctx, masked), sql)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}
@@ -49,6 +54,10 @@ func (i *impl) CreateNamedCollection(ctx context.Context, collection NamedCollec
 }
 
 func (i *impl) GetNamedCollection(ctx context.Context, name string, clusterName *string) (*NamedCollection, error) {
+	// The result holds every key value, which ClickHouse returns in clear text to
+	// users granted SHOW NAMED COLLECTIONS SECRETS.
+	ctx = clickhouseclient.WithRedactedResult(ctx)
+
 	// system.named_collections stores the keys in a Map(String, String), which the
 	// clickhouse clients can't decode, so LEFT ARRAY JOIN unrolls it into one row
 	// per key. LEFT keeps a row for a collection with no keys, which is how
@@ -111,14 +120,14 @@ func (i *impl) GetNamedCollection(ctx context.Context, name string, clusterName 
 }
 
 // UpdateNamedCollection sets every key in collection.Keys and deletes deleteKeys, in a single ALTER.
-func (i *impl) UpdateNamedCollection(ctx context.Context, collection NamedCollection, deleteKeys []string, clusterName *string) (*NamedCollection, error) {
+func (i *impl) UpdateNamedCollection(ctx context.Context, collection NamedCollection, deleteKeys []string, clusterName *string) error {
 	existing, err := i.GetNamedCollection(ctx, collection.Name, clusterName)
 	if err != nil {
-		return nil, errors.WithMessage(err, "unable to get existing named collection")
+		return errors.WithMessage(err, "unable to get existing named collection")
 	}
 
 	if existing == nil {
-		return nil, errors.Errorf("named collection %q not found", collection.Name)
+		return errors.Errorf("named collection %q not found", collection.Name)
 	}
 
 	builder := querybuilder.NewAlterNamedCollection(collection.Name).WithCluster(clusterName)
@@ -135,29 +144,24 @@ func (i *impl) UpdateNamedCollection(ctx context.Context, collection NamedCollec
 
 	sql, err := builder.Build()
 	if err != nil {
-		return nil, errors.WithMessage(err, "error building query")
+		return errors.WithMessage(err, "error building query")
 	}
 
-	err = i.clickhouseClient.Exec(ctx, sql)
+	masked, err := builder.BuildMasked()
 	if err != nil {
-		return nil, errors.WithMessage(err, "error running query")
+		return errors.WithMessage(err, "error building masked query")
 	}
 
-	return i.GetNamedCollection(ctx, collection.Name, clusterName)
+	err = i.clickhouseClient.Exec(clickhouseclient.WithMaskedQuery(ctx, masked), sql)
+	if err != nil {
+		return errors.WithMessage(err, "error running query")
+	}
+
+	return nil
 }
 
 func (i *impl) DeleteNamedCollection(ctx context.Context, name string, clusterName *string) error {
-	collection, err := i.GetNamedCollection(ctx, name, clusterName)
-	if err != nil {
-		return errors.WithMessage(err, "error looking up named collection")
-	}
-
-	if collection == nil {
-		// Desired status
-		return nil
-	}
-
-	sql, err := querybuilder.NewDropNamedCollection(name).WithCluster(clusterName).Build()
+	sql, err := querybuilder.NewDropNamedCollection(name).WithCluster(clusterName).IfExists(true).Build()
 	if err != nil {
 		return errors.WithMessage(err, "error building query")
 	}

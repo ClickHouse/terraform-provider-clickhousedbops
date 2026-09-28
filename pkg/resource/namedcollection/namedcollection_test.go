@@ -125,6 +125,16 @@ func TestNamedcollection_acceptance(t *testing.T) {
 		WithMapAttribute("keys", keys).
 		Build()
 
+	// Same as resetFlagResource, for a key held in secret_keys_wo: its name only
+	// appears in the config, never in the plan.
+	resetSecretFlagName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	resetSecretFlagResource := resourcebuilder.New(resourceType, resourceName).
+		WithStringAttribute("name", resetSecretFlagName).
+		WithMapAttribute("keys", map[string]cty.Value{"host": cty.StringVal("127.0.0.1")}).
+		WithMapAttribute("secret_keys_wo", map[string]cty.Value{"password": cty.StringVal("topsecret")}).
+		WithIntAttribute("secret_keys_wo_version", 1).
+		Build()
+
 	// Rotates the write-only value by bumping the version.
 	rotateName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
 	rotateResource := resourcebuilder.New(resourceType, resourceName).
@@ -253,6 +263,24 @@ func TestNamedcollection_acceptance(t *testing.T) {
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributes(),
+		},
+		{
+			Name:     "Reset the flag of a write-only key by replacing the collection",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", resetSecretFlagName).
+				WithMapAttribute("keys", map[string]cty.Value{"host": cty.StringVal("127.0.0.1")}).
+				WithMapAttribute("secret_keys_wo", map[string]cty.Value{"password": cty.StringVal("topsecret")}).
+				WithIntAttribute("secret_keys_wo_version", 1).
+				WithListAttribute("not_overridable_keys", []cty.Value{cty.StringVal("password")}).
+				Build(),
+			UpdateResource:      &resetSecretFlagResource,
+			UpdateExpectReplace: true,
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributes("password"),
 		},
 		{
 			Name:     "Rotate write-only secret keys via version bump in place",

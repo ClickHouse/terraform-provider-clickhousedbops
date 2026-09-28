@@ -81,7 +81,7 @@ func (i *nativeClient) Select(ctx context.Context, qry string, callback func(Row
 	ctx, cancel := queryContext(ctx, i.queryTimeout)
 	defer cancel()
 
-	ctx = tflog.SetField(ctx, "Query", qry)
+	ctx = tflog.SetField(ctx, "Query", loggableQuery(ctx, qry))
 	tflog.Debug(ctx, "Running Query")
 
 	rows, err := i.connection.Query(ctx, qry)
@@ -141,7 +141,7 @@ func (i *nativeClient) Exec(ctx context.Context, qry string, params ...map[strin
 	ctx, cancel := queryContext(ctx, i.queryTimeout)
 	defer cancel()
 
-	ctx = tflog.SetField(ctx, "Query", qry)
+	ctx = tflog.SetField(ctx, "Query", loggableQuery(ctx, qry))
 	tflog.Debug(ctx, "Running Query")
 
 	if len(params) > 0 {
