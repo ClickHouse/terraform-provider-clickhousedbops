@@ -22,6 +22,10 @@ inputs:
   cluster_type:
     required: true
     description: "Name of the clickhouse cluster or 'null'"
+  upgrade_test:
+    required: false
+    default: "true"
+    description: "Whether to check that upgrading from the latest release plans no changes"
 
 runs:
   using: "composite"
@@ -46,6 +50,21 @@ runs:
       run: |
         cd tests/
         docker compose exec shell ash -c "cd ${{ inputs.example }} && ${{ inputs.terraform_binary }} apply -auto-approve && ${{ inputs.terraform_binary }} destroy -auto-approve"
+
+    - name: Run upgrade test
+      if: inputs.upgrade_test != 'false'
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.terraform_binary == 'tofu' && 'registry.opentofu.org' || 'registry.terraform.io' }}
+      run: |
+        version="$(curl -sf "https://${REGISTRY}/v1/providers/ClickHouse/clickhousedbops/versions" | jq -r '.versions[].version' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+        git fetch origin tag "v${version}"
+        git cat-file -e "v${version}:examples/tests/${{ inputs.example }}" 2>/dev/null || { echo "${{ inputs.example }} is not in v${version}, skipping"; exit 0; }
+        cd tests/
+        git -C .. archive --prefix="${{ inputs.example }}/" "v${version}:examples/tests/${{ inputs.example }}" | docker compose exec -T shell tar -x -C /tmp
+        # Empty CLI config skips dev_overrides, so the state is created by the released provider.
+        docker compose exec -e TF_CLI_CONFIG_FILE=/dev/null shell ash -c "cd /tmp/${{ inputs.example }} && sed -i '/version *=/d' provider.tf && ${{ inputs.terraform_binary }} init && ${{ inputs.terraform_binary }} apply -auto-approve"
+        docker compose exec shell ash -c "cd /tmp/${{ inputs.example }} && ${{ inputs.terraform_binary }} plan -detailed-exitcode && ${{ inputs.terraform_binary }} destroy -auto-approve"
 
     - name: Stop test env
       if: always()
