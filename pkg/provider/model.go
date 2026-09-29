@@ -25,4 +25,5 @@ type AuthConfig struct {
 type TLSConfig struct {
 	InsecureSkipVerify types.Bool   `tfsdk:"insecure_skip_verify"`
 	CACert             types.String `tfsdk:"ca_cert"`
+	ServerName         types.String `tfsdk:"server_name"`
 }
