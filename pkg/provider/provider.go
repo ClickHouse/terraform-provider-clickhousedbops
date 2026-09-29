@@ -181,14 +181,28 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 	var data Model
 	var err error
 
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if !req.Config.Raw.IsFullyKnown() {
+		if req.ClientCapabilities.DeferralAllowed {
+			resp.Deferred = &provider.Deferred{Reason: provider.DeferredReasonProviderConfigUnknown}
+			return
+		}
 
-	if resp.Diagnostics.HasError() {
+		// Terraform configures the provider again with known values before apply.
+		var dbopsClient dbops.Client
+		dbopsClient, err = dbops.NewClient(clickhouseclient.NewUnknownConfigClient())
+		if err != nil {
+			resp.Diagnostics.AddError("error initializing dbops client", fmt.Sprintf("%+v\n", err))
+			return
+		}
+
+		resp.ResourceData = dbopsClient
+		resp.DataSourceData = dbopsClient
 		return
 	}
 
-	if data.Host.IsUnknown() || data.Protocol.IsUnknown() || data.Port.IsUnknown() || data.AuthConfig.Strategy.IsUnknown() || data.AuthConfig.Username.IsUnknown() {
-		// We don't know the service data yet.
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
