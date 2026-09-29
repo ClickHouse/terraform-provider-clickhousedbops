@@ -73,3 +73,4 @@ Optional:
 
 - `ca_cert` (String, Sensitive) PEM-encoded CA certificate to use for TLS verification. When specified, only this CA will be trusted for server certificate validation.
 - `insecure_skip_verify` (Boolean) Skip TLS cert verification when using the https protocol. This is insecure!
+- `server_name` (String) Hostname to use for TLS SNI and certificate validation, if different from `host`. Useful when connecting through a tunnel or port-forward that resolves `host` to a different address but the server certificate is still issued for the original hostname.

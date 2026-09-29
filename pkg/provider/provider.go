@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/grantprivilege"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/grantrole"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/maskingpolicy"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/namedcollection"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/role"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/rowpolicy"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/setting"
@@ -115,6 +117,10 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 						Sensitive:   true,
 						Description: "PEM-encoded CA certificate to use for TLS verification. When specified, only this CA will be trusted for server certificate validation.",
 					},
+					"server_name": schema.StringAttribute{
+						Optional:    true,
+						Description: "Hostname to use for TLS SNI and certificate validation, if different from `host`. Useful when connecting through a tunnel or port-forward that resolves `host` to a different address but the server certificate is still issued for the original hostname.",
+					},
 				},
 				Optional:    true,
 				Description: "TLS configuration options",
@@ -144,18 +150,59 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 	}
 }
 
+// buildTLSConfig builds a *tls.Config from the provider's tls_config block.
+func buildTLSConfig(cfg *TLSConfig) (*tls.Config, error) {
+	tlsConfig := &tls.Config{} //nolint:gosec
+
+	if cfg == nil {
+		return tlsConfig, nil
+	}
+
+	if !cfg.InsecureSkipVerify.IsNull() {
+		tlsConfig.InsecureSkipVerify = cfg.InsecureSkipVerify.ValueBool()
+	}
+
+	if !cfg.CACert.IsNull() && cfg.CACert.ValueString() != "" {
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM([]byte(cfg.CACert.ValueString())) {
+			return nil, errors.New("failed to parse ca_cert as PEM-encoded certificate")
+		}
+		tlsConfig.RootCAs = caCertPool
+	}
+
+	if !cfg.ServerName.IsNull() && cfg.ServerName.ValueString() != "" {
+		tlsConfig.ServerName = cfg.ServerName.ValueString()
+	}
+
+	return tlsConfig, nil
+}
+
 func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var data Model
 	var err error
 
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if !req.Config.Raw.IsFullyKnown() {
+		if req.ClientCapabilities.DeferralAllowed {
+			resp.Deferred = &provider.Deferred{Reason: provider.DeferredReasonProviderConfigUnknown}
+			return
+		}
 
-	if resp.Diagnostics.HasError() {
+		// Terraform configures the provider again with known values before apply.
+		var dbopsClient dbops.Client
+		dbopsClient, err = dbops.NewClient(clickhouseclient.NewUnknownConfigClient())
+		if err != nil {
+			resp.Diagnostics.AddError("error initializing dbops client", fmt.Sprintf("%+v\n", err))
+			return
+		}
+
+		resp.ResourceData = dbopsClient
+		resp.DataSourceData = dbopsClient
 		return
 	}
 
-	if data.Host.IsUnknown() || data.Protocol.IsUnknown() || data.Port.IsUnknown() || data.AuthConfig.Strategy.IsUnknown() || data.AuthConfig.Username.IsUnknown() {
-		// We don't know the service data yet.
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -210,19 +257,11 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 
 			var nativeTLSConfig *tls.Config
 			if data.Protocol.ValueString() == protocolNativeSecure {
-				nativeTLSConfig = &tls.Config{} //nolint:gosec
-				if data.TLSConfig != nil {
-					if !data.TLSConfig.InsecureSkipVerify.IsNull() {
-						nativeTLSConfig.InsecureSkipVerify = data.TLSConfig.InsecureSkipVerify.ValueBool()
-					}
-					if !data.TLSConfig.CACert.IsNull() && data.TLSConfig.CACert.ValueString() != "" {
-						caCertPool := x509.NewCertPool()
-						if !caCertPool.AppendCertsFromPEM([]byte(data.TLSConfig.CACert.ValueString())) {
-							resp.Diagnostics.AddError("invalid configuration", "failed to parse ca_cert as PEM-encoded certificate")
-							return
-						}
-						nativeTLSConfig.RootCAs = caCertPool
-					}
+				var tlsErr error
+				nativeTLSConfig, tlsErr = buildTLSConfig(data.TLSConfig)
+				if tlsErr != nil {
+					resp.Diagnostics.AddError("invalid configuration", tlsErr.Error())
+					return
 				}
 			}
 
@@ -276,19 +315,11 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			protocol := "http"
 			if data.Protocol.ValueString() == protocolHTTPS {
 				protocol = "https"
-				tlsConfig = &tls.Config{} //nolint:gosec
-				if data.TLSConfig != nil {
-					if !data.TLSConfig.InsecureSkipVerify.IsNull() {
-						tlsConfig.InsecureSkipVerify = data.TLSConfig.InsecureSkipVerify.ValueBool()
-					}
-					if !data.TLSConfig.CACert.IsNull() && data.TLSConfig.CACert.ValueString() != "" {
-						caCertPool := x509.NewCertPool()
-						if !caCertPool.AppendCertsFromPEM([]byte(data.TLSConfig.CACert.ValueString())) {
-							resp.Diagnostics.AddError("invalid configuration", "failed to parse ca_cert as PEM-encoded certificate")
-							return
-						}
-						tlsConfig.RootCAs = caCertPool
-					}
+				var tlsErr error
+				tlsConfig, tlsErr = buildTLSConfig(data.TLSConfig)
+				if tlsErr != nil {
+					resp.Diagnostics.AddError("invalid configuration", tlsErr.Error())
+					return
 				}
 			}
 
@@ -338,6 +369,7 @@ func (p *Provider) Resources(ctx context.Context) []func() tfresource.Resource {
 		setting.NewResource,
 		settingsprofileassociation.NewResource,
 		rowpolicy.NewResource,
+		namedcollection.NewResource,
 	}
 }
 
