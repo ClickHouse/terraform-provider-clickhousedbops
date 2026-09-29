@@ -128,7 +128,7 @@ func (i *httpClient) runQuery(ctx context.Context, qry string, params map[string
 	ctx, cancel := queryContext(ctx, i.queryTimeout)
 	defer cancel()
 
-	ctx = tflog.SetField(ctx, "Query", qry)
+	ctx = tflog.SetField(ctx, "Query", loggableQuery(ctx, qry))
 
 	reqURL := i.baseUrl
 	if len(params) > 0 {
@@ -172,7 +172,7 @@ func (i *httpClient) runQuery(ctx context.Context, qry string, params map[string
 		body = buf.Bytes()
 	}
 
-	ctx = tflog.SetField(ctx, "QueryResult", string(body))
+	ctx = tflog.SetField(ctx, "QueryResult", loggableResult(ctx, string(body)))
 
 	if resp.StatusCode != http.StatusOK {
 		return "", errors.New(string(body))
