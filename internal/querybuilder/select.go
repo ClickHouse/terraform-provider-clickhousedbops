@@ -19,16 +19,19 @@ type SelectQueryBuilder interface {
 	QueryBuilder
 	Where(...Where) SelectQueryBuilder
 	WithCluster(clusterName *string) SelectQueryBuilder
+	LeftArrayJoin(column string, alias string) SelectQueryBuilder
 	OrderBy(column Field, order OrderDirection) SelectQueryBuilder
 }
 
 type selectQueryBuilder struct {
-	tableName      string
-	fields         []Field
-	where          Where
-	clusterName    *string
-	orderBy        Field
-	orderDirection *OrderDirection
+	tableName       string
+	fields          []Field
+	where           Where
+	clusterName     *string
+	arrayJoinColumn string
+	arrayJoinAlias  string
+	orderBy         Field
+	orderDirection  *OrderDirection
 }
 
 func NewSelect(fields []Field, from string) SelectQueryBuilder {
@@ -45,6 +48,15 @@ func (q *selectQueryBuilder) Where(where ...Where) SelectQueryBuilder {
 
 func (q *selectQueryBuilder) WithCluster(clusterName *string) SelectQueryBuilder {
 	q.clusterName = clusterName
+	return q
+}
+
+// LeftArrayJoin unrolls an array or map column into one row per element, keeping
+// rows whose column is empty. Used to read Map columns, which the clickhouse
+// clients can't decode.
+func (q *selectQueryBuilder) LeftArrayJoin(column string, alias string) SelectQueryBuilder {
+	q.arrayJoinColumn = column
+	q.arrayJoinAlias = alias
 	return q
 }
 
@@ -87,6 +99,13 @@ func (q *selectQueryBuilder) Build() (string, error) {
 		strings.Join(fields, ", "),
 		"FROM",
 		from,
+	}
+
+	if q.arrayJoinColumn != "" {
+		if q.arrayJoinAlias == "" {
+			return "", errors.New("alias cannot be empty for LEFT ARRAY JOIN")
+		}
+		tokens = append(tokens, "LEFT ARRAY JOIN", backtick(q.arrayJoinColumn), "AS", backtick(q.arrayJoinAlias))
 	}
 
 	// Handle WHERE
