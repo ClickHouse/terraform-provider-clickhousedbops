@@ -97,6 +97,7 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 					},
 					"password": schema.StringAttribute{
 						Optional:    true,
+						Sensitive:   true,
 						Description: "The password to use to authenticate to ClickHouse",
 						Validators: []validator.String{
 							stringvalidator.LengthAtLeast(1),

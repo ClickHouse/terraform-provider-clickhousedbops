@@ -140,3 +140,34 @@ func TestBuildTLSConfig_NilTLSConfig(t *testing.T) {
 		t.Errorf("expected empty ServerName when tls_config is nil, got %q", tlsConfig.ServerName)
 	}
 }
+
+func TestProviderSchema_PasswordIsSensitive(t *testing.T) {
+	p := &Provider{}
+
+	req := provider.SchemaRequest{}
+	resp := &provider.SchemaResponse{}
+	p.Schema(context.Background(), req, resp)
+
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("schema returned errors: %v", resp.Diagnostics.Errors())
+	}
+
+	authAttr, ok := resp.Schema.Attributes["auth_config"]
+	if !ok {
+		t.Fatal("expected 'auth_config' attribute in provider schema, not found")
+	}
+
+	nested, ok := authAttr.(schema.SingleNestedAttribute)
+	if !ok {
+		t.Fatalf("expected 'auth_config' to be a SingleNestedAttribute, got %T", authAttr)
+	}
+
+	password, ok := nested.Attributes["password"]
+	if !ok {
+		t.Fatal("expected 'password' attribute in auth_config schema, not found")
+	}
+
+	if !password.IsSensitive() {
+		t.Error("'password' attribute should be sensitive")
+	}
+}
