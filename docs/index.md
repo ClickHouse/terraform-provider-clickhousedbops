@@ -63,7 +63,7 @@ Required:
 
 Optional:
 
-- `password` (String) The password to use to authenticate to ClickHouse
+- `password` (String, Sensitive) The password to use to authenticate to ClickHouse
 
 
 <a id="nestedatt--tls_config"></a>
