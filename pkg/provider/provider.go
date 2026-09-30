@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	tfresource "github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -43,6 +45,8 @@ const (
 	authStrategyBasicAuth = "basicauth"
 
 	defaultQueryTimeout = 300 * time.Second
+
+	envPassword = "CLICKHOUSEDBOPS_PASSWORD" //nolint:gosec // G101: an environment variable name, not a credential.
 )
 
 var (
@@ -98,7 +102,7 @@ func (p *Provider) Schema(ctx context.Context, req provider.SchemaRequest, resp 
 					"password": schema.StringAttribute{
 						Optional:    true,
 						Sensitive:   true,
-						Description: "The password to use to authenticate to ClickHouse",
+						Description: "The password to use to authenticate to ClickHouse. Alternatively, can be configured using the `CLICKHOUSEDBOPS_PASSWORD` environment variable.",
 						Validators: []validator.String{
 							stringvalidator.LengthAtLeast(1),
 						},
@@ -178,6 +182,15 @@ func buildTLSConfig(cfg *TLSConfig) (*tls.Config, error) {
 	return tlsConfig, nil
 }
 
+// passwordFromConfigOrEnv returns the configured password, or CLICKHOUSEDBOPS_PASSWORD when it is unset.
+func passwordFromConfigOrEnv(configured types.String) string {
+	if !configured.IsNull() {
+		return configured.ValueString()
+	}
+
+	return os.Getenv(envPassword)
+}
+
 func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var data Model
 	var err error
@@ -228,10 +241,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			case authStrategyPassword:
 				auth = &clickhouseclient.UserPasswordAuth{
 					Username: data.AuthConfig.Username.ValueString(),
-				}
-
-				if !data.AuthConfig.Password.IsNull() {
-					auth.Password = data.AuthConfig.Password.ValueString()
+					Password: passwordFromConfigOrEnv(data.AuthConfig.Password),
 				}
 
 				valid, errorStrings := auth.ValidateConfig()
@@ -284,10 +294,7 @@ func (p *Provider) Configure(ctx context.Context, req provider.ConfigureRequest,
 			case authStrategyBasicAuth:
 				auth = &clickhouseclient.BasicAuth{
 					Username: data.AuthConfig.Username.ValueString(),
-				}
-
-				if !data.AuthConfig.Password.IsNull() {
-					auth.Password = data.AuthConfig.Password.ValueString()
+					Password: passwordFromConfigOrEnv(data.AuthConfig.Password),
 				}
 
 				valid, errorStrings := auth.ValidateConfig()

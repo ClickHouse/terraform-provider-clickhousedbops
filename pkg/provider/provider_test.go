@@ -171,3 +171,30 @@ func TestProviderSchema_PasswordIsSensitive(t *testing.T) {
 		t.Error("'password' attribute should be sensitive")
 	}
 }
+
+func TestPasswordFromConfigOrEnv_ConfigTakesPriority(t *testing.T) {
+	t.Setenv(envPassword, "from-env")
+
+	got := passwordFromConfigOrEnv(types.StringValue("from-config"))
+	if got != "from-config" {
+		t.Errorf("expected the configured password to win, got %q", got)
+	}
+}
+
+func TestPasswordFromConfigOrEnv_FallsBackToEnv(t *testing.T) {
+	t.Setenv(envPassword, "from-env")
+
+	got := passwordFromConfigOrEnv(types.StringNull())
+	if got != "from-env" {
+		t.Errorf("expected the environment password, got %q", got)
+	}
+}
+
+func TestPasswordFromConfigOrEnv_EmptyWhenEnvIsEmpty(t *testing.T) {
+	t.Setenv(envPassword, "")
+
+	got := passwordFromConfigOrEnv(types.StringNull())
+	if got != "" {
+		t.Errorf("expected an empty password, got %q", got)
+	}
+}
