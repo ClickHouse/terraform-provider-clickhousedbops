@@ -1,7 +1,12 @@
 name: Run E2E tests
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      upgrade_test:
+        type: boolean
+        default: true
+        description: "Check that upgrading from the latest release plans no changes"
 
 defaults:
   run:
@@ -108,6 +113,7 @@ jobs:
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
           cluster_type: ${{ matrix.cluster_type }}
+          upgrade_test: ${{ inputs.upgrade_test }}
 
   role:
     runs-on: ubuntu-latest
@@ -130,6 +136,7 @@ jobs:
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
           cluster_type: ${{ matrix.cluster_type }}
+          upgrade_test: ${{ inputs.upgrade_test }}
 
   user:
     runs-on: ubuntu-latest
@@ -152,6 +159,7 @@ jobs:
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
           cluster_type: ${{ matrix.cluster_type }}
+          upgrade_test: ${{ inputs.upgrade_test }}
 
   grantrole:
     runs-on: ubuntu-latest
@@ -174,6 +182,7 @@ jobs:
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
           cluster_type: ${{ matrix.cluster_type }}
+          upgrade_test: ${{ inputs.upgrade_test }}
 
   grantprivilege:
     runs-on: ubuntu-latest
@@ -196,6 +205,7 @@ jobs:
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
           cluster_type: ${{ matrix.cluster_type }}
+          upgrade_test: ${{ inputs.upgrade_test }}
 
   settingsprofile:
     runs-on: ubuntu-latest
@@ -218,6 +228,7 @@ jobs:
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
           cluster_type: ${{ matrix.cluster_type }}
+          upgrade_test: ${{ inputs.upgrade_test }}
 
   rowpolicy:
     runs-on: ubuntu-latest
@@ -240,6 +251,7 @@ jobs:
           terraform_binary: ${{ matrix.terraform.binary }}
           protocol: ${{ matrix.protocol }}
           cluster_type: ${{ matrix.cluster_type }}
+          upgrade_test: ${{ inputs.upgrade_test }}
 
   namedcollection:
     runs-on: ubuntu-latest
