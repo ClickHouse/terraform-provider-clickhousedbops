@@ -63,7 +63,7 @@ Required:
 
 Optional:
 
-- `password` (String) The password to use to authenticate to ClickHouse
+- `password` (String, Sensitive) The password to use to authenticate to ClickHouse. Alternatively, can be configured using the `CLICKHOUSEDBOPS_PASSWORD` environment variable.
 
 
 <a id="nestedatt--tls_config"></a>
