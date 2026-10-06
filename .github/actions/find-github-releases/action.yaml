@@ -27,7 +27,7 @@ runs:
   using: "composite"
   steps:
     - id: find-tf-releases
-      uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08
+      uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60
       env:
         GITHUB_TOKEN: ${{ github.token }}
       with:
