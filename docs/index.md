@@ -22,6 +22,12 @@ terraform {
   }
 }
 
+variable "clickhouse_password" {
+  type      = string
+  sensitive = true
+  ephemeral = true
+}
+
 provider "clickhousedbops" {
   host = "localhost"
 
@@ -31,7 +37,7 @@ provider "clickhousedbops" {
   auth_config = {
     strategy = "password"
     username = "default"
-    password = "changeme"
+    password = var.clickhouse_password
   }
 }
 ```
@@ -63,7 +69,7 @@ Required:
 
 Optional:
 
-- `password` (String) The password to use to authenticate to ClickHouse
+- `password` (String, Sensitive) The password to use to authenticate to ClickHouse. Alternatively, can be configured using the `CLICKHOUSEDBOPS_PASSWORD` environment variable.
 
 
 <a id="nestedatt--tls_config"></a>
