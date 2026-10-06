@@ -22,6 +22,12 @@ terraform {
   }
 }
 
+variable "clickhouse_password" {
+  type      = string
+  sensitive = true
+  ephemeral = true
+}
+
 provider "clickhousedbops" {
   host = "localhost"
 
@@ -31,7 +37,7 @@ provider "clickhousedbops" {
   auth_config = {
     strategy = "password"
     username = "default"
-    password = "changeme"
+    password = var.clickhouse_password
   }
 }
 ```
