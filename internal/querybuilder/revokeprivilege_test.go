@@ -54,6 +54,27 @@ func Test_revokePrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Table engine target",
+			builder: RevokePrivilege("TABLE ENGINE", "builder").WithAccessObject(new("Distributed")).WithParameterizedTarget(true),
+			want:    "REVOKE TABLE ENGINE ON `Distributed` FROM `builder`;",
+			wantErr: false,
+		},
+		{
+			name:    "All parameterized targets",
+			builder: RevokePrivilege("READ", "reader").WithParameterizedTarget(true),
+			want:    "REVOKE READ ON * FROM `reader`;",
+			wantErr: false,
+		},
+		{
+			name: "Filtered source target",
+			builder: RevokePrivilege("READ", "reader").
+				WithAccessObject(new("URL")).
+				WithAccessObjectFilter(new(`https://example\.com/files/.*`)).
+				WithParameterizedTarget(true),
+			want:    "REVOKE READ ON `URL`('https://example\\\\.com/files/.*') FROM `reader`;",
+			wantErr: false,
+		},
+		{
 			name:    "Missing access type",
 			builder: RevokePrivilege("", "user1"),
 			want:    "",
