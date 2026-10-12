@@ -11,16 +11,17 @@ type ScopeAttributes struct {
 }
 
 var attributesByScope = map[string]ScopeAttributes{
-	"GLOBAL":       {},
-	"DATABASE":     {Database: true},
-	"TABLE":        {Database: true, Table: true},
-	"VIEW":         {Database: true, Table: true},
-	"DICTIONARY":   {Database: true, Table: true},
-	"COLUMN":       {Database: true, Table: true, Column: true},
-	"USER_NAME":    {AccessObject: true},
-	"DEFINER":      {AccessObject: true},
-	"SOURCE":       {AccessObject: true},
-	"TABLE_ENGINE": {},
+	"GLOBAL":           {},
+	"DATABASE":         {Database: true},
+	"TABLE":            {Database: true, Table: true},
+	"VIEW":             {Database: true, Table: true},
+	"DICTIONARY":       {Database: true, Table: true},
+	"COLUMN":           {Database: true, Table: true, Column: true},
+	"USER_NAME":        {AccessObject: true},
+	"DEFINER":          {AccessObject: true},
+	"SOURCE":           {AccessObject: true},
+	"NAMED_COLLECTION": {AccessObject: true},
+	"TABLE_ENGINE":     {},
 }
 
 // ScopeAttributesFor returns the attributes supported by the privilege's own
