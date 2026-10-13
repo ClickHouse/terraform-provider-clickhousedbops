@@ -81,6 +81,22 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"engine": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "Database engine, interpolated verbatim into `CREATE DATABASE ... ENGINE = <engine>`, e.g. `Replicated('/clickhouse/databases/{database}', '{shard}', '{replica}')`. If omitted, the server default is used (usually `Atomic`) and this attribute is set to the engine reported by `system.databases`.",
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplaceIf(
+						engineNameChanged,
+						"Changing the engine name requires replacing the database. Changing only its arguments updates state without touching the database.",
+						"Changing the engine name requires replacing the database. Changing only its arguments updates state without touching the database.",
+					),
+				},
+			},
 		},
 		MarkdownDescription: databaseResourceDescription,
 	}
@@ -102,7 +118,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	db, err := r.client.CreateDatabase(ctx, dbops.Database{Name: plan.Name.ValueString(), Comment: plan.Comment.ValueString()}, plan.ClusterName.ValueStringPointer())
+	db, err := r.client.CreateDatabase(ctx, dbops.Database{Name: plan.Name.ValueString(), Comment: plan.Comment.ValueString(), Engine: plan.Engine.ValueString()}, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error creating database",
@@ -111,7 +127,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	state, err := r.syncDatabaseState(ctx, db.UUID, plan.ClusterName.ValueStringPointer())
+	state, err := r.syncDatabaseState(ctx, db.UUID, plan.ClusterName.ValueStringPointer(), plan.Engine)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error syncing database",
@@ -143,7 +159,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	state, err := r.syncDatabaseState(ctx, plan.UUID.ValueString(), plan.ClusterName.ValueStringPointer())
+	state, err := r.syncDatabaseState(ctx, plan.UUID.ValueString(), plan.ClusterName.ValueStringPointer(), plan.Engine)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error syncing database",
@@ -163,8 +179,34 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	}
 }
 
+// Update only runs when the engine changes without its name changing (every other attribute
+// requires replacement). That is formatting or arguments ClickHouse cannot alter, so only state changes.
 func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	panic("unsupported")
+	var plan, state Database
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	newState, err := r.syncDatabaseState(ctx, state.UUID.ValueString(), state.ClusterName.ValueStringPointer(), plan.Engine)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error syncing database",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
+	}
+
+	if newState == nil {
+		resp.Diagnostics.AddError(
+			"Error syncing database",
+			"database not found",
+		)
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, newState)...)
 }
 
 func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -221,8 +263,9 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	}
 }
 
-// syncDatabaseState reads database settings from clickhouse and returns a DatabaseResourceModel
-func (r *Resource) syncDatabaseState(ctx context.Context, uuid string, clusterName *string) (*Database, error) {
+// syncDatabaseState reads database settings from clickhouse and returns a DatabaseResourceModel.
+// knownEngine is the engine from the plan or prior state, kept when it still matches the server's engine.
+func (r *Resource) syncDatabaseState(ctx context.Context, uuid string, clusterName *string, knownEngine types.String) (*Database, error) {
 	db, err := r.client.GetDatabase(ctx, uuid, clusterName)
 	if err != nil {
 		return nil, errors.WithMessage(err, "cannot get database")
@@ -243,7 +286,35 @@ func (r *Resource) syncDatabaseState(ctx context.Context, uuid string, clusterNa
 		UUID:        types.StringValue(db.UUID),
 		Name:        types.StringValue(db.Name),
 		Comment:     comment,
+		Engine:      engineState(knownEngine, db),
 	}
 
 	return state, nil
+}
+
+// engineState keeps the configured engine unless the server reports a different engine name.
+// ClickHouse normalizes engine_full (e.g. `Replicated` reads back with its default arguments),
+// so comparing full strings would report drift on every read.
+func engineState(known types.String, db *dbops.Database) types.String {
+	if !known.IsNull() && !known.IsUnknown() && strings.EqualFold(engineName(known.ValueString()), db.EngineName) {
+		return known
+	}
+
+	return types.StringValue(db.Engine)
+}
+
+// engineNameChanged replaces the database only when the engine name changes. Comparing full
+// strings would drop an imported database over formatting, since import stores engine_full.
+func engineNameChanged(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+	// State written before this attribute existed has no engine. Without a refresh
+	// (e.g. plan -refresh=false) that would otherwise replace the database.
+	if req.StateValue.IsNull() || req.StateValue.IsUnknown() {
+		return
+	}
+	resp.RequiresReplace = !strings.EqualFold(engineName(req.StateValue.ValueString()), engineName(req.PlanValue.ValueString()))
+}
+
+func engineName(engine string) string {
+	name, _, _ := strings.Cut(engine, "(")
+	return strings.TrimSpace(name)
 }

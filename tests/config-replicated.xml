@@ -8,6 +8,8 @@
 
     <http_port>8123</http_port>
     <tcp_port>9000</tcp_port>
+    <!-- Required for Replicated databases. -->
+    <interserver_http_port>9009</interserver_http_port>
     <mysql_port>9004</mysql_port>
 
     <path>/var/lib/clickhouse/</path>
@@ -26,6 +28,11 @@
     <distributed_ddl>
         <path>/clickhouse/task_queue/ddl</path>
     </distributed_ddl>
+    <!-- Replicas share this file, so the container hostname makes each replica name unique. -->
+    <macros>
+        <shard>01</shard>
+        <replica from_env="HOSTNAME"/>
+    </macros>
 
     <remote_servers replace="true">
         <cluster1>

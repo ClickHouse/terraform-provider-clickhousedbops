@@ -9,4 +9,5 @@ type Database struct {
 	UUID        types.String `tfsdk:"uuid"`
 	Name        types.String `tfsdk:"name"`
 	Comment     types.String `tfsdk:"comment"`
+	Engine      types.String `tfsdk:"engine"`
 }

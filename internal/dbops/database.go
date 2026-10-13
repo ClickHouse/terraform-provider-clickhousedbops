@@ -13,12 +13,20 @@ type Database struct {
 	UUID    string `json:"uuid"`
 	Name    string `json:"name"`
 	Comment string `json:"comment" ch:"comment"`
+	// Engine is the engine as written in CREATE DATABASE. On read it is the
+	// normalized `engine_full`, e.g. `Replicated` reads back with its default arguments.
+	Engine string `json:"engine"`
+	// EngineName is the engine without arguments, e.g. `Replicated`.
+	EngineName string `json:"engine_name"`
 }
 
 func (i *impl) CreateDatabase(ctx context.Context, database Database, clusterName *string) (*Database, error) {
 	builder := querybuilder.NewCreateDatabase(database.Name).WithCluster(clusterName)
 	if database.Comment != "" {
 		builder.WithComment(database.Comment)
+	}
+	if database.Engine != "" {
+		builder.WithEngine(database.Engine)
 	}
 	sql, err := builder.Build()
 	if err != nil {
@@ -35,7 +43,12 @@ func (i *impl) CreateDatabase(ctx context.Context, database Database, clusterNam
 
 func (i *impl) GetDatabase(ctx context.Context, uuid string, clusterName *string) (*Database, error) {
 	sql, err := querybuilder.NewSelect(
-		[]querybuilder.Field{querybuilder.NewField("name"), querybuilder.NewField("comment")},
+		[]querybuilder.Field{
+			querybuilder.NewField("name"),
+			querybuilder.NewField("comment"),
+			querybuilder.NewField("engine"),
+			querybuilder.NewField("engine_full"),
+		},
 		"system.databases",
 	).WithCluster(clusterName).Where(querybuilder.WhereEquals("uuid", uuid)).Build()
 	if err != nil {
@@ -53,10 +66,20 @@ func (i *impl) GetDatabase(ctx context.Context, uuid string, clusterName *string
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'comment' field")
 		}
+		e, err := data.GetString("engine")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'engine' field")
+		}
+		ef, err := data.GetString("engine_full")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'engine_full' field")
+		}
 		database = &Database{
-			UUID:    uuid,
-			Name:    n,
-			Comment: c,
+			UUID:       uuid,
+			Name:       n,
+			Comment:    c,
+			Engine:     ef,
+			EngineName: e,
 		}
 		return nil
 	})

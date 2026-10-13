@@ -3,6 +3,7 @@ package database_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -62,6 +63,11 @@ func TestDatabase_acceptance(t *testing.T) {
 			return fmt.Errorf("wrong value for cluster_name attribute")
 		}
 
+		engine, _ := attrs["engine"].(string)
+		if !strings.HasPrefix(engine, database.EngineName) {
+			return fmt.Errorf("expected engine %q to start with %q", engine, database.EngineName)
+		}
+
 		return nil
 	}
 
@@ -113,6 +119,36 @@ func TestDatabase_acceptance(t *testing.T) {
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("cluster_name", clusterName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:        "Create Replicated Database using Native protocol on a cluster using replicated storage",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-replicated.xml"},
+			ClusterName: &clusterName,
+			Protocol:    "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("cluster_name", clusterName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithStringAttribute("engine", "Replicated('/clickhouse/databases/{database}', '{shard}', '{replica}')").
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:        "Create Database with explicit engine using HTTP protocol on a cluster using localfile storage",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
+			Protocol:    "http",
+			ClusterName: &clusterName,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("cluster_name", clusterName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithStringAttribute("engine", "Replicated").
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),

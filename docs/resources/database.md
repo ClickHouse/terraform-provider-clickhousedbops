@@ -5,7 +5,7 @@ subcategory: ""
 description: |-
   Use the clickhousedbops_database resource to create a database in a ClickHouse instance.
   Known limitations:
-  Changing the comment on a database resource is unsupported and will cause the database to be destroyed and recreated. WARNING: you will lose any content of the database if you do so!
+  Changing the comment on a database resource is unsupported and will cause the database to be destroyed and recreated. WARNING: you will lose any content of the database if you do so!Changing the engine name (e.g. Atomic to Replicated) destroys and recreates the database. WARNING: you will lose any content of the database if you do so!Only the engine name is compared, because ClickHouse normalizes the engine arguments it reports. Changing only the arguments (or their formatting) is an in-place update of Terraform state that leaves the database untouched. Use terraform apply -replace to recreate the database with new arguments.After importing a database, engine is set to engine_full from system.databases. A configured engine with the same name shows as an in-place update on the next plan, which only updates state.
 ---
 
 # clickhousedbops_database (Resource)
@@ -15,6 +15,9 @@ Use the *clickhousedbops_database* resource to create a database in a ClickHouse
 Known limitations:
 
 - Changing the comment on a `database` resource is unsupported and will cause the database to be destroyed and recreated. WARNING: you will lose any content of the database if you do so!
+- Changing the `engine` name (e.g. `Atomic` to `Replicated`) destroys and recreates the database. WARNING: you will lose any content of the database if you do so!
+- Only the engine name is compared, because ClickHouse normalizes the engine arguments it reports. Changing only the arguments (or their formatting) is an in-place update of Terraform state that leaves the database untouched. Use `terraform apply -replace` to recreate the database with new arguments.
+- After importing a database, `engine` is set to `engine_full` from `system.databases`. A configured `engine` with the same name shows as an in-place update on the next plan, which only updates state.
 
 ## Example Usage
 
@@ -22,6 +25,13 @@ Known limitations:
 resource "clickhousedbops_database" "logs" {
   cluster_name = "cluster"
   name = "logs"
+}
+
+# A Replicated database replicates DDL across the cluster. Its tables still need Replicated*MergeTree engines to replicate data.
+resource "clickhousedbops_database" "events" {
+  cluster_name = "cluster"
+  name         = "events"
+  engine       = "Replicated('/clickhouse/databases/{database}', '{shard}', '{replica}')"
 }
 ```
 
@@ -38,6 +48,7 @@ resource "clickhousedbops_database" "logs" {
 This field must be left null when using a ClickHouse Cloud cluster.
 Should be set when hitting a cluster with more than one replica.
 - `comment` (String) Comment associated with the database
+- `engine` (String) Database engine, interpolated verbatim into `CREATE DATABASE ... ENGINE = <engine>`, e.g. `Replicated('/clickhouse/databases/{database}', '{shard}', '{replica}')`. If omitted, the server default is used (usually `Atomic`) and this attribute is set to the engine reported by `system.databases`.
 
 ### Read-Only
 

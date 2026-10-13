@@ -10,12 +10,14 @@ import (
 type CreateDatabaseQueryBuilder interface {
 	QueryBuilder
 	WithComment(comment string) CreateDatabaseQueryBuilder
+	WithEngine(engine string) CreateDatabaseQueryBuilder
 	WithCluster(clusterName *string) CreateDatabaseQueryBuilder
 }
 
 type createDatabaseQueryBuilder struct {
 	databaseName string
 	comment      *string
+	engine       *string
 	clusterName  *string
 }
 
@@ -27,6 +29,12 @@ func NewCreateDatabase(name string) CreateDatabaseQueryBuilder {
 
 func (q *createDatabaseQueryBuilder) WithComment(comment string) CreateDatabaseQueryBuilder {
 	q.comment = &comment
+	return q
+}
+
+// WithEngine sets the database engine, interpolated verbatim (e.g. `Replicated('/clickhouse/databases/{database}', '{shard}', '{replica}')`).
+func (q *createDatabaseQueryBuilder) WithEngine(engine string) CreateDatabaseQueryBuilder {
+	q.engine = &engine
 	return q
 }
 
@@ -47,6 +55,9 @@ func (q *createDatabaseQueryBuilder) Build() (string, error) {
 	}
 	if q.clusterName != nil {
 		tokens = append(tokens, "ON", "CLUSTER", quote(*q.clusterName))
+	}
+	if q.engine != nil {
+		tokens = append(tokens, "ENGINE", "=", *q.engine)
 	}
 	if q.comment != nil {
 		tokens = append(tokens, "COMMENT", quote(*q.comment))
