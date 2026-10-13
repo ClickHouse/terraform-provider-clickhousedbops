@@ -3,6 +3,7 @@ package database_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -141,6 +142,68 @@ func TestDatabase_acceptance(t *testing.T) {
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("cluster_name", clusterName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:        "Import of a Database missing on some replicas fails using HTTP protocol on a cluster using localfile storage",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
+			Protocol:    "http",
+			ClusterName: &clusterName,
+			SetupFunc: func(ctx context.Context, dbopsClient dbops.Client, _ *string) error {
+				_, err := dbopsClient.CreateDatabase(ctx, dbops.Database{Name: "partial"}, nil)
+				return err
+			},
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("cluster_name", clusterName).
+				WithStringAttribute("name", "partial").
+				WithImport(clusterName + ":partial").
+				Build(),
+			ResourceName:    resourceName,
+			ResourceAddress: fmt.Sprintf("%s.%s", resourceType, resourceName),
+			ExpectError:     regexp.MustCompile(`(?s)database\s+with\s+UUID\s+"[^"]+"\s+exists\s+on\s+1\s+of\s+2\s+replicas`),
+		},
+		{
+			Name:        "Import of a Database with different UUIDs on replicas fails using Native protocol on a cluster using localfile storage",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
+			Protocol:    "native",
+			ClusterName: &clusterName,
+			SetupFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error {
+				db, err := dbopsClient.CreateDatabase(ctx, dbops.Database{Name: "drifted"}, clusterName)
+				if err != nil {
+					return err
+				}
+				if err = dbopsClient.DeleteDatabase(ctx, db.UUID, nil); err != nil {
+					return err
+				}
+				_, err = dbopsClient.CreateDatabase(ctx, dbops.Database{Name: "drifted"}, nil)
+				return err
+			},
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("cluster_name", clusterName).
+				WithStringAttribute("name", "drifted").
+				WithImport(clusterName + ":drifted").
+				Build(),
+			ResourceName:    resourceName,
+			ResourceAddress: fmt.Sprintf("%s.%s", resourceType, resourceName),
+			ExpectError:     regexp.MustCompile(`(?s)database\s+with\s+UUID\s+"[^"]+"\s+exists\s+on\s+1\s+of\s+2\s+replicas`),
+		},
+		{
+			Name:        "Import Database with the same UUID on all replicas using Native protocol on a cluster using localfile storage",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
+			Protocol:    "native",
+			ClusterName: &clusterName,
+			SetupFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error {
+				_, err := dbopsClient.CreateDatabase(ctx, dbops.Database{Name: "oncluster"}, clusterName)
+				return err
+			},
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("cluster_name", clusterName).
+				WithStringAttribute("name", "oncluster").
+				WithImport(clusterName + ":oncluster").
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),

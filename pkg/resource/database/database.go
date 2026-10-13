@@ -209,6 +209,10 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 			)
 			return
 		}
+		if db == nil {
+			resp.Diagnostics.AddError("Cannot find database", fmt.Sprintf("database %q not found", ref))
+			return
+		}
 
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), db.UUID)...)
 	} else {
@@ -217,6 +221,14 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	}
 
 	if clusterName != nil {
+		var dbUUID string
+		resp.Diagnostics.Append(resp.State.GetAttribute(ctx, path.Root("uuid"), &dbUUID)...)
+
+		if err := r.client.CheckDatabaseReplicas(ctx, dbUUID, *clusterName); err != nil {
+			resp.Diagnostics.AddError("Cannot import database", fmt.Sprintf("%+v\n", err))
+			return
+		}
+
 		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("cluster_name"), clusterName)...)
 	}
 }

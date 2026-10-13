@@ -3,6 +3,7 @@ package role_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -136,6 +137,18 @@ func TestRole_acceptance(t *testing.T) {
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Import of a missing Role fails using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", "missing").
+				WithImport("missing").
+				Build(),
+			ResourceName:    resourceName,
+			ResourceAddress: fmt.Sprintf("%s.%s", resourceType, resourceName),
+			ExpectError:     regexp.MustCompile(`(?s)role\s+"missing"\s+not\s+found`),
 		},
 	}
 

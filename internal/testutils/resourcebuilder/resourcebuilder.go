@@ -84,6 +84,17 @@ func (r *ResourceBuilder) WithBlock(name string, fn func(*BlockBuilder)) *Resour
 	return r
 }
 
+func (r *ResourceBuilder) WithImport(id string) *ResourceBuilder {
+	body := r.file.Body().AppendNewBlock("import", nil).Body()
+	body.SetAttributeTraversal("to", hcl.Traversal{
+		hcl.TraverseRoot{Name: r.resourceType},
+		hcl.TraverseAttr{Name: r.resourceName},
+	})
+	body.SetAttributeValue("id", cty.StringVal(id))
+
+	return r
+}
+
 func (r *ResourceBuilder) WithListAttribute(attrName string, data []cty.Value) *ResourceBuilder {
 	r.getRootResourceBody().SetAttributeValue(attrName, cty.ListVal(data))
 

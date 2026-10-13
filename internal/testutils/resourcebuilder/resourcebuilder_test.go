@@ -23,6 +23,7 @@ func TestResourcebuilder_Build(t *testing.T) {
 			arg      string
 		}
 		mapAttributes map[string]map[string]cty.Value
+		importID      string
 		want          string
 	}{
 		{
@@ -96,6 +97,18 @@ func TestResourcebuilder_Build(t *testing.T) {
   }
 }`,
 		},
+		{
+			name:         "Resource with import",
+			resourceType: "test",
+			resourceName: "foo",
+			importID:     "cluster1:foo",
+			want: `resource "test" "foo" {
+}
+import {
+  to = test.foo
+  id = "cluster1:foo"
+}`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -115,6 +128,10 @@ func TestResourcebuilder_Build(t *testing.T) {
 
 			for n, v := range tt.functionCalls {
 				r.WithFunction(n, v.function, v.arg)
+			}
+
+			if tt.importID != "" {
+				r.WithImport(tt.importID)
 			}
 
 			if got := strings.TrimRight(r.Build(), "\n"); got != tt.want {

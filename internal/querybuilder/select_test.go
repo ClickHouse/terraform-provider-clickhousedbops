@@ -11,6 +11,7 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 		where           []Where
 		from            string
 		cluster         string
+		allReplicas     bool
 		orderCol        *Field
 		orderDir        *OrderDirection
 		arrayJoinColumn string
@@ -32,6 +33,15 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			cluster: "cluster1",
 			want:    "SELECT `name` FROM cluster('cluster1', `users`);",
 			wantErr: false,
+		},
+		{
+			name:        "Select With Cluster All Replicas",
+			fields:      []Field{NewField("name")},
+			from:        "system.users",
+			cluster:     "cluster1",
+			allReplicas: true,
+			want:        "SELECT `name` FROM clusterAllReplicas('cluster1', `system`.`users`);",
+			wantErr:     false,
 		},
 		{
 			name:    "Select two fields",
@@ -107,7 +117,9 @@ func Test_selectQueryBuilder_Build(t *testing.T) {
 			if tt.where != nil {
 				q = q.Where(tt.where...)
 			}
-			if tt.cluster != "" {
+			if tt.cluster != "" && tt.allReplicas {
+				q = q.WithClusterAllReplicas(&tt.cluster)
+			} else if tt.cluster != "" {
 				q = q.WithCluster(&tt.cluster)
 			}
 			if tt.orderCol != nil && tt.orderDir != nil {
