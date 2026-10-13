@@ -25,6 +25,9 @@ func explainOverlap(current GrantPrivilege, existing dbops.GrantPrivilege) strin
 	switch {
 	case existing.AccessObject != nil:
 		row = fmt.Sprintf("%s on %q", row, *existing.AccessObject)
+		if existing.AccessObjectFilter != nil {
+			row = fmt.Sprintf("%s with filter %q", row, *existing.AccessObjectFilter)
+		}
 	case existing.ColumnName != nil:
 		row = fmt.Sprintf("%s on column %q of table %q in the %q database", row, *existing.ColumnName, *existing.TableName, *existing.DatabaseName)
 	case existing.TableName != nil:
