@@ -18,7 +18,9 @@ func TestScopeAttributesFor(t *testing.T) {
 		{"ALL", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, Column: true, AccessObject: true}, true},
 		{"TABLE ENGINE", ScopeAttributes{}, ScopeAttributes{}, true},
 		{"READ", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
-		{"CREATE NAMED COLLECTION", ScopeAttributes{}, ScopeAttributes{}, false},
+		{"NAMED COLLECTION", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
+		{"NAMED COLLECTION ADMIN", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
+		{"CREATE NAMED COLLECTION", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.privilege, func(t *testing.T) {

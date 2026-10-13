@@ -378,6 +378,35 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
 		},
+		{
+			Name:     "Grant NAMED_COLLECTION-scoped privilege on access object to role using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "NAMED COLLECTION").
+				WithStringAttribute("access_object", "collection1").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
+				AddDependency(granteeRoleResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Grant NAMED_COLLECTION-scoped privilege globally to role using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "NAMED COLLECTION").
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
+				AddDependency(granteeRoleResource.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
 		// Single replica, HTTP
 		{
 			Name:     "Grant privilege on single column to role using HTTP protocol on a single replica",

@@ -126,7 +126,7 @@ func resourceSchema(version int64) schema.Schema {
 			},
 			"access_object": schema.StringAttribute{
 				Optional:    true,
-				Description: "The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, or a source name (e.g. `S3`) for source READ/WRITE grants. Supports a trailing `*` prefix pattern.",
+				Description: "The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, a source name (e.g. `S3`) for source READ/WRITE grants, or a named collection name for NAMED_COLLECTION-scoped privileges. Supports a trailing `*` prefix pattern.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

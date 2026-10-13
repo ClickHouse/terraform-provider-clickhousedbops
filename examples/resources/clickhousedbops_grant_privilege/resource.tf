@@ -40,3 +40,10 @@ resource "clickhousedbops_grant_privilege" "team_user_admin" {
   grantee_role_name = "team_provisioner"
   grant_option      = true
 }
+
+# NAMED COLLECTION grants are restricted to one collection via access_object.
+resource "clickhousedbops_grant_privilege" "use_collection" {
+  privilege_name    = "NAMED COLLECTION"
+  access_object     = "my_collection"
+  grantee_user_name = "my_user_name"
+}
