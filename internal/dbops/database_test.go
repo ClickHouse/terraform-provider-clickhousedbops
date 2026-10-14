@@ -54,6 +54,7 @@ func namedDatabaseRow(uuid, name, comment, engine string) clickhouseclient.Row {
 	row.Set("name", name)
 	row.Set("comment", comment)
 	row.Set("engine", engine)
+	row.Set("engine_full", engine)
 	return row
 }
 
@@ -87,7 +88,7 @@ func TestFindDatabaseByNameUsesOneLogicalLookup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindDatabaseByName() error = %v", err)
 	}
-	if database == nil || database.Name != "catalog" || database.Engine != "DataLakeCatalog" {
+	if database == nil || database.Name != "catalog" || database.Engine != "DataLakeCatalog" || database.EngineFull != "DataLakeCatalog" {
 		t.Fatalf("FindDatabaseByName() = %#v", database)
 	}
 	if database.UUID != "00000000-0000-0000-0000-000000000001" {
@@ -96,10 +97,27 @@ func TestFindDatabaseByNameUsesOneLogicalLookup(t *testing.T) {
 	if len(clickhouse.selectQueries) != 1 {
 		t.Fatalf("FindDatabaseByName() issued %d queries, want 1", len(clickhouse.selectQueries))
 	}
-	for _, field := range []string{"uuid", "name", "comment", "engine"} {
+	for _, field := range []string{"uuid", "name", "comment", "engine", "engine_full"} {
 		if !strings.Contains(clickhouse.selectQueries[0], "`"+field+"`") {
 			t.Errorf("query %q does not select %q", clickhouse.selectQueries[0], field)
 		}
+	}
+}
+
+func TestFindDatabaseByNameClearsEngineFullWhenReplicasDisagree(t *testing.T) {
+	first := databaseRow("00000000-0000-0000-0000-000000000001", "", "Replicated")
+	first.Set("engine_full", "Replicated('/clickhouse/databases/catalog', 'shard', 'replica1')")
+	second := databaseRow("00000000-0000-0000-0000-000000000002", "", "Replicated")
+	second.Set("engine_full", "Replicated('/clickhouse/databases/catalog', 'shard', 'replica2')")
+	clickhouse := &databaseClickhouseClient{selectRows: []clickhouseclient.Row{first, second, first}}
+	client := &impl{clickhouseClient: clickhouse}
+
+	database, err := client.FindDatabaseByName(context.Background(), "catalog", new("cluster"))
+	if err != nil {
+		t.Fatalf("FindDatabaseByName() error = %v", err)
+	}
+	if database == nil || database.EngineFull != "" {
+		t.Fatalf("FindDatabaseByName() = %#v, want empty EngineFull", database)
 	}
 }
 

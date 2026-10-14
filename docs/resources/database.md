@@ -19,6 +19,13 @@ description: |-
   system.databases, but does not expose engine arguments and settings as
   structured fields. The provider detects drift of the engine name and retains
   configured arguments and settings in state.
+  State has no engine arguments or settings after an import, or after an upgrade
+  from a provider version without them. In that case, the provider compares the
+  configured values with engine_full from system.databases. If they match, the
+  provider adds them to state without recreating the database. The comparison is
+  textual, so write expressions the way ClickHouse formats them, for example
+  'value' for a string. A value that ClickHouse hides, or a write-only parameter,
+  matches any string literal.
 ---
 
 # clickhousedbops_database (Resource)
@@ -42,6 +49,14 @@ destroys its contents.** ClickHouse exposes the engine name through
 `system.databases`, but does not expose engine arguments and settings as
 structured fields. The provider detects drift of the engine name and retains
 configured arguments and settings in state.
+
+State has no engine arguments or settings after an import, or after an upgrade
+from a provider version without them. In that case, the provider compares the
+configured values with `engine_full` from `system.databases`. If they match, the
+provider adds them to state without recreating the database. The comparison is
+textual, so write expressions the way ClickHouse formats them, for example
+`'value'` for a string. A value that ClickHouse hides, or a write-only parameter,
+matches any string literal.
 
 ## Example Usage
 
