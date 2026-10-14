@@ -124,10 +124,11 @@ func (q *createDatabaseQueryBuilder) build() (string, error) {
 	return strings.Join(tokens, " ") + ";", nil
 }
 
-var engineParameterPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*):String\}`)
+// EngineParameterPattern matches write-only parameter placeholders in engine arguments and settings.
+var EngineParameterPattern = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_]*):String\}`)
 
 func (q *createDatabaseQueryBuilder) substituteParameters(query string, redact bool) (string, error) {
-	matches := engineParameterPattern.FindAllStringSubmatch(query, -1)
+	matches := EngineParameterPattern.FindAllStringSubmatch(query, -1)
 	referenced := make(map[string]struct{}, len(matches))
 	for _, match := range matches {
 		name := match[1]
@@ -145,8 +146,8 @@ func (q *createDatabaseQueryBuilder) substituteParameters(query string, redact b
 
 	// Replace in one pass so placeholder-like text inside a parameter value cannot
 	// be interpreted as another parameter.
-	return engineParameterPattern.ReplaceAllStringFunc(query, func(placeholder string) string {
-		name := engineParameterPattern.FindStringSubmatch(placeholder)[1]
+	return EngineParameterPattern.ReplaceAllStringFunc(query, func(placeholder string) string {
+		name := EngineParameterPattern.FindStringSubmatch(placeholder)[1]
 		value := q.queryParameters[name]
 		if redact {
 			value = "[REDACTED]"

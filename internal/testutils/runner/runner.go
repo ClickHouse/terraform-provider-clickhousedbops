@@ -33,6 +33,11 @@ type TestCase struct {
 	ResourceName          string
 	ResourceAddress       string
 
+	// ImportID, when set, imports the resource (usually seeded by SetupFunc) before applying Resource.
+	ImportID string
+	// ExpectAction, when set, is the action planned for applying Resource.
+	ExpectAction plancheck.ResourceActionType
+
 	ExpectError         *regexp.Regexp
 	CheckNotExistsFunc  func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error)
 	CheckAttributesFunc func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error
@@ -107,20 +112,37 @@ func RunTests(t *testing.T, tests []TestCase) {
 			}
 
 			t.Run(tc.Name, func(t *testing.T) {
-				// Build test steps: create + optional update
-				steps := []resource.TestStep{
-					{
-						// Combine the provider definition and the resourcePtr definition.
-						Config: fmt.Sprintf("%s\n%s", providerCfg, tc.Resource),
-						ConfigStateChecks: []statecheck.StateCheck{
-							// Compare the state with the actual resource.
-							internalstatecheck.NewGetAttributes(tc.ResourceAddress, func(attrs map[string]interface{}) error {
-								return tc.CheckAttributesFunc(ctx, dbopsClient, tc.ClusterName, attrs)
-							}),
-						},
-						ExpectError: tc.ExpectError,
-					},
+				// Build test steps: optional import + create + optional update
+				var steps []resource.TestStep
+				if tc.ImportID != "" {
+					steps = append(steps, resource.TestStep{
+						Config:             fmt.Sprintf("%s\n%s", providerCfg, tc.Resource),
+						ResourceName:       tc.ResourceAddress,
+						ImportState:        true,
+						ImportStateId:      tc.ImportID,
+						ImportStatePersist: true,
+					})
 				}
+
+				createStep := resource.TestStep{
+					// Combine the provider definition and the resourcePtr definition.
+					Config: fmt.Sprintf("%s\n%s", providerCfg, tc.Resource),
+					ConfigStateChecks: []statecheck.StateCheck{
+						// Compare the state with the actual resource.
+						internalstatecheck.NewGetAttributes(tc.ResourceAddress, func(attrs map[string]interface{}) error {
+							return tc.CheckAttributesFunc(ctx, dbopsClient, tc.ClusterName, attrs)
+						}),
+					},
+					ExpectError: tc.ExpectError,
+				}
+				if tc.ExpectAction != "" {
+					createStep.ConfigPlanChecks = resource.ConfigPlanChecks{
+						PreApply: []plancheck.PlanCheck{
+							plancheck.ExpectResourceAction(tc.ResourceAddress, tc.ExpectAction),
+						},
+					}
+				}
+				steps = append(steps, createStep)
 
 				// Add update step if UpdateResource is provided
 				if tc.UpdateResource != nil {

@@ -17,6 +17,9 @@ type Database struct {
 	EngineArguments  []string          `json:"-"`
 	EngineSettings   map[string]string `json:"-"`
 	EngineParameters map[string]string `json:"-"`
+	// EngineFull is the engine clause reported by system.databases, with secrets hidden by
+	// ClickHouse. FindDatabaseByName leaves it empty when cluster replicas disagree on it.
+	EngineFull string `json:"-"`
 }
 
 func (i *impl) CreateDatabase(ctx context.Context, database Database, clusterName *string) (*Database, error) {
@@ -147,6 +150,7 @@ func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName 
 			querybuilder.NewField("name"),
 			querybuilder.NewField("comment"),
 			querybuilder.NewField("engine"),
+			querybuilder.NewField("engine_full"),
 		},
 		"system.databases",
 	).WithCluster(clusterName).Where(querybuilder.WhereEquals("name", name)).Build()
@@ -155,6 +159,7 @@ func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName 
 	}
 
 	var database *Database
+	engineFullConsistent := true
 
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
 		uuid, err := data.GetString("uuid")
@@ -173,8 +178,12 @@ func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName 
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'engine' field")
 		}
+		ef, err := data.GetString("engine_full")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'engine_full' field")
+		}
 		if database == nil {
-			database = &Database{UUID: uuid, Name: n, Comment: c, Engine: e}
+			database = &Database{UUID: uuid, Name: n, Comment: c, Engine: e, EngineFull: ef}
 			return nil
 		}
 
@@ -183,6 +192,9 @@ func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName 
 				"database %q has inconsistent metadata across cluster replicas (comments %q/%q, engines %q/%q)",
 				name, database.Comment, c, database.Engine, e,
 			)
+		}
+		if database.EngineFull != ef {
+			engineFullConsistent = false
 		}
 		// UUIDs for local engines such as Atomic may legitimately differ by replica.
 		// Pick a deterministic representative when resolving a name for the first time.
@@ -198,6 +210,9 @@ func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName 
 
 	if database == nil {
 		return nil, nil
+	}
+	if !engineFullConsistent {
+		database.EngineFull = ""
 	}
 
 	return database, nil

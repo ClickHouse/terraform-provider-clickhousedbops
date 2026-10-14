@@ -12,13 +12,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -36,6 +34,7 @@ var (
 	_ resource.Resource                = &Resource{}
 	_ resource.ResourceWithConfigure   = &Resource{}
 	_ resource.ResourceWithImportState = &Resource{}
+	_ resource.ResourceWithModifyPlan  = &Resource{}
 )
 
 // NewResource is a helper function to simplify the provider implementation.
@@ -109,9 +108,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					listvalidator.ValueStringsAre(stringvalidator.RegexMatches(regexp.MustCompile(`\S`), "must not be blank")),
 					listvalidator.AlsoRequires(path.MatchRoot("engine")),
 				},
-				PlanModifiers: []planmodifier.List{
-					listplanmodifier.RequiresReplace(),
-				},
+				// ModifyPlan decides on replacement.
 			},
 			"engine_settings": schema.MapAttribute{
 				Optional:    true,
@@ -123,9 +120,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					mapvalidator.ValueStringsAre(stringvalidator.RegexMatches(regexp.MustCompile(`\S`), "must not be blank")),
 					mapvalidator.AlsoRequires(path.MatchRoot("engine")),
 				},
-				PlanModifiers: []planmodifier.Map{
-					mapplanmodifier.RequiresReplace(),
-				},
+				// ModifyPlan decides on replacement.
 			},
 			"engine_parameters_wo": schema.MapAttribute{
 				Optional:    true,
@@ -148,9 +143,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Validators: []validator.Int64{
 					int64validator.AlsoRequires(path.MatchRoot("engine_parameters_wo")),
 				},
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
-				},
+				// ModifyPlan decides on replacement.
 			},
 		},
 		MarkdownDescription: databaseResourceDescription,
@@ -248,8 +241,124 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	}
 }
 
+// ModifyPlan recreates the database when its engine configuration changes. Imports and
+// older provider versions leave engine_arguments, engine_settings, and
+// engine_parameters_wo_version unset in state though, so configuring the engine the database
+// already has adopts it in place instead.
+func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var plan, state Database
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	attributes := []struct {
+		path           path.Path
+		planned, prior attr.Value
+	}{
+		{path.Root("engine_arguments"), plan.EngineArguments, state.EngineArguments},
+		{path.Root("engine_settings"), plan.EngineSettings, state.EngineSettings},
+		{path.Root("engine_parameters_wo_version"), plan.EngineParametersWOVersion, state.EngineParametersWOVersion},
+	}
+	var changed path.Paths
+	adoptable := true
+	for _, a := range attributes {
+		if a.planned.Equal(a.prior) {
+			continue
+		}
+		changed = append(changed, a.path)
+		adoptable = adoptable && a.prior.IsNull() && !a.planned.IsUnknown()
+	}
+	if len(changed) == 0 {
+		return
+	}
+
+	if adoptable {
+		matches, diags := r.engineMatchesDatabase(ctx, plan, state)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() || matches {
+			return
+		}
+	}
+
+	resp.RequiresReplace = append(resp.RequiresReplace, changed...)
+}
+
+// engineMatchesDatabase reports whether the database already has the planned engine,
+// comparing the engine arguments and settings that state does not have yet.
+func (r *Resource) engineMatchesDatabase(ctx context.Context, plan, state Database) (bool, diag.Diagnostics) {
+	var diags diag.Diagnostics
+
+	if plan.Engine.IsUnknown() {
+		return false, diags
+	}
+
+	db, err := r.client.FindDatabaseByName(ctx, state.Name.ValueString(), state.ClusterName.ValueStringPointer())
+	if err != nil {
+		diags.AddError("Error reading database", fmt.Sprintf("%+v\n", err))
+		return false, diags
+	}
+	if db == nil {
+		return false, diags
+	}
+
+	clause, ok := parseEngineFull(db.EngineFull)
+	if !ok || clause.name != plan.Engine.ValueString() {
+		return false, diags
+	}
+
+	if state.EngineArguments.IsNull() && !plan.EngineArguments.IsNull() {
+		var arguments []string
+		diags.Append(plan.EngineArguments.ElementsAs(ctx, &arguments, false)...)
+		if diags.HasError() || !clause.matchesArguments(arguments) {
+			return false, diags
+		}
+	}
+	if state.EngineSettings.IsNull() && !plan.EngineSettings.IsNull() {
+		var settings map[string]string
+		diags.Append(plan.EngineSettings.ElementsAs(ctx, &settings, false)...)
+		if diags.HasError() || !clause.matchesSettings(settings) {
+			return false, diags
+		}
+	}
+
+	return true, diags
+}
+
+// Update only runs when ModifyPlan adopts engine configuration the database already has, so
+// there is nothing to change in ClickHouse.
 func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	panic("unsupported")
+	var plan Database
+	diags := req.Plan.Get(ctx, &plan)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	state, err := r.syncDatabaseState(ctx, plan)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error syncing database",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
+	}
+
+	if state == nil {
+		resp.Diagnostics.AddError(
+			"Error syncing database",
+			"database was not found",
+		)
+		return
+	}
+
+	diags = resp.State.Set(ctx, state)
+	resp.Diagnostics.Append(diags...)
 }
 
 func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
