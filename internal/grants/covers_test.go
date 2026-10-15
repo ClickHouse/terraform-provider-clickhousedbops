@@ -47,9 +47,25 @@ func TestCovers(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Covers(tt.broader, tt.narrower); got != tt.want {
+			if got := Parsed().Covers(tt.broader, tt.narrower); got != tt.want {
 				t.Errorf("Covers() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCoversWithServerHierarchy(t *testing.T) {
+	// Servers before 25.7 list sources under the SOURCES group.
+	server := NewCatalog([]Privilege{
+		{Name: "SOURCES", Scope: new("GLOBAL"), ParentGroup: new("ALL")},
+		{Name: "S3", Scope: new("GLOBAL"), ParentGroup: new("SOURCES")},
+	})
+
+	sources, s3 := Grant{AccessType: "SOURCES"}, Grant{AccessType: "S3"}
+	if !server.Covers(sources, s3) {
+		t.Errorf("server catalog: SOURCES doesn't cover S3")
+	}
+	if Parsed().Covers(sources, s3) {
+		t.Errorf("bundled catalog: SOURCES covers S3")
 	}
 }

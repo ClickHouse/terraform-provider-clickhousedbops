@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
-	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/resourcebuilder"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/runner"
@@ -23,8 +22,6 @@ const (
 
 func TestGrantprivilege_acceptance(t *testing.T) {
 	clusterName := "cluster1"
-
-	grantsGroups := grants.Parsed().Groups
 
 	granteeRoleResource := resourcebuilder.
 		New("clickhousedbops_role", granteeRoleName).
@@ -78,14 +75,13 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 		}
 
 		grantPrivilege := dbops.GrantPrivilege{
-			AccessType:          accessType,
-			ExpandedAccessTypes: grants.AllDescendants(grantsGroups, accessType),
-			DatabaseName:        database,
-			TableName:           table,
-			ColumnName:          column,
-			AccessObject:        accessObject,
-			GranteeUserName:     granteeUserName,
-			GranteeRoleName:     granteeRoleName,
+			AccessType:      accessType,
+			DatabaseName:    database,
+			TableName:       table,
+			ColumnName:      column,
+			AccessObject:    accessObject,
+			GranteeUserName: granteeUserName,
+			GranteeRoleName: granteeRoleName,
 		}
 
 		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
@@ -139,15 +135,14 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 		}
 
 		grantPrivilege := dbops.GrantPrivilege{
-			AccessType:          accessType,
-			ExpandedAccessTypes: grants.AllDescendants(grantsGroups, accessType),
-			DatabaseName:        database,
-			TableName:           table,
-			ColumnName:          column,
-			AccessObject:        accessObject,
-			GranteeUserName:     granteeUserName,
-			GranteeRoleName:     granteeRoleName,
-			GrantOption:         grantOption,
+			AccessType:      accessType,
+			DatabaseName:    database,
+			TableName:       table,
+			ColumnName:      column,
+			AccessObject:    accessObject,
+			GranteeUserName: granteeUserName,
+			GranteeRoleName: granteeRoleName,
+			GrantOption:     grantOption,
 		}
 
 		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)

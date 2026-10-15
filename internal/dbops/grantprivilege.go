@@ -42,11 +42,6 @@ type GrantPrivilege struct {
 	GranteeUserName *string `json:"user_name"`
 	GranteeRoleName *string `json:"role_name"`
 	GrantOption     bool    `json:"grant_option"`
-	// ExpandedAccessTypes includes AccessType and all its descendants.
-	// ClickHouse may expand a parent privilege (e.g. CREATE, ACCESS MANAGEMENT)
-	// into its children in system.grants instead of storing a single parent row.
-	// Setting this field allows the matcher to find the grant in either case.
-	ExpandedAccessTypes []string `json:"-"`
 	// CurrentGrants emits `GRANT CURRENT GRANTS(... ON ...)`, copying the grantor's own
 	// privileges. Needed on ClickHouse Cloud for broad grants the default admin holds but
 	// cannot transfer directly (see #190).
@@ -134,8 +129,13 @@ func (i *impl) isGrantCovered(ctx context.Context, grantPrivilege *GrantPrivileg
 		return false, err
 	}
 
+	privileges, err := i.GetPrivileges(ctx)
+	if err != nil {
+		return false, err
+	}
+
 	for idx := range existing {
-		if grants.Covers(existing[idx].AsGrant(), grantPrivilege.AsGrant()) {
+		if privileges.Covers(existing[idx].AsGrant(), grantPrivilege.AsGrant()) {
 			return true, nil
 		}
 	}
@@ -161,13 +161,14 @@ func ClassicGrantMatcher(ctx context.Context, priv *GrantPrivilege, clusterName 
 		accessName = &stripped
 	}
 
-	accessTypes := priv.ExpandedAccessTypes
-	if len(accessTypes) == 0 {
-		accessTypes = []string{priv.AccessType}
+	privileges, err := i.GetPrivileges(ctx)
+	if err != nil {
+		return false, err
 	}
 
 	where := []querybuilder.Where{
-		querybuilder.WhereIn("access_type", accessTypes),
+		// ClickHouse may store a group privilege as rows of its members.
+		querybuilder.WhereIn("access_type", grants.AllDescendants(privileges.Groups, priv.AccessType)),
 		querybuilder.WhereEquals("is_partial_revoke", 0),
 		valOrNullWhere("database", dbName),
 		valOrNullWhere("table", tblName),

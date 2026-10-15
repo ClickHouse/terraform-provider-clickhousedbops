@@ -6,14 +6,18 @@ import (
 	"time"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 )
 
 type impl struct {
 	clickhouseClient      clickhouseclient.ClickhouseClient
 	CapabilityFlags       *CapabilityFlags
+	Privileges            *grants.Catalog
 	readAfterWriteTimeout time.Duration
 	initOnce              sync.Once
 	initErr               error
+	privilegesOnce        sync.Once
+	privilegesErr         error
 }
 
 // ClientOption configures optional behaviour of the dbops client.
@@ -67,4 +71,26 @@ func (i *impl) GetCapabilityFlags(ctx context.Context) (CapabilityFlags, error) 
 	}
 
 	return *i.CapabilityFlags, i.initErr
+}
+
+func (i *impl) initPrivileges(ctx context.Context) {
+	i.privilegesOnce.Do(func() {
+		privileges, err := i.readPrivileges(ctx)
+		if err != nil {
+			i.privilegesErr = err
+			return
+		}
+		i.Privileges = &privileges
+	})
+}
+
+// GetPrivileges returns the privilege catalog of the connected ClickHouse server.
+func (i *impl) GetPrivileges(ctx context.Context) (grants.Catalog, error) {
+	i.initPrivileges(ctx)
+
+	if i.Privileges == nil {
+		return grants.Catalog{}, i.privilegesErr
+	}
+
+	return *i.Privileges, i.privilegesErr
 }

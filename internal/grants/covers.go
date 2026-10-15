@@ -17,9 +17,9 @@ type Grant struct {
 
 // Covers reports whether broader already conveys at least narrower. Both are
 // assumed to target the same grantee.
-func Covers(broader, narrower Grant) bool {
+func (c Catalog) Covers(broader, narrower Grant) bool {
 	// broader must be narrower's privilege, or a group that contains it.
-	if !slices.Contains(AllDescendants(Parsed().Groups, broader.AccessType), narrower.AccessType) {
+	if !slices.Contains(AllDescendants(c.Groups, broader.AccessType), narrower.AccessType) {
 		return false
 	}
 	// A grant that needs grant option is not covered by one lacking it.
