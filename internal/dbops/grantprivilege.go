@@ -378,7 +378,12 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		}
 	}
 
-	sql, err := querybuilder.NewSelect([]querybuilder.Field{
+	capabilityFlags, err := i.GetCapabilityFlags(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fields := []querybuilder.Field{
 		querybuilder.NewField("access_type").ToString(),
 		querybuilder.NewField("database"),
 		querybuilder.NewField("table"),
@@ -388,7 +393,12 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		querybuilder.NewField("user_name"),
 		querybuilder.NewField("role_name"),
 		querybuilder.NewField("grant_option"),
-	}, "system.grants").
+	}
+	if capabilityFlags.GrantsWildcardColumn {
+		fields = append(fields, querybuilder.NewField("is_wildcard"))
+	}
+
+	sql, err := querybuilder.NewSelect(fields, "system.grants").
 		WithCluster(clusterName).
 		Where(querybuilder.AndWhere(where...)).
 		Build()
@@ -430,6 +440,24 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		grantOption, err := data.GetBool("grant_option")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'grant_option' field")
+		}
+
+		isWildcard := true
+		if capabilityFlags.GrantsWildcardColumn {
+			isWildcard, err = data.GetBool("is_wildcard")
+			if err != nil {
+				return errors.WithMessage(err, "error scanning query result, missing 'is_wildcard' field")
+			}
+		}
+		// The pattern is the deepest set dimension; restore its trailing '*' as written in config.
+		switch {
+		case !isWildcard:
+		case accessObject != nil:
+			accessObject = new(*accessObject + "*")
+		case table != nil:
+			table = new(*table + "*")
+		case database != nil:
+			database = new(*database + "*")
 		}
 
 		ret = append(ret, GrantPrivilege{

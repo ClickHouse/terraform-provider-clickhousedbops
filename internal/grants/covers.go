@@ -32,9 +32,7 @@ func Covers(broader, narrower Grant) bool {
 		objectCovers(broader.AccessObject, narrower.AccessObject)
 }
 
-// objectCovers reports whether broader covers narrower on a single dimension; nil means wildcard.
-// ClickHouse does not return the trailing '*' of a prefix grant, so a stored value cannot be
-// distinguished from a wildcard and is always treated as a prefix.
+// objectCovers reports whether broader covers narrower on one dimension.
 func objectCovers(broader, narrower *string) bool {
 	if broader == nil {
 		return true
@@ -44,6 +42,10 @@ func objectCovers(broader, narrower *string) bool {
 	}
 	if *broader == *narrower {
 		return true
+	}
+
+	if !strings.HasSuffix(*broader, "*") {
+		return false
 	}
 	return strings.HasPrefix(strings.TrimSuffix(*narrower, "*"), strings.TrimSuffix(*broader, "*"))
 }
