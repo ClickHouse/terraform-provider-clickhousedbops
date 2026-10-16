@@ -9,6 +9,8 @@
     <http_port>8123</http_port>
     <tcp_port>9000</tcp_port>
     <mysql_port>9004</mysql_port>
+    <!-- Required by the Replicated database engine. -->
+    <interserver_http_port>9009</interserver_http_port>
 
     <path>/var/lib/clickhouse/</path>
     <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>

@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
+	"github.com/zclconf/go-cty/cty"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
@@ -22,32 +24,36 @@ func TestDatabase_acceptance(t *testing.T) {
 	clusterName := "cluster1"
 
 	checkNotExistsFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error) {
-		uuid := attrs["uuid"]
-		if uuid == "" {
-			return false, fmt.Errorf("uuid attribute was not set")
+		name := attrs["name"]
+		if name == "" {
+			return false, fmt.Errorf("name attribute was not set")
 		}
-		database, err := dbopsClient.GetDatabase(ctx, uuid, clusterName)
+		database, err := dbopsClient.FindDatabaseByName(ctx, name, clusterName)
 		return database != nil, err
 	}
 
 	checkAttributesFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
-		uuid := attrs["uuid"]
-		if uuid == nil {
-			return fmt.Errorf("uuid was nil")
+		name := attrs["name"]
+		if name == nil {
+			return fmt.Errorf("name was nil")
 		}
 
-		database, err := dbopsClient.GetDatabase(ctx, uuid.(string), clusterName)
+		database, err := dbopsClient.FindDatabaseByName(ctx, name.(string), clusterName)
 		if err != nil {
 			return err
 		}
 
 		if database == nil {
-			return fmt.Errorf("database with uuid %q was not found", uuid)
+			return fmt.Errorf("database with name %q was not found", name)
 		}
 
 		// Check state fields are aligned with the database we retrieved from CH.
 		if attrs["name"].(string) != database.Name {
 			return fmt.Errorf("expected name to be %q, was %q", database.Name, attrs["name"].(string))
+		}
+
+		if attrs["engine"].(string) != database.Engine {
+			return fmt.Errorf("expected engine to be %q, was %q", database.Engine, attrs["engine"].(string))
 		}
 
 		var comment *string
@@ -72,6 +78,7 @@ func TestDatabase_acceptance(t *testing.T) {
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				WithStringAttribute("engine", "Memory").
 				Build(),
 			ResourceName:        resourceName,
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
@@ -148,6 +155,59 @@ func TestDatabase_acceptance(t *testing.T) {
 			CheckAttributesFunc: checkAttributesFunc,
 		},
 	}
+
+	// Import a Replicated database created outside of Terraform, then configure the engine
+	// arguments and settings it was created with.
+	importReplicatedCase := func(name string, configuredSettings map[string]string, expectAction plancheck.ResourceActionType) runner.TestCase {
+		databaseName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+		arguments := []string{"'/clickhouse/databases/{database}'", "'shard1'", "'replica1'"}
+
+		settings := make(map[string]cty.Value, len(configuredSettings))
+		for k, v := range configuredSettings {
+			settings[k] = cty.StringVal(v)
+		}
+
+		return runner.TestCase{
+			Name:     name,
+			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
+			Protocol: "native",
+			SetupFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error {
+				_, err := dbopsClient.CreateDatabase(ctx, dbops.Database{
+					Name:            databaseName,
+					Engine:          "Replicated",
+					EngineArguments: arguments,
+					EngineSettings:  map[string]string{"logs_to_keep": "500"},
+				}, clusterName)
+				return err
+			},
+			ImportID:     databaseName,
+			ExpectAction: expectAction,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", databaseName).
+				WithStringAttribute("engine", "Replicated").
+				WithListAttribute("engine_arguments", []cty.Value{
+					cty.StringVal(arguments[0]), cty.StringVal(arguments[1]), cty.StringVal(arguments[2]),
+				}).
+				WithMapAttribute("engine_settings", settings).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		}
+	}
+	tests = append(tests,
+		importReplicatedCase(
+			"Import Replicated database and adopt matching engine configuration in place",
+			map[string]string{"logs_to_keep": "500"},
+			plancheck.ResourceActionUpdate,
+		),
+		importReplicatedCase(
+			"Import Replicated database and replace it for different engine configuration",
+			map[string]string{"logs_to_keep": "600"},
+			plancheck.ResourceActionReplace,
+		),
+	)
 
 	runner.RunTests(t, tests)
 }
