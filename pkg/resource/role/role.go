@@ -229,13 +229,17 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	// Check if ref is a UUID
 	_, err := uuid.Parse(ref)
 	if err != nil {
-		// Failed parsing UUID, try importing using the database name
+		// Failed parsing UUID, try importing using the name
 		role, err := r.client.FindRoleByName(ctx, ref, clusterName)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Cannot find role",
 				fmt.Sprintf("%+v\n", err),
 			)
+			return
+		}
+		if role == nil {
+			resp.Diagnostics.AddError("Cannot find role", fmt.Sprintf("role %q not found", ref))
 			return
 		}
 

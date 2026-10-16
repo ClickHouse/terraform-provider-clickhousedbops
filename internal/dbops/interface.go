@@ -10,6 +10,7 @@ type Client interface {
 	GetDatabase(ctx context.Context, uuid string, clusterName *string) (*Database, error)
 	DeleteDatabase(ctx context.Context, uuid string, clusterName *string) error
 	FindDatabaseByName(ctx context.Context, name string, clusterName *string) (*Database, error)
+	CheckDatabaseReplicas(ctx context.Context, uuid string, clusterName string) error
 
 	CreateRole(ctx context.Context, role Role, clusterName *string) (*Role, error)
 	GetRole(ctx context.Context, id string, clusterName *string) (*Role, error)
