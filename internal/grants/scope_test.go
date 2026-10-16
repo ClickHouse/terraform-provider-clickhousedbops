@@ -16,11 +16,18 @@ func TestScopeAttributesFor(t *testing.T) {
 		{"CREATE", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true}, true},
 		{"ACCESS MANAGEMENT", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, AccessObject: true}, true},
 		{"ALL", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, Column: true, AccessObject: true}, true},
+		{"ALTER VIEW", ScopeAttributes{Database: true, Table: true}, ScopeAttributes{Database: true, Table: true}, true},
+		{"ALTER TABLE", ScopeAttributes{Database: true, Table: true}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
+		{"ALTER COLUMN", ScopeAttributes{Database: true, Table: true, Column: true}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
+		{"SHOW", ScopeAttributes{Database: true}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
+		{"ALTER DATABASE", ScopeAttributes{Database: true}, ScopeAttributes{Database: true}, true},
+		{"ALTER", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
 		{"TABLE ENGINE", ScopeAttributes{}, ScopeAttributes{}, true},
 		{"READ", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
 		{"NAMED COLLECTION", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
 		{"NAMED COLLECTION ADMIN", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
 		{"CREATE NAMED COLLECTION", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
+		{"UNKNOWN", ScopeAttributes{}, ScopeAttributes{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.privilege, func(t *testing.T) {
