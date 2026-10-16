@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/zclconf/go-cty/cty"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
@@ -94,6 +95,18 @@ func TestSettingsProfileSettings_acceptance(t *testing.T) {
 
 		return nil
 	}
+
+	withCreateTimeout := func(timeout string) string {
+		return resourcebuilder.New(resourceType, resourceName).
+			AddDependency(settingProfileBuilder.Build()).
+			WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
+			WithStringAttribute("name", "max_threads").
+			WithStringAttribute("value", "100").
+			WithMapAttribute("timeouts", map[string]cty.Value{"create": cty.StringVal(timeout)}).
+			Build()
+	}
+	timeoutsCreate := withCreateTimeout("1m")
+	timeoutsUpdate := withCreateTimeout("2m")
 
 	tests := []runner.TestCase{
 		{
@@ -197,6 +210,18 @@ func TestSettingsProfileSettings_acceptance(t *testing.T) {
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:                  "Change Settings Profile setting timeouts in place",
+			ChEnv:                 map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:              "native",
+			Resource:              timeoutsCreate,
+			UpdateResource:        &timeoutsUpdate,
+			UpdateExpectNoReplace: true,
+			ResourceName:          resourceName,
+			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:    checkNotExistsFunc,
+			CheckAttributesFunc:   checkAttributesFunc,
 		},
 	}
 

@@ -24,17 +24,26 @@ var attributesByScope = map[string]ScopeAttributes{
 	"TABLE_ENGINE":     {},
 }
 
-// ScopeAttributesFor returns the attributes supported by the privilege's own
-// scope, the union over all its descendants, and whether the privilege (or any
-// descendant) has a supported scope at all.
+// ScopeAttributesFor returns the attributes supported by every scoped member of
+// the privilege (itself and its descendants), the union over all of them, and
+// whether any of them has a supported scope at all.
 func ScopeAttributesFor(privilege string) (ScopeAttributes, ScopeAttributes, bool) {
 	cat := Parsed()
-	attrs := attributesByScope[cat.Scopes[privilege]]
+	attrs := ScopeAttributes{Database: true, Table: true, Column: true, AccessObject: true}
 
 	allAttrs := ScopeAttributes{}
 	supported := false
 	for _, p := range AllDescendants(cat.Groups, privilege) {
-		a, ok := attributesByScope[cat.Scopes[p]]
+		scope, scoped := cat.Scopes[p]
+		if !scoped {
+			continue
+		}
+		// An unsupported scope yields no attributes, so its members narrow every target.
+		a, ok := attributesByScope[scope]
+		attrs.Database = attrs.Database && a.Database
+		attrs.Table = attrs.Table && a.Table
+		attrs.Column = attrs.Column && a.Column
+		attrs.AccessObject = attrs.AccessObject && a.AccessObject
 		if !ok {
 			continue
 		}
@@ -43,6 +52,10 @@ func ScopeAttributesFor(privilege string) (ScopeAttributes, ScopeAttributes, boo
 		allAttrs.Table = allAttrs.Table || a.Table
 		allAttrs.Column = allAttrs.Column || a.Column
 		allAttrs.AccessObject = allAttrs.AccessObject || a.AccessObject
+	}
+
+	if !supported {
+		attrs = ScopeAttributes{}
 	}
 
 	return attrs, allAttrs, supported

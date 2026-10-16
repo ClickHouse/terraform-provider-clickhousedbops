@@ -331,13 +331,17 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	// Check if ref is a UUID
 	_, err := uuid.Parse(ref)
 	if err != nil {
-		// Failed parsing UUID, try importing using the database name
+		// Failed parsing UUID, try importing using the name
 		user, err := r.client.FindUserByName(ctx, ref, clusterName)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Cannot find user",
 				fmt.Sprintf("%+v\n", err),
 			)
+			return
+		}
+		if user == nil {
+			resp.Diagnostics.AddError("Cannot find user", fmt.Sprintf("user %q not found", ref))
 			return
 		}
 

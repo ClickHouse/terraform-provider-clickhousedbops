@@ -19,6 +19,7 @@ type SelectQueryBuilder interface {
 	QueryBuilder
 	Where(...Where) SelectQueryBuilder
 	WithCluster(clusterName *string) SelectQueryBuilder
+	WithClusterAllReplicas(clusterName *string) SelectQueryBuilder
 	LeftArrayJoin(column string, alias string) SelectQueryBuilder
 	OrderBy(column Field, order OrderDirection) SelectQueryBuilder
 }
@@ -28,6 +29,7 @@ type selectQueryBuilder struct {
 	fields          []Field
 	where           Where
 	clusterName     *string
+	allReplicas     bool
 	arrayJoinColumn string
 	arrayJoinAlias  string
 	orderBy         Field
@@ -48,6 +50,12 @@ func (q *selectQueryBuilder) Where(where ...Where) SelectQueryBuilder {
 
 func (q *selectQueryBuilder) WithCluster(clusterName *string) SelectQueryBuilder {
 	q.clusterName = clusterName
+	return q
+}
+
+func (q *selectQueryBuilder) WithClusterAllReplicas(clusterName *string) SelectQueryBuilder {
+	q.clusterName = clusterName
+	q.allReplicas = true
 	return q
 }
 
@@ -88,7 +96,11 @@ func (q *selectQueryBuilder) Build() (string, error) {
 		tableName := strings.Join(tokens, ".")
 
 		if q.clusterName != nil {
-			from = fmt.Sprintf("cluster(%s, %s)", quote(*q.clusterName), tableName)
+			function := "cluster"
+			if q.allReplicas {
+				function = "clusterAllReplicas"
+			}
+			from = fmt.Sprintf("%s(%s, %s)", function, quote(*q.clusterName), tableName)
 		} else {
 			from = tableName
 		}

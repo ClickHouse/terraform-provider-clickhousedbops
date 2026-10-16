@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -257,7 +258,20 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 }
 
 func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	panic("Update of settingsprofilesetting resource is not supported")
+	var plan, state Setting
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	state.Timeouts = plan.Timeouts
+	if !reflect.DeepEqual(plan, state) {
+		resp.Diagnostics.AddError("Error Updating ClickHouse Setting", "Only 'timeouts' can be updated in place")
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
 func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
