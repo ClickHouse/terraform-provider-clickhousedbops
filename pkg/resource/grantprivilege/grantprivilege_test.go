@@ -689,6 +689,27 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			ResourceAddress: fmt.Sprintf("%s.%s", resourceType, resourceName),
 			ExpectError:     regexp.MustCompile(`(?s)a\s+user\s+with\s+the\s+same\s+name\s+exists`),
 		},
+		{
+			Name:     "Grant privilege fails when a wildcard grant includes it using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			SetupFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error {
+				if _, err := dbopsClient.CreateRole(ctx, dbops.Role{Name: "covered"}, clusterName); err != nil {
+					return err
+				}
+				_, err := dbopsClient.GrantPrivilege(ctx, dbops.GrantPrivilege{AccessType: "SELECT", DatabaseName: new("default"), TableName: new("t0*"), GranteeRoleName: new("covered")}, clusterName)
+				return err
+			},
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "SELECT").
+				WithStringAttribute("database_name", "default").
+				WithStringAttribute("table_name", "t01").
+				WithStringAttribute("grantee_role_name", "covered").
+				Build(),
+			ResourceName:    resourceName,
+			ResourceAddress: fmt.Sprintf("%s.%s", resourceType, resourceName),
+			ExpectError:     regexp.MustCompile(`(?s)Privilege\s+"SELECT"\s+is\s+already\s+granted\s+on\s+table\s+"t0\*"`),
+		},
 	}
 
 	runner.RunTests(t, tests)

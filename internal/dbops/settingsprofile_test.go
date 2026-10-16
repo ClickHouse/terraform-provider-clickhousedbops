@@ -43,7 +43,7 @@ var nativeAlreadyExistsErr = errors.WithMessage(
 
 type step struct {
 	wantSQL string
-	rows    map[string]string
+	rows    []map[string]any
 	err     error
 }
 
@@ -75,9 +75,11 @@ func (c *scriptedClient) Select(_ context.Context, sql string, callback func(cli
 	if s.err != nil {
 		return s.err
 	}
-	for field, value := range s.rows {
+	for _, fields := range s.rows {
 		row := clickhouseclient.Row{}
-		row.Set(field, value)
+		for field, value := range fields {
+			row.Set(field, value)
+		}
 		if err := callback(row); err != nil {
 			return err
 		}
@@ -100,8 +102,8 @@ func newTestClient(t *testing.T, script []step) (Client, *scriptedClient) {
 func TestCreateSettingsProfile(t *testing.T) {
 	miss := step{wantSQL: findByNameSQL}
 	found := []step{
-		{wantSQL: findByNameSQL, rows: map[string]string{"id": testProfileID}},
-		{wantSQL: getByIDSQL, rows: map[string]string{"name": testProfileName}},
+		{wantSQL: findByNameSQL, rows: []map[string]any{{"id": testProfileID}}},
+		{wantSQL: getByIDSQL, rows: []map[string]any{{"name": testProfileName}}},
 		{wantSQL: inheritSQL},
 	}
 

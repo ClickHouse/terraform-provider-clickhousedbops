@@ -18,21 +18,22 @@ func TestCovers(t *testing.T) {
 
 		// Database dimension.
 		{"database: same", Grant{AccessType: "SELECT", Database: new("test")}, Grant{AccessType: "SELECT", Database: new("test")}, true},
-		{"database: unrelated", Grant{AccessType: "SELECT", Database: new("prod")}, Grant{AccessType: "SELECT", Database: new("test")}, false},
 		{"database: broader unrestricted covers specific", Grant{AccessType: "SELECT"}, Grant{AccessType: "SELECT", Database: new("test")}, true},
 		{"database: specific does not cover all", Grant{AccessType: "SELECT", Database: new("test")}, Grant{AccessType: "SELECT"}, false},
 		{"database: prefix wildcard covers", Grant{AccessType: "SELECT", Database: new("tes*")}, Grant{AccessType: "SELECT", Database: new("test*")}, true},
-		{"database: implicit prefix wildcard covers", Grant{AccessType: "SELECT", Database: new("tes")}, Grant{AccessType: "SELECT", Database: new("test")}, true},
+		{"database: value without '*' is exact", Grant{AccessType: "SELECT", Database: new("tes")}, Grant{AccessType: "SELECT", Database: new("test")}, false},
 
 		// Table dimension.
 		{"table: broader database covers a table in it", Grant{AccessType: "SELECT", Database: new("db")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t")}, true},
 		{"table: specific table does not cover the database", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t")}, Grant{AccessType: "SELECT", Database: new("db")}, false},
-		{"table: different table", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t1")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t2")}, false},
+		{"table: prefix wildcard covers", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t1*")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t10")}, true},
+		{"table: prefix wildcard doesn't cover another name", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t1*")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t2")}, false},
+		{"table: value without '*' is exact", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t1")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t10")}, false},
 
 		// Column dimension.
 		{"column: broader table covers a column in it", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t"), Column: new("c")}, true},
 		{"column: specific column does not cover all", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t"), Column: new("c")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t")}, false},
-		{"column: different column", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t"), Column: new("c1")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t"), Column: new("c2")}, false},
+		{"column: shorter name doesn't cover", Grant{AccessType: "SELECT", Database: new("db"), Table: new("t"), Column: new("c")}, Grant{AccessType: "SELECT", Database: new("db"), Table: new("t"), Column: new("c1")}, false},
 
 		// Grant option.
 		{"grant option needed but broader lacks it", Grant{AccessType: "SELECT"}, Grant{AccessType: "SELECT", GrantOption: true}, false},
@@ -41,9 +42,9 @@ func TestCovers(t *testing.T) {
 
 		// Access object (USER_NAME/DEFINER scope).
 		{"access object: same", Grant{AccessType: "CREATE USER", AccessObject: new("u")}, Grant{AccessType: "CREATE USER", AccessObject: new("u")}, true},
-		{"access object: different", Grant{AccessType: "CREATE USER", AccessObject: new("u1")}, Grant{AccessType: "CREATE USER", AccessObject: new("u2")}, false},
 		{"access object: broader unrestricted covers specific", Grant{AccessType: "CREATE USER"}, Grant{AccessType: "CREATE USER", AccessObject: new("u")}, true},
-		{"access object: prefix covers", Grant{AccessType: "CREATE USER", AccessObject: new("team")}, Grant{AccessType: "CREATE USER", AccessObject: new("team_a")}, true},
+		{"access object: prefix covers", Grant{AccessType: "CREATE USER", AccessObject: new("team*")}, Grant{AccessType: "CREATE USER", AccessObject: new("team_a")}, true},
+		{"access object: value without '*' is exact", Grant{AccessType: "CREATE USER", AccessObject: new("team")}, Grant{AccessType: "CREATE USER", AccessObject: new("team_a")}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
