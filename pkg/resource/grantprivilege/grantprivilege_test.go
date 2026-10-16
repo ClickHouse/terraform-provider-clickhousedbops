@@ -4,13 +4,20 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/resourcebuilder"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/runner"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/pkg/resource/grantprivilege"
 )
 
 const (
@@ -685,4 +692,57 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 	}
 
 	runner.RunTests(t, tests)
+}
+
+func TestGrantprivilege_ValidateConfig(t *testing.T) {
+	ctx := context.Background()
+	r := grantprivilege.NewResource().(resource.ResourceWithValidateConfig)
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	objectType := schemaResp.Schema.Type().TerraformType(ctx).(tftypes.Object)
+
+	tests := []struct {
+		name     string
+		config   map[string]string
+		warnings []string
+		errors   []string
+	}{
+		{"every member supports the database", map[string]string{"privilege_name": "ALTER VIEW", "database_name": "db"}, nil, nil},
+		{"some members support the database", map[string]string{"privilege_name": "ALTER", "database_name": "db"}, []string{"database_name"}, nil},
+		{"some members support the table", map[string]string{"privilege_name": "SHOW", "database_name": "db", "table_name": "t"}, []string{"table_name"}, nil},
+		{"no member supports the table", map[string]string{"privilege_name": "ALTER DATABASE", "database_name": "db", "table_name": "t"}, nil, []string{"table_name"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			values := make(map[string]tftypes.Value, len(objectType.AttributeTypes))
+			for name, typ := range objectType.AttributeTypes {
+				values[name] = tftypes.NewValue(typ, nil)
+			}
+			for name, value := range tt.config {
+				values[name] = tftypes.NewValue(tftypes.String, value)
+			}
+
+			var resp resource.ValidateConfigResponse
+			r.ValidateConfig(ctx, resource.ValidateConfigRequest{
+				Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: tftypes.NewValue(objectType, values)},
+			}, &resp)
+
+			if got := diagnosticPaths(resp.Diagnostics.Warnings()); !slices.Equal(got, tt.warnings) {
+				t.Errorf("warnings on %v, want %v: %v", got, tt.warnings, resp.Diagnostics)
+			}
+			if got := diagnosticPaths(resp.Diagnostics.Errors()); !slices.Equal(got, tt.errors) {
+				t.Errorf("errors on %v, want %v: %v", got, tt.errors, resp.Diagnostics)
+			}
+		})
+	}
+}
+
+func diagnosticPaths(diags diag.Diagnostics) []string {
+	var paths []string
+	for _, d := range diags {
+		if withPath, ok := d.(diag.DiagnosticWithPath); ok {
+			paths = append(paths, withPath.Path().String())
+		}
+	}
+	return paths
 }
