@@ -430,9 +430,18 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 			return
 		}
 
+		privileges, err := r.client.GetPrivileges(ctx)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error checking for existing overlapping privileges",
+				"internal error while checking for existing overlapping privileges. Please try again",
+			)
+			return
+		}
+
 		overlappingExplanations := make([]string, 0)
 		for _, e := range existing {
-			if overlaps(plan, e) {
+			if overlaps(privileges, plan, e) {
 				// Prepare human-readable explanation of the overlap.
 				overlappingExplanations = append(overlappingExplanations, explainOverlap(plan, e))
 			}
