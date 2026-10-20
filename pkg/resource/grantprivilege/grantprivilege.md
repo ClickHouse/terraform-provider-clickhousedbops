@@ -11,4 +11,4 @@ Known limitations:
 - It's not possible to grant the same privilege (example 'SELECT') to multiple entities (for example tables) with a single stanza. You can do that my creating one stanza for each entity you want to grant privileges on.
 - It's not possible to grant privileges to a role when a user with the same name exists: ClickHouse resolves grantee names to users first, so the grant would silently target the user instead. The provider rejects such grants.
 - Importing `clickhousedbops_grant_privilege` resources into terraform is not supported.
-- ClickHouse versions before 26.7 report prefix grants (such as `db.t1*`) without the trailing `*`, so with those versions a grant on `db.t1` is treated as including `db.t10` when checking overlaps.
+- ClickHouse versions before 26.7 report prefix grants (such as `db.t1*`) without the trailing `*`, so with those versions a grant on `db.t1` is treated as including `db.t10` when checking overlaps, and as the same grant as `db.t1*`.

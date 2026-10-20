@@ -3,6 +3,7 @@ package grantprivilege
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -241,6 +242,15 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 		)
 	}
 
+	// Older ClickHouse versions apply a database pattern to the table, so db*.t grants on db.t*; newer ones reject it.
+	if strings.HasSuffix(config.Database.ValueString(), "*") && !config.Table.IsNull() {
+		diags.AddAttributeError(
+			path.Root("database_name"),
+			"Invalid Grant Privilege",
+			"A 'database_name' pattern ending in '*' can't be combined with 'table_name': older ClickHouse versions apply the pattern to the table instead, newer ones reject it.",
+		)
+	}
+
 	upstrGrts := grants.Parsed()
 
 	// Aliases must be granted using their canonical name.
@@ -412,48 +422,25 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	grant := plan.toGrant()
 
 	createdGrant, err := r.client.GrantPrivilege(ctx, grant, plan.ClusterName.ValueStringPointer())
+	if overlap, ok := errors.AsType[*dbops.OverlapError](err); ok {
+		overlappingExplanations := make([]string, 0, len(overlap.Covering))
+		for _, e := range overlap.Covering {
+			overlappingExplanations = append(overlappingExplanations, explainOverlap(plan, e))
+		}
+
+		resp.Diagnostics.AddError(
+			"Overlapping Privilege",
+			fmt.Sprintf(
+				"While trying to apply this resource, we found some privileges already granted to the same grantee that are overlapping with this resource:\n"+
+					"%s\n\nThis is a configuration error that prevents further actions. Please note that these privileges might have been granted outside terraform.",
+				strings.Join(overlappingExplanations, "\n")),
+		)
+		return
+	}
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Creating ClickHouse Privilege Grant",
 			"Could not create privilege grant, unexpected error: "+err.Error(),
-		)
-		return
-	}
-
-	if createdGrant == nil {
-		existing, err := r.client.GetAllGrantsForGrantee(ctx, grant.GranteeUserName, grant.GranteeRoleName, plan.ClusterName.ValueStringPointer())
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Error checking for existing overlapping privileges",
-				"internal error while checking for existing overlapping privileges. Please try again",
-			)
-			return
-		}
-
-		overlappingExplanations := make([]string, 0)
-		for _, e := range existing {
-			if overlaps(plan, e) {
-				// Prepare human-readable explanation of the overlap.
-				overlappingExplanations = append(overlappingExplanations, explainOverlap(plan, e))
-			}
-		}
-
-		if len(overlappingExplanations) > 0 {
-			details := fmt.Sprintf(`While trying to apply this resource, we found some privileges already granted to the same grantee that are overlapping with this resource:
-%s
-
-This is a configuration error that prevents further actions. Please note that these privileges might have been granted outside terraform.`, strings.Join(overlappingExplanations, "\n"))
-
-			resp.Diagnostics.AddError(
-				"Overlapping Privilege",
-				details,
-			)
-			return
-		}
-
-		resp.Diagnostics.AddError(
-			"Error Creating ClickHouse Privilege Grant",
-			"The grant operation was successful but it didn't create the expected entry in system.grants table. This normally means there is an already granted privilege to the same grantee that already includes the one you tried to apply.",
 		)
 		return
 	}
@@ -478,6 +465,11 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	}
 
 	grant, err := r.client.GetGrantPrivilege(ctx, new(state.toGrant()), state.ClusterName.ValueStringPointer())
+	if _, ok := errors.AsType[*dbops.OverlapError](err); ok {
+		// A broader grant absorbed this one; forget it rather than revoke a part of that grant.
+		resp.State.RemoveResource(ctx)
+		return
+	}
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading ClickHouse Privilege Grant",

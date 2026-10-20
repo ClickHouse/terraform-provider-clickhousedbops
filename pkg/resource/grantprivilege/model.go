@@ -35,17 +35,6 @@ func (g GrantPrivilege) toGrant() dbops.GrantPrivilege {
 	}
 }
 
-func (g GrantPrivilege) asGrant() grants.Grant {
-	return grants.Grant{
-		AccessType:   g.Privilege.ValueString(),
-		Database:     g.Database.ValueStringPointer(),
-		Table:        g.Table.ValueStringPointer(),
-		Column:       g.Column.ValueStringPointer(),
-		AccessObject: g.AccessObject.ValueStringPointer(),
-		GrantOption:  g.GrantOption.ValueBool(),
-	}
-}
-
 func toState(g dbops.GrantPrivilege, clusterName types.String) GrantPrivilege {
 	return GrantPrivilege{
 		ClusterName:     clusterName,
