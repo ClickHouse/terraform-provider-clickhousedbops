@@ -2,105 +2,56 @@ package dbops
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
-	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
-)
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/stretchr/testify/require"
 
-const (
-	versionSQL              = "SELECT `value` FROM `system`.`build_options` WHERE (`name` = 'VERSION_FULL');"
-	granteeGrantsSQL        = "SELECT toString(`access_type`) AS `access_type`, `database`, `table`, `column`, nullIf(access_object, '') AS `access_object_nullable`, `user_name`, `role_name`, `grant_option` FROM `system`.`grants` WHERE ((`is_partial_revoke` = 0 AND `user_name` = 'app'));"
-	granteeGrantsWithWcdSQL = "SELECT toString(`access_type`) AS `access_type`, `database`, `table`, `column`, nullIf(access_object, '') AS `access_object_nullable`, `user_name`, `role_name`, `grant_option`, `is_wildcard` FROM `system`.`grants` WHERE ((`is_partial_revoke` = 0 AND `user_name` = 'app'));"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/chcontainer"
 )
-
-func grantRow(database, table, accessObject *string, wildcard bool) map[string]any {
-	return map[string]any{
-		"access_type":            "SELECT",
-		"database":               database,
-		"table":                  table,
-		"column":                 (*string)(nil),
-		"access_object_nullable": accessObject,
-		"user_name":              new("app"),
-		"role_name":              (*string)(nil),
-		"grant_option":           false,
-		"is_wildcard":            wildcard,
-	}
-}
 
 func TestGetAllGrantsForGrantee(t *testing.T) {
-	type object struct{ database, table, accessObject *string }
-
-	tests := []struct {
-		name      string
-		version   string
-		grantsSQL string
-		rows      []map[string]any
-		want      []object
+	tests := map[string][]struct {
+		name  string
+		grant string
+		want  GrantPrivilege
 	}{
-		{
-			name:      "restores the wildcard on the deepest dimension",
-			version:   "26.9.4.3",
-			grantsSQL: granteeGrantsWithWcdSQL,
-			rows: []map[string]any{
-				grantRow(new("db"), nil, nil, true),
-				grantRow(new("db"), new("t"), nil, true),
-				grantRow(nil, nil, new("bob"), true),
-				grantRow(new("db"), new("x"), nil, false),
-			},
-			want: []object{
-				{database: new("db*")},
-				{database: new("db"), table: new("t*")},
-				{accessObject: new("bob*")},
-				{database: new("db"), table: new("x")},
-			},
+		"latest": {
+			{"restores a database wildcard", "SELECT ON db*.*", GrantPrivilege{AccessType: "SELECT", DatabaseName: new("db*")}},
+			{"restores a table wildcard", "SELECT ON db.t*", GrantPrivilege{AccessType: "SELECT", DatabaseName: new("db"), TableName: new("t*")}},
+			{"restores an access object wildcard", "NAMED COLLECTION ON nc*", GrantPrivilege{AccessType: "NAMED COLLECTION", AccessObject: new("nc*")}},
+			{"keeps an exact table", "SELECT ON db.t", GrantPrivilege{AccessType: "SELECT", DatabaseName: new("db"), TableName: new("t")}},
 		},
-		{
-			name:      "treats every grant as a wildcard before 26.7",
-			version:   "26.6.8.7",
-			grantsSQL: granteeGrantsSQL,
-			rows: []map[string]any{
-				grantRow(nil, nil, nil, false),
-				grantRow(new("db"), nil, nil, false),
-				grantRow(new("db"), new("t"), nil, false),
-				grantRow(nil, nil, new("bob"), false),
-			},
-			want: []object{
-				{},
-				{database: new("db*")},
-				{database: new("db"), table: new("t*")},
-				{accessObject: new("bob*")},
-			},
+		"26.6": {
+			{"keeps a global grant before 26.7", "SELECT ON *.*", GrantPrivilege{AccessType: "SELECT"}},
+			{"treats a database as a wildcard before 26.7", "SELECT ON db.*", GrantPrivilege{AccessType: "SELECT", DatabaseName: new("db*")}},
+			{"treats a table as a wildcard before 26.7", "SELECT ON db.t", GrantPrivilege{AccessType: "SELECT", DatabaseName: new("db"), TableName: new("t*")}},
+			{"treats an access object as a wildcard before 26.7", "NAMED COLLECTION ON nc", GrantPrivilege{AccessType: "NAMED COLLECTION", AccessObject: new("nc*")}},
 		},
 	}
 
-	str := func(s *string) string {
-		if s == nil {
-			return "<nil>"
-		}
-		return *s
-	}
+	for version, tcs := range tests {
+		t.Run(version, func(t *testing.T) {
+			container := chcontainer.Start(t, version)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			client, fake := newTestClient(t, []step{
-				{wantSQL: versionSQL, rows: []map[string]any{{"value": tc.version}}},
-				{wantSQL: tc.grantsSQL, rows: tc.rows},
-			})
+			for _, protocol := range protocols {
+				raw := container.Client(t, protocol)
+				client := newTestClient(t, raw)
+				for _, tc := range tcs {
+					t.Run(protocol+"/"+tc.name, func(t *testing.T) {
+						user := acctest.RandomWithPrefix("tfacc")
+						execOnCleanup(t, raw, fmt.Sprintf("DROP USER IF EXISTS `%s`", user))
+						mustExec(t, raw, fmt.Sprintf("CREATE USER `%s` IDENTIFIED WITH no_password", user))
+						mustExec(t, raw, fmt.Sprintf("GRANT %s TO `%s`", tc.grant, user))
 
-			got, err := client.GetAllGrantsForGrantee(context.Background(), new("app"), nil, nil)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if len(fake.steps) != 0 {
-				t.Errorf("script not fully consumed, %d steps left", len(fake.steps))
-			}
-			if len(got) != len(tc.want) {
-				t.Fatalf("got %d grants, want %d", len(got), len(tc.want))
-			}
-			for idx, w := range tc.want {
-				g := got[idx]
-				if !nilcompare.NilCompare(g.DatabaseName, w.database) || !nilcompare.NilCompare(g.TableName, w.table) || !nilcompare.NilCompare(g.AccessObject, w.accessObject) {
-					t.Errorf("grant %d = %s.%s %s, want %s.%s %s", idx, str(g.DatabaseName), str(g.TableName), str(g.AccessObject), str(w.database), str(w.table), str(w.accessObject))
+						got, err := client.GetAllGrantsForGrantee(context.Background(), &user, nil, nil)
+						require.NoError(t, err)
+
+						want := tc.want
+						want.GranteeUserName = &user
+						require.Equal(t, []GrantPrivilege{want}, got)
+					})
 				}
 			}
 		})

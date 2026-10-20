@@ -4,25 +4,16 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/pingcap/errors"
+	"github.com/stretchr/testify/require"
 
-	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/chcontainer"
 )
 
-const (
-	testProfileID   = "0e4a8a40-dd60-b0d9-7baa-d44f89302d8d"
-	testProfileName = "test-14xyz-use1_readwrite_default"
-)
-
-const (
-	createProfileSQL = "CREATE SETTINGS PROFILE `test-14xyz-use1_readwrite_default`;"
-	findByNameSQL    = "SELECT toString(`id`) AS `id` FROM `system`.`settings_profiles` WHERE (`name` = 'test-14xyz-use1_readwrite_default');"
-	getByIDSQL       = "SELECT `name` FROM `system`.`settings_profiles` WHERE (`id` = '0e4a8a40-dd60-b0d9-7baa-d44f89302d8d');"
-	inheritSQL       = "SELECT `inherit_profile` FROM `system`.`settings_profile_elements` WHERE (`profile_name` = 'test-14xyz-use1_readwrite_default') ORDER BY `index` ASC;"
-)
+const findProfileByNameSQL = "`system`.`settings_profiles` WHERE (`name` = "
 
 var httpAlreadyExistsErr = errors.WithMessage(
 	errors.WithMessage(
@@ -41,125 +32,62 @@ var nativeAlreadyExistsErr = errors.WithMessage(
 	"error executing query",
 )
 
-type step struct {
-	wantSQL string
-	rows    []map[string]any
-	err     error
-}
-
-// scriptedClient serves queries from an ordered script and fails the test on any deviation.
-type scriptedClient struct {
-	t     *testing.T
-	steps []step
-}
-
-func (c *scriptedClient) next(sql string) step {
-	c.t.Helper()
-	if len(c.steps) == 0 {
-		c.t.Fatalf("unexpected query: %s", sql)
-	}
-	s := c.steps[0]
-	c.steps = c.steps[1:]
-	if sql != s.wantSQL {
-		c.t.Fatalf("query mismatch:\nwant: %s\ngot:  %s", s.wantSQL, sql)
-	}
-	return s
-}
-
-func (c *scriptedClient) Exec(_ context.Context, sql string, _ ...map[string]string) error {
-	return c.next(sql).err
-}
-
-func (c *scriptedClient) Select(_ context.Context, sql string, callback func(clickhouseclient.Row) error) error {
-	s := c.next(sql)
-	if s.err != nil {
-		return s.err
-	}
-	for _, fields := range s.rows {
-		row := clickhouseclient.Row{}
-		for field, value := range fields {
-			row.Set(field, value)
-		}
-		if err := callback(row); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func newTestClient(t *testing.T, script []step) (Client, *scriptedClient) {
-	t.Helper()
-
-	fake := &scriptedClient{t: t, steps: script}
-	client, err := NewClient(fake, WithReadAfterWriteTimeout(5*time.Second))
-	if err != nil {
-		t.Fatalf("NewClient returned error: %v", err)
-	}
-
-	return client, fake
-}
-
 func TestCreateSettingsProfile(t *testing.T) {
-	miss := step{wantSQL: findByNameSQL}
-	found := []step{
-		{wantSQL: findByNameSQL, rows: []map[string]any{{"id": testProfileID}}},
-		{wantSQL: getByIDSQL, rows: []map[string]any{{"name": testProfileName}}},
-		{wantSQL: inheritSQL},
-	}
+	server := chcontainer.Start(t, "")
+	missingProfile := acctest.RandomWithPrefix("tfacc")
 
 	tests := []struct {
-		name    string
-		script  []step
-		wantErr bool
+		name           string
+		existing       bool
+		inheritFrom    []string
+		lookupMisses   int
+		wantErr        bool
+		wantMissesLeft int
 	}{
-		{
-			name:   "adopts existing profile after transient lookup misses",
-			script: append([]step{{wantSQL: createProfileSQL, err: httpAlreadyExistsErr}, miss, miss}, found...),
-		},
-		{
-			name:   "retries transient lookup misses after successful create",
-			script: append([]step{{wantSQL: createProfileSQL}, miss, miss}, found...),
-		},
-		{
-			name:    "fails on unrelated error without lookup",
-			script:  []step{{wantSQL: createProfileSQL, err: errors.New("Code: 241. DB::Exception: Memory limit (total) exceeded (MEMORY_LIMIT_EXCEEDED)")}},
-			wantErr: true,
-		},
+		{name: "adopts existing profile after transient lookup misses", existing: true, lookupMisses: 2},
+		{name: "retries transient lookup misses after successful create", lookupMisses: 2},
+		{name: "fails on unrelated error without lookup", inheritFrom: []string{missingProfile}, lookupMisses: 2, wantErr: true, wantMissesLeft: 2},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			client, fake := newTestClient(t, tc.script)
+	for _, protocol := range protocols {
+		raw := server.Client(t, protocol)
+		lagging := &laggingClient{ClickhouseClient: raw, match: findProfileByNameSQL}
+		client := newTestClient(t, lagging)
+		direct := newTestClient(t, raw)
 
-			profile, err := client.CreateSettingsProfile(context.Background(), SettingsProfile{Name: testProfileName}, nil)
-
-			if len(fake.steps) != 0 {
-				t.Errorf("script not fully consumed, %d steps left", len(fake.steps))
-			}
-
-			if tc.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
+		for _, tc := range tests {
+			t.Run(protocol+"/"+tc.name, func(t *testing.T) {
+				lagging.misses = tc.lookupMisses
+				name := acctest.RandomWithPrefix("tfacc")
+				execOnCleanup(t, raw, fmt.Sprintf("DROP SETTINGS PROFILE IF EXISTS `%s`", name))
+				var existingID string
+				if tc.existing {
+					mustExec(t, raw, fmt.Sprintf("CREATE SETTINGS PROFILE `%s`", name))
+					existing, err := retryWithBackoff(context.Background(), "settings profile", name, func() (*SettingsProfile, error) {
+						return direct.FindSettingsProfileByName(context.Background(), name, nil)
+					})
+					require.NoError(t, err)
+					require.NotNil(t, existing)
+					existingID = existing.ID
 				}
-				if profile != nil {
-					t.Errorf("expected nil profile, got %+v", profile)
-				}
-				return
-			}
 
-			if err != nil {
-				t.Fatalf("expected settings profile, got error: %v", err)
-			}
-			if profile == nil {
-				t.Fatal("expected a settings profile, got nil")
-			}
-			if profile.ID != testProfileID {
-				t.Errorf("expected profile ID %q, got %q", testProfileID, profile.ID)
-			}
-			if profile.Name != testProfileName {
-				t.Errorf("expected profile name %q, got %q", testProfileName, profile.Name)
-			}
-		})
+				created, err := client.CreateSettingsProfile(context.Background(), SettingsProfile{Name: name, InheritFrom: tc.inheritFrom}, nil)
+
+				if tc.wantErr {
+					require.Error(t, err)
+					require.Nil(t, created)
+				} else {
+					require.NoError(t, err)
+					require.NotNil(t, created)
+					require.Equal(t, name, created.Name)
+					require.NotEmpty(t, created.ID)
+					if tc.existing {
+						require.Equal(t, existingID, created.ID, "adopted profile ID")
+					}
+				}
+				require.Equal(t, tc.wantMissesLeft, lagging.misses, "lookup misses left")
+			})
+		}
 	}
 }
 
@@ -199,13 +127,15 @@ func TestIsAlreadyExistsError(t *testing.T) {
 // TestFindSettingsProfileByName_NotFound verifies the not-found contract used by retryWithBackoff:
 // a lookup miss returns (nil, nil) rather than an error, so callers keep retrying within their backoff.
 func TestFindSettingsProfileByName_NotFound(t *testing.T) {
-	client, _ := newTestClient(t, []step{{wantSQL: findByNameSQL}})
+	server := chcontainer.Start(t, "")
 
-	profile, err := client.FindSettingsProfileByName(context.Background(), testProfileName, nil)
-	if err != nil {
-		t.Fatalf("expected (nil, nil) on lookup miss, got error: %v", err)
-	}
-	if profile != nil {
-		t.Errorf("expected nil profile on lookup miss, got %+v", profile)
+	for _, protocol := range protocols {
+		client := newTestClient(t, server.Client(t, protocol))
+
+		t.Run(protocol, func(t *testing.T) {
+			profile, err := client.FindSettingsProfileByName(context.Background(), acctest.RandomWithPrefix("tfacc"), nil)
+			require.NoError(t, err, "expected (nil, nil) on lookup miss")
+			require.Nil(t, profile, "expected nil profile on lookup miss")
+		})
 	}
 }
