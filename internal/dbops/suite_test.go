@@ -11,7 +11,7 @@ import (
 
 var protocols = []string{"native", "http"}
 
-// laggingClient returns no rows for the first misses selects containing match, like a replica that hasn't seen a write yet.
+// laggingClient simulates read-after-write lag: the first `misses` SELECTs containing `match` return no rows.
 type laggingClient struct {
 	clickhouseclient.ClickhouseClient
 	match  string
