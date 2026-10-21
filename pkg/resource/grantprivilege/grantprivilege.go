@@ -127,7 +127,7 @@ func resourceSchema(version int64) schema.Schema {
 			},
 			"access_object": schema.StringAttribute{
 				Optional:    true,
-				Description: "The parameterized object the privilege applies to, such as a user/role name, named collection, table engine (e.g. `Distributed`), or source (e.g. `S3` or `URL`). Supports a trailing `*` prefix pattern where ClickHouse permits one.",
+				Description: "The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, a source name (e.g. `S3`) for source READ/WRITE grants, a named collection name for NAMED_COLLECTION-scoped privileges, or a table engine (e.g. `Distributed`) for TABLE ENGINE. Supports a trailing `*` prefix pattern.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -141,20 +141,15 @@ func resourceSchema(version int64) schema.Schema {
 					),
 				},
 			},
-			"access_object_filter": schema.StringAttribute{
+			"source_filter": schema.StringAttribute{
 				Optional:    true,
-				Description: "A regular-expression filter for a SOURCE-scoped access object. For example, set `access_object = \"URL\"` and this attribute to a URL regexp to emit `READ ON URL('<regexp>')`. The value is encoded as a SQL string; raw SQL is not accepted. Requires ClickHouse 25.8 or newer with read/write source grants enabled.",
+				Description: "A regular-expression filter for a SOURCE-scoped access object. For example, set `access_object = \"URL\"` and this attribute to a URL regexp to emit `READ ON URL('<regexp>')`.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 					stringvalidator.AlsoRequires(path.MatchRoot("access_object")),
-					stringvalidator.ConflictsWith(
-						path.MatchRoot("database_name"),
-						path.MatchRoot("table_name"),
-						path.MatchRoot("column_name"),
-					),
 				},
 			},
 			"grantee_user_name": schema.StringAttribute{
@@ -290,12 +285,12 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 		return
 	}
 
-	checkAttr := func(attrName string, isSupported, isAllSupported, isSet bool) {
-		if !isSet || isSupported {
+	checkAttr := func(attrName string, supported, narrowable, isSet bool) {
+		if !isSet || supported {
 			return
 		}
 
-		if isAllSupported {
+		if narrowable {
 			diags.AddAttributeWarning(
 				path.Root(attrName),
 				"Grant scope will be narrowed to supported grants",
@@ -314,20 +309,30 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 	checkAttr("database_name", attrs.Database, allAttrs.Database, !config.Database.IsNull())
 	checkAttr("table_name", attrs.Table, allAttrs.Table, !config.Table.IsNull())
 	checkAttr("column_name", attrs.Column, allAttrs.Column, !config.Column.IsNull())
-	checkAttr("access_object", attrs.AccessObject, allAttrs.AccessObject, !config.AccessObject.IsNull())
-	checkAttr("access_object_filter", attrs.AccessObjectFilter, allAttrs.AccessObjectFilter, !config.AccessObjectFilter.IsNull())
+	// ClickHouse parses ON <name> as a table unless every privilege takes a parameter, so parameter targets never narrow.
+	checkAttr("access_object", attrs.AccessObject, false, !config.AccessObject.IsNull())
+	checkAttr("source_filter", attrs.SourceFilter, false, !config.SourceFilter.IsNull())
 
 	if diags.HasError() {
 		return
 	}
 
+	// ClickHouse stores source aliases such as MySQL under their canonical name, which would never match a filtered grant on read.
+	if source := config.AccessObject.ValueString(); !config.SourceFilter.IsNull() && source != strings.ToUpper(source) {
+		diags.AddAttributeError(
+			path.Root("access_object"),
+			"Invalid Grant Privilege",
+			fmt.Sprintf("%q must be a canonical ClickHouse source name such as URL or MYSQL when 'source_filter' is set", source),
+		)
+		return
+	}
+
 	// Restricting a multi-family group privilege to a scope silently drops members of the other family.
 	requested := grants.ScopeAttributes{
-		Database:           !config.Database.IsNull(),
-		Table:              !config.Table.IsNull(),
-		Column:             !config.Column.IsNull(),
-		AccessObject:       !config.AccessObject.IsNull(),
-		AccessObjectFilter: !config.AccessObjectFilter.IsNull(),
+		Database:     !config.Database.IsNull(),
+		Table:        !config.Table.IsNull(),
+		Column:       !config.Column.IsNull(),
+		AccessObject: !config.AccessObject.IsNull(),
 	}
 	if granted, folds := grants.FoldedMembers(config.Privilege.ValueString(), requested); folds {
 		diags.AddAttributeWarning(
@@ -361,6 +366,23 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 	}
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	// Without this capability ClickHouse either drops the filter or hides it from system.grants.
+	if r.client != nil && !config.SourceFilter.IsNull() && !config.SourceFilter.IsUnknown() {
+		capabilityFlags, err := r.client.GetCapabilityFlags(ctx)
+		if err != nil {
+			resp.Diagnostics.AddError("Error Checking ClickHouse Capabilities", fmt.Sprintf("%+v\n", err))
+			return
+		}
+		if !capabilityFlags.SourceGrantFilters {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("source_filter"),
+				"Unsupported Source Filter",
+				"'source_filter' requires ClickHouse 26.3 or newer with access_control_improvements.enable_read_write_grants enabled.",
+			)
+			return
+		}
 	}
 
 	// Only check replicated storage when cluster_name is set, to avoid

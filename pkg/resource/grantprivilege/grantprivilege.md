@@ -1,10 +1,8 @@
-You can use the `clickhousedbops_grant_privilege` resource to grant privileges on databases, tables, and parameterized ClickHouse objects to either a `clickhousedbops_user` or a `clickhousedbops_role`.
+You can use the `clickhousedbops_grant_privilege` resource to grant privileges on databases and tables to either a `clickhousedbops_user` or a `clickhousedbops_role`.
 
 Please note that in order to grant privileges to all database and/or all tables, the `database` and/or `table` fields must be set to null, and not to "*".
 
-For global-with-parameter privileges, use `access_object` for the parameter. This includes user and role names, named collections, table engines, and external sources. Leaving `access_object` null grants the privilege on every parameter (`ON *`).
-
-Source `READ` and `WRITE` privileges can additionally use `access_object_filter` to restrict the source URI with a regular expression. ClickHouse treats this value as a regexp, not a literal URI, so escape regexp metacharacters such as `.` when an exact match is intended. Source filters require ClickHouse 25.8 or newer and `access_control_improvements.enable_read_write_grants`.
+Source `READ` and `WRITE` privileges can additionally use `source_filter` to restrict the source URI with a regular expression. ClickHouse treats this value as a regexp, not a literal URI, so escape regexp metacharacters such as `.` when an exact match is intended. Source filters require ClickHouse 26.3 or newer with `access_control_improvements.enable_read_write_grants` enabled. Use the canonical source name, such as `URL` or `MYSQL`.
 
 Known limitations:
 
@@ -16,3 +14,4 @@ Known limitations:
 - It's not possible to grant privileges to a role when a user with the same name exists: ClickHouse resolves grantee names to users first, so the grant would silently target the user instead. The provider rejects such grants.
 - Importing `clickhousedbops_grant_privilege` resources into terraform is not supported.
 - ClickHouse versions before 26.7 report prefix grants (such as `db.t1*`) without the trailing `*`, so with those versions a grant on `db.t1` is treated as including `db.t10` when checking overlaps, and as the same grant as `db.t1*`.
+- ClickHouse revokes every grant of a privilege on a source at once, so destroying a grant with `source_filter` also revokes the grantee's other grants of that privilege on the source, filtered or not. Terraform plans to re-create them on the next apply. To avoid this, combine several patterns into a single regular expression.

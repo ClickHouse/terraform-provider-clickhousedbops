@@ -3,23 +3,20 @@
 page_title: "clickhousedbops_grant_privilege Resource - clickhousedbops"
 subcategory: ""
 description: |-
-  You can use the clickhousedbops_grant_privilege resource to grant privileges on databases, tables, and parameterized ClickHouse objects to either a clickhousedbops_user or a clickhousedbops_role.
+  You can use the clickhousedbops_grant_privilege resource to grant privileges on databases and tables to either a clickhousedbops_user or a clickhousedbops_role.
   Please note that in order to grant privileges to all database and/or all tables, the database and/or table fields must be set to null, and not to "*".
-  For global-with-parameter privileges, use access_object for the parameter. This includes user and role names, named collections, table engines, and external sources. Leaving access_object null grants the privilege on every parameter (ON *).
-  Source READ and WRITE privileges can additionally use access_object_filter to restrict the source URI with a regular expression. ClickHouse treats this value as a regexp, not a literal URI, so escape regexp metacharacters such as . when an exact match is intended. Source filters require ClickHouse 25.8 or newer and access_control_improvements.enable_read_write_grants.
+  Source READ and WRITE privileges can additionally use source_filter to restrict the source URI with a regular expression. ClickHouse treats this value as a regexp, not a literal URI, so escape regexp metacharacters such as . when an exact match is intended. Source filters require ClickHouse 26.3 or newer with access_control_improvements.enable_read_write_grants enabled. Use the canonical source name, such as URL or MYSQL.
   Known limitations:
-  On ClickHouse Cloud some broad privileges (for example ALL, or SELECT on *.*) can't be granted directly, because the admin user holds them but can't transfer them. Set current_grants = true to grant them via GRANT CURRENT GRANTS(...). See https://clickhouse.com/docs/en/sql-reference/statements/grant#allIt's not possible to grant privileges using their alias name. The canonical name must be used.A group of privileges (such as ALL) can't be granted directly: grant each member of the group individually, or set current_grants = true to copy the group from the grantor.It's not possible to grant the same clickhousedbops_grant_privilege to both a clickhousedbops_user and a clickhousedbops_role using a single clickhousedbops_grant_privilege stanza. You can do that using two different stanzas, one with grantee_user_name and the other with grantee_role_name fields set.It's not possible to grant the same privilege (example 'SELECT') to multiple entities (for example tables) with a single stanza. You can do that my creating one stanza for each entity you want to grant privileges on.It's not possible to grant privileges to a role when a user with the same name exists: ClickHouse resolves grantee names to users first, so the grant would silently target the user instead. The provider rejects such grants.Importing clickhousedbops_grant_privilege resources into terraform is not supported.ClickHouse versions before 26.7 report prefix grants (such as db.t1*) without the trailing *, so with those versions a grant on db.t1 is treated as including db.t10 when checking overlaps, and as the same grant as db.t1*.
+  On ClickHouse Cloud some broad privileges (for example ALL, or SELECT on *.*) can't be granted directly, because the admin user holds them but can't transfer them. Set current_grants = true to grant them via GRANT CURRENT GRANTS(...). See https://clickhouse.com/docs/en/sql-reference/statements/grant#allIt's not possible to grant privileges using their alias name. The canonical name must be used.A group of privileges (such as ALL) can't be granted directly: grant each member of the group individually, or set current_grants = true to copy the group from the grantor.It's not possible to grant the same clickhousedbops_grant_privilege to both a clickhousedbops_user and a clickhousedbops_role using a single clickhousedbops_grant_privilege stanza. You can do that using two different stanzas, one with grantee_user_name and the other with grantee_role_name fields set.It's not possible to grant the same privilege (example 'SELECT') to multiple entities (for example tables) with a single stanza. You can do that my creating one stanza for each entity you want to grant privileges on.It's not possible to grant privileges to a role when a user with the same name exists: ClickHouse resolves grantee names to users first, so the grant would silently target the user instead. The provider rejects such grants.Importing clickhousedbops_grant_privilege resources into terraform is not supported.ClickHouse versions before 26.7 report prefix grants (such as db.t1*) without the trailing *, so with those versions a grant on db.t1 is treated as including db.t10 when checking overlaps, and as the same grant as db.t1*.ClickHouse revokes every grant of a privilege on a source at once, so destroying a grant with source_filter also revokes the grantee's other grants of that privilege on the source, filtered or not. Terraform plans to re-create them on the next apply. To avoid this, combine several patterns into a single regular expression.
 ---
 
 # clickhousedbops_grant_privilege (Resource)
 
-You can use the `clickhousedbops_grant_privilege` resource to grant privileges on databases, tables, and parameterized ClickHouse objects to either a `clickhousedbops_user` or a `clickhousedbops_role`.
+You can use the `clickhousedbops_grant_privilege` resource to grant privileges on databases and tables to either a `clickhousedbops_user` or a `clickhousedbops_role`.
 
 Please note that in order to grant privileges to all database and/or all tables, the `database` and/or `table` fields must be set to null, and not to "*".
 
-For global-with-parameter privileges, use `access_object` for the parameter. This includes user and role names, named collections, table engines, and external sources. Leaving `access_object` null grants the privilege on every parameter (`ON *`).
-
-Source `READ` and `WRITE` privileges can additionally use `access_object_filter` to restrict the source URI with a regular expression. ClickHouse treats this value as a regexp, not a literal URI, so escape regexp metacharacters such as `.` when an exact match is intended. Source filters require ClickHouse 25.8 or newer and `access_control_improvements.enable_read_write_grants`.
+Source `READ` and `WRITE` privileges can additionally use `source_filter` to restrict the source URI with a regular expression. ClickHouse treats this value as a regexp, not a literal URI, so escape regexp metacharacters such as `.` when an exact match is intended. Source filters require ClickHouse 26.3 or newer with `access_control_improvements.enable_read_write_grants` enabled. Use the canonical source name, such as `URL` or `MYSQL`.
 
 Known limitations:
 
@@ -31,6 +28,7 @@ Known limitations:
 - It's not possible to grant privileges to a role when a user with the same name exists: ClickHouse resolves grantee names to users first, so the grant would silently target the user instead. The provider rejects such grants.
 - Importing `clickhousedbops_grant_privilege` resources into terraform is not supported.
 - ClickHouse versions before 26.7 report prefix grants (such as `db.t1*`) without the trailing `*`, so with those versions a grant on `db.t1` is treated as including `db.t10` when checking overlaps, and as the same grant as `db.t1*`.
+- ClickHouse revokes every grant of a privilege on a source at once, so destroying a grant with `source_filter` also revokes the grantee's other grants of that privilege on the source, filtered or not. Terraform plans to re-create them on the next apply. To avoid this, combine several patterns into a single regular expression.
 
 ## Example Usage
 
@@ -85,27 +83,19 @@ resource "clickhousedbops_grant_privilege" "use_collection" {
   grantee_user_name = "my_user_name"
 }
 
-# Parameterized privileges use access_object for targets that are not in the
-# database/table hierarchy, including table engines and external sources.
+# TABLE ENGINE grants are restricted to one engine via access_object.
 resource "clickhousedbops_grant_privilege" "distributed_engine" {
   privilege_name    = "TABLE ENGINE"
   access_object     = "Distributed"
   grantee_role_name = "ddl_role"
 }
 
-resource "clickhousedbops_grant_privilege" "read_s3" {
-  privilege_name    = "READ"
-  access_object     = "S3"
-  grantee_role_name = "reader_role"
-}
-
-# ClickHouse 25.8+ can restrict source grants to a URI regexp. The provider
-# quotes the filter as a SQL string; this field does not accept raw SQL.
+# ClickHouse 26.3+ can restrict source grants to a URI regexp.
 resource "clickhousedbops_grant_privilege" "read_public_exports" {
-  privilege_name       = "READ"
-  access_object        = "URL"
-  access_object_filter = "https://example\\.com/public/.*"
-  grantee_role_name    = "reader_role"
+  privilege_name    = "READ"
+  access_object     = "URL"
+  source_filter     = "https://example\\.com/public/.*"
+  grantee_role_name = "reader_role"
 }
 ```
 
@@ -118,8 +108,7 @@ resource "clickhousedbops_grant_privilege" "read_public_exports" {
 
 ### Optional
 
-- `access_object` (String) The parameterized object the privilege applies to, such as a user/role name, named collection, table engine (e.g. `Distributed`), or source (e.g. `S3` or `URL`). Supports a trailing `*` prefix pattern where ClickHouse permits one.
-- `access_object_filter` (String) A regular-expression filter for a SOURCE-scoped access object. For example, set `access_object = "URL"` and this attribute to a URL regexp to emit `READ ON URL('<regexp>')`. The value is encoded as a SQL string; raw SQL is not accepted. Requires ClickHouse 25.8 or newer with read/write source grants enabled.
+- `access_object` (String) The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, a source name (e.g. `S3`) for source READ/WRITE grants, a named collection name for NAMED_COLLECTION-scoped privileges, or a table engine (e.g. `Distributed`) for TABLE ENGINE. Supports a trailing `*` prefix pattern.
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
@@ -129,4 +118,5 @@ When using a self hosted ClickHouse instance, this field should only be set when
 - `grant_option` (Boolean) If true, the grantee will be able to grant the same privileges to others.
 - `grantee_role_name` (String) Name of the `role` to grant privileges to.
 - `grantee_user_name` (String) Name of the `user` to grant privileges to.
+- `source_filter` (String) A regular-expression filter for a SOURCE-scoped access object. For example, set `access_object = "URL"` and this attribute to a URL regexp to emit `READ ON URL('<regexp>')`.
 - `table_name` (String) The name of the table to grant privilege on. Defaults to all tables if left null.

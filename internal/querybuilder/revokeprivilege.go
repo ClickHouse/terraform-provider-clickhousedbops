@@ -14,21 +14,19 @@ type RevokePrivilegeQueryBuilder interface {
 	WithTable(*string) RevokePrivilegeQueryBuilder
 	WithColumn(*string) RevokePrivilegeQueryBuilder
 	WithAccessObject(*string) RevokePrivilegeQueryBuilder
-	WithAccessObjectFilter(*string) RevokePrivilegeQueryBuilder
-	WithParameterizedTarget(bool) RevokePrivilegeQueryBuilder
+	WithSourceFilter(*string) RevokePrivilegeQueryBuilder
 	WithCluster(*string) RevokePrivilegeQueryBuilder
 }
 
 type revokePrivilegeQueryBuilder struct {
-	accessType          string
-	from                string
-	database            *string
-	table               *string
-	column              *string
-	accessObject        *string
-	accessObjectFilter  *string
-	parameterizedTarget bool
-	clusterName         *string
+	accessType   string
+	from         string
+	database     *string
+	table        *string
+	column       *string
+	accessObject *string
+	sourceFilter *string
+	clusterName  *string
 }
 
 func RevokePrivilege(accessType string, from string) RevokePrivilegeQueryBuilder {
@@ -58,13 +56,8 @@ func (q *revokePrivilegeQueryBuilder) WithAccessObject(accessObject *string) Rev
 	return q
 }
 
-func (q *revokePrivilegeQueryBuilder) WithAccessObjectFilter(filter *string) RevokePrivilegeQueryBuilder {
-	q.accessObjectFilter = filter
-	return q
-}
-
-func (q *revokePrivilegeQueryBuilder) WithParameterizedTarget(parameterized bool) RevokePrivilegeQueryBuilder {
-	q.parameterizedTarget = parameterized
+func (q *revokePrivilegeQueryBuilder) WithSourceFilter(filter *string) RevokePrivilegeQueryBuilder {
+	q.sourceFilter = filter
 	return q
 }
 
@@ -79,6 +72,9 @@ func (q *revokePrivilegeQueryBuilder) Build() (string, error) {
 	}
 	if q.from == "" {
 		return "", errors.New("From cannot be empty")
+	}
+	if q.sourceFilter != nil && q.accessObject == nil {
+		return "", errors.New("SourceFilter requires AccessObject")
 	}
 
 	tokens := []string{
@@ -96,11 +92,23 @@ func (q *revokePrivilegeQueryBuilder) Build() (string, error) {
 		tokens = append(tokens, q.accessType)
 	}
 
-	target, err := privilegeTarget(q.database, q.table, q.accessObject, q.accessObjectFilter, q.parameterizedTarget)
-	if err != nil {
-		return "", err
+	// Target database/table
+	{
+		tokens = append(tokens, "ON")
+
+		switch {
+		case q.accessObject != nil && q.sourceFilter != nil:
+			tokens = append(tokens, fmt.Sprintf("%s(%s)", identifierOrPattern(*q.accessObject), quote(*q.sourceFilter)))
+		case q.accessObject != nil:
+			tokens = append(tokens, identifierOrPattern(*q.accessObject))
+		case q.database != nil && q.table != nil:
+			tokens = append(tokens, fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table)))
+		case q.database != nil:
+			tokens = append(tokens, fmt.Sprintf("%s.*", identifierOrPattern(*q.database)))
+		default:
+			tokens = append(tokens, "*.*")
+		}
 	}
-	tokens = append(tokens, "ON", target)
 
 	// Grantee
 	{

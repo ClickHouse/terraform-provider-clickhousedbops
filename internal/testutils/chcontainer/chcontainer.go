@@ -36,9 +36,19 @@ type Server struct {
 func Start(t testing.TB, version string) Server {
 	t.Helper()
 
+	return StartWithConfig(t, version, tests.ConfigSingle)
+}
+
+// StartWithConfig is Start with the container running config; the external server is skipped for any other config.
+func StartWithConfig(t testing.TB, version, config string) Server {
+	t.Helper()
+
 	if host := os.Getenv("TEST_CLICKHOUSE_HOST"); host != "" {
 		if version != "" {
 			t.Skipf("requires ClickHouse %s, the external server can't be pinned", version)
+		}
+		if config != tests.ConfigSingle {
+			t.Skip("requires a custom server config, the external server can't be configured")
 		}
 		return external(t, host)
 	}
@@ -47,7 +57,7 @@ func Start(t testing.TB, version string) Server {
 	ctr, err := testcontainers.Run(ctx, "clickhouse/clickhouse-server:"+cmp.Or(version, os.Getenv("CLICKHOUSE_VERSION"), "latest"),
 		testcontainers.WithEnv(map[string]string{"CLICKHOUSE_SKIP_USER_SETUP": "1"}),
 		testcontainers.WithFiles(testcontainers.ContainerFile{
-			Reader:            strings.NewReader(tests.ConfigSingle),
+			Reader:            strings.NewReader(config),
 			ContainerFilePath: "/etc/clickhouse-server/config.xml",
 			FileMode:          0o644,
 		}),

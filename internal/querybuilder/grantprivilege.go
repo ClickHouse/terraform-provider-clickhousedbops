@@ -14,25 +14,23 @@ type GrantPrivilegeQueryBuilder interface {
 	WithTable(*string) GrantPrivilegeQueryBuilder
 	WithColumn(*string) GrantPrivilegeQueryBuilder
 	WithAccessObject(*string) GrantPrivilegeQueryBuilder
-	WithAccessObjectFilter(*string) GrantPrivilegeQueryBuilder
-	WithParameterizedTarget(bool) GrantPrivilegeQueryBuilder
+	WithSourceFilter(*string) GrantPrivilegeQueryBuilder
 	WithGrantOption(bool) GrantPrivilegeQueryBuilder
 	WithCluster(*string) GrantPrivilegeQueryBuilder
 	WithCurrentGrants(bool) GrantPrivilegeQueryBuilder
 }
 
 type grantPrivilegeQueryBuilder struct {
-	accessType          string
-	to                  string
-	database            *string
-	table               *string
-	column              *string
-	accessObject        *string
-	accessObjectFilter  *string
-	parameterizedTarget bool
-	grantOption         bool
-	clusterName         *string
-	currentGrants       bool
+	accessType    string
+	to            string
+	database      *string
+	table         *string
+	column        *string
+	accessObject  *string
+	sourceFilter  *string
+	grantOption   bool
+	clusterName   *string
+	currentGrants bool
 }
 
 func GrantPrivilege(accessType string, to string) GrantPrivilegeQueryBuilder {
@@ -62,13 +60,8 @@ func (q *grantPrivilegeQueryBuilder) WithAccessObject(accessObject *string) Gran
 	return q
 }
 
-func (q *grantPrivilegeQueryBuilder) WithAccessObjectFilter(filter *string) GrantPrivilegeQueryBuilder {
-	q.accessObjectFilter = filter
-	return q
-}
-
-func (q *grantPrivilegeQueryBuilder) WithParameterizedTarget(parameterized bool) GrantPrivilegeQueryBuilder {
-	q.parameterizedTarget = parameterized
+func (q *grantPrivilegeQueryBuilder) WithSourceFilter(filter *string) GrantPrivilegeQueryBuilder {
+	q.sourceFilter = filter
 	return q
 }
 
@@ -94,6 +87,9 @@ func (q *grantPrivilegeQueryBuilder) Build() (string, error) {
 	if q.to == "" {
 		return "", errors.New("To cannot be empty")
 	}
+	if q.sourceFilter != nil && q.accessObject == nil {
+		return "", errors.New("SourceFilter requires AccessObject")
+	}
 
 	tokens := []string{
 		"GRANT",
@@ -111,9 +107,19 @@ func (q *grantPrivilegeQueryBuilder) Build() (string, error) {
 		privilege = q.accessType
 	}
 
-	target, err := privilegeTarget(q.database, q.table, q.accessObject, q.accessObjectFilter, q.parameterizedTarget)
-	if err != nil {
-		return "", err
+	// Target database/table/access object
+	var target string
+	switch {
+	case q.accessObject != nil && q.sourceFilter != nil:
+		target = fmt.Sprintf("%s(%s)", identifierOrPattern(*q.accessObject), quote(*q.sourceFilter))
+	case q.accessObject != nil:
+		target = identifierOrPattern(*q.accessObject)
+	case q.database != nil && q.table != nil:
+		target = fmt.Sprintf("%s.%s", identifierOrPattern(*q.database), identifierOrPattern(*q.table))
+	case q.database != nil:
+		target = fmt.Sprintf("%s.*", identifierOrPattern(*q.database))
+	default:
+		target = "*.*"
 	}
 
 	// CURRENT GRANTS copies the grantor's own privileges. ClickHouse Cloud requires it for

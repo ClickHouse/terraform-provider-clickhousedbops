@@ -75,3 +75,34 @@ func Test_quote(t *testing.T) {
 		})
 	}
 }
+
+func Test_escape(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		want string
+	}{
+		{
+			name: "Noop",
+			s:    "test",
+			want: "'test'",
+		},
+		{
+			name: "Control chars",
+			s:    "a\nb\tc\x00",
+			want: "'a\\nb\\tc\\0'",
+		},
+		{
+			name: "URL regexp",
+			s:    "https://example\\.com/public/.*",
+			want: "'https://example\\\\.com/public/.*'",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := quote(tt.s); got != tt.want {
+				t.Errorf("escape() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

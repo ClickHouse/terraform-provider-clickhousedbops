@@ -2,6 +2,8 @@ package dbops
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -34,15 +36,15 @@ var sourcesFamily = map[string]bool{
 }
 
 type GrantPrivilege struct {
-	AccessType         string  `json:"access_type"`
-	AccessObject       *string `json:"access_object"`
-	AccessObjectFilter *string `json:"-"`
-	DatabaseName       *string `json:"database"`
-	TableName          *string `json:"table"`
-	ColumnName         *string `json:"column"`
-	GranteeUserName    *string `json:"user_name"`
-	GranteeRoleName    *string `json:"role_name"`
-	GrantOption        bool    `json:"grant_option"`
+	AccessType      string  `json:"access_type"`
+	AccessObject    *string `json:"access_object"`
+	SourceFilter    *string `json:"-"`
+	DatabaseName    *string `json:"database"`
+	TableName       *string `json:"table"`
+	ColumnName      *string `json:"column"`
+	GranteeUserName *string `json:"user_name"`
+	GranteeRoleName *string `json:"role_name"`
+	GrantOption     bool    `json:"grant_option"`
 	// ExpandedAccessTypes includes AccessType and all its descendants.
 	// ClickHouse may expand a parent privilege (e.g. CREATE, ACCESS MANAGEMENT)
 	// into its children in system.grants instead of storing a single parent row.
@@ -52,21 +54,17 @@ type GrantPrivilege struct {
 	// privileges. Needed on ClickHouse Cloud for broad grants the default admin holds but
 	// cannot transfer directly (see #190).
 	CurrentGrants bool `json:"-"`
-	// ParameterizedTarget selects ClickHouse's global-with-parameter ON syntax.
-	// Unlike database/table privileges, an unrestricted parameter target is ON *.
-	ParameterizedTarget bool `json:"-"`
 }
 
 // AsGrant projects the grant onto the neutral grants.Grant used for coverage checks.
 func (g GrantPrivilege) AsGrant() grants.Grant {
 	return grants.Grant{
-		AccessType:         g.AccessType,
-		Database:           g.DatabaseName,
-		Table:              g.TableName,
-		Column:             g.ColumnName,
-		AccessObject:       g.AccessObject,
-		AccessObjectFilter: g.AccessObjectFilter,
-		GrantOption:        g.GrantOption,
+		AccessType:   g.AccessType,
+		Database:     g.DatabaseName,
+		Table:        g.TableName,
+		Column:       g.ColumnName,
+		AccessObject: g.AccessObject,
+		GrantOption:  g.GrantOption,
 	}
 }
 
@@ -91,24 +89,12 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		}
 	}
 
-	hadUnfilteredSourceGrant := false
-	if grantPrivilege.AccessObjectFilter != nil {
-		unfilteredGrant := grantPrivilege
-		unfilteredGrant.AccessObjectFilter = nil
-		existing, err := i.GetGrantPrivilege(ctx, &unfilteredGrant, clusterName)
-		if err != nil {
-			return nil, errors.WithMessage(err, "error checking for an existing unfiltered source grant")
-		}
-		hadUnfilteredSourceGrant = existing != nil
-	}
-
 	sql, err := querybuilder.GrantPrivilege(grantPrivilege.AccessType, to).
 		WithDatabase(grantPrivilege.DatabaseName).
 		WithTable(grantPrivilege.TableName).
 		WithColumn(grantPrivilege.ColumnName).
 		WithAccessObject(grantPrivilege.AccessObject).
-		WithAccessObjectFilter(grantPrivilege.AccessObjectFilter).
-		WithParameterizedTarget(grantPrivilege.ParameterizedTarget).
+		WithSourceFilter(grantPrivilege.SourceFilter).
 		WithGrantOption(grantPrivilege.GrantOption).
 		WithCluster(clusterName).
 		WithCurrentGrants(grantPrivilege.CurrentGrants).
@@ -127,31 +113,6 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		identifier += " to user " + *grantPrivilege.GranteeUserName
 	} else if grantPrivilege.GranteeRoleName != nil {
 		identifier += " to role " + *grantPrivilege.GranteeRoleName
-	}
-
-	// With access_control_improvements.enable_read_write_grants disabled,
-	// ClickHouse accepts filtered READ/WRITE syntax but records an unfiltered
-	// source grant. Never adopt that broader grant as the requested resource.
-	if grantPrivilege.AccessObjectFilter != nil {
-		if found, err := i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName); err == nil && found != nil {
-			return found, nil
-		}
-		unfilteredGrant := grantPrivilege
-		unfilteredGrant.AccessObjectFilter = nil
-		unfiltered, err := i.GetGrantPrivilege(ctx, &unfilteredGrant, clusterName)
-		if err != nil {
-			return nil, errors.WithMessage(err, "error checking whether ClickHouse preserved the source filter")
-		}
-		if unfiltered != nil {
-			detail := "ClickHouse recorded the filtered source grant as an unfiltered grant. Enable access_control_improvements.enable_read_write_grants on the server before managing source filters."
-			if !hadUnfilteredSourceGrant {
-				if err := i.RevokeGrantPrivilege(ctx, unfilteredGrant, clusterName); err != nil {
-					return nil, errors.Wrapf(err, "%s The provider also failed to roll back the broader grant", detail)
-				}
-				detail += " The provider rolled back the broader grant."
-			}
-			return nil, errors.New(detail)
-		}
 	}
 
 	// Wait for the grant's rows, or for a broader grant that absorbed it, in which case ClickHouse writes none.
@@ -181,14 +142,17 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivi
 	database := name(grantPrivilege.DatabaseName)
 	table := name(grantPrivilege.TableName)
 	column := name(grantPrivilege.ColumnName)
-	accessObject := name(grantPrivilege.AccessObject)
+	accessObjects := []string{name(grantPrivilege.AccessObject)}
+	if grantPrivilege.SourceFilter != nil {
+		accessObjects = sourceFilterTargets(*grantPrivilege.AccessObject, *grantPrivilege.SourceFilter)
+	}
 
 	isReadWrite := false
 	var accessTypes []string
 	switch {
 	case capabilityFlags.SourcesGrantReadWriteSeparation && sourcesFamily[grantPrivilege.AccessType]:
 		accessTypes = []string{"READ", "WRITE"}
-		accessObject = grantPrivilege.AccessType
+		accessObjects = []string{grantPrivilege.AccessType}
 		isReadWrite = true
 	case len(grantPrivilege.ExpandedAccessTypes) > 0:
 		accessTypes = grantPrivilege.ExpandedAccessTypes
@@ -207,8 +171,7 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivi
 			name(row.DatabaseName) == database &&
 			name(row.TableName) == table &&
 			name(row.ColumnName) == column &&
-			name(row.AccessObject) == accessObject &&
-			name(row.AccessObjectFilter) == name(grantPrivilege.AccessObjectFilter) {
+			slices.Contains(accessObjects, name(row.AccessObject)) {
 			seen[row.AccessType] = true
 		}
 	}
@@ -247,8 +210,7 @@ func (i *impl) RevokeGrantPrivilege(ctx context.Context, grantPrivilege GrantPri
 		WithTable(grantPrivilege.TableName).
 		WithColumn(grantPrivilege.ColumnName).
 		WithAccessObject(grantPrivilege.AccessObject).
-		WithAccessObjectFilter(grantPrivilege.AccessObjectFilter).
-		WithParameterizedTarget(grantPrivilege.ParameterizedTarget).
+		WithSourceFilter(grantPrivilege.SourceFilter).
 		WithCluster(clusterName).
 		Build()
 	if err != nil {
@@ -327,7 +289,6 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'access_object_nullable' field")
 		}
-		accessObject, accessObjectFilter := splitSystemAccessObject(accessType, accessObject)
 		granteeUserName, err := data.GetNullableString("user_name")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'user_name' field")
@@ -341,16 +302,17 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 			return errors.WithMessage(err, "error scanning query result, missing 'grant_option' field")
 		}
 
-		isWildcard := true
+		// Without is_wildcard any stored name may be a pattern, except a source.
+		isWildcard := grants.Parsed().Scopes[accessType] != "SOURCE"
 		if capabilityFlags.GrantsWildcardColumn {
 			isWildcard, err = data.GetBool("is_wildcard")
 			if err != nil {
 				return errors.WithMessage(err, "error scanning query result, missing 'is_wildcard' field")
 			}
 		}
-		// The pattern is the deepest set dimension; restore its trailing '*' as written in config. A filtered source is never a pattern.
+		// The pattern is the deepest set dimension; restore its trailing '*' as written in config.
 		switch {
-		case !isWildcard || accessObjectFilter != nil:
+		case !isWildcard:
 		case accessObject != nil:
 			accessObject = new(*accessObject + "*")
 		case table != nil:
@@ -360,15 +322,14 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 		}
 
 		ret = append(ret, GrantPrivilege{
-			AccessType:         accessType,
-			AccessObject:       accessObject,
-			AccessObjectFilter: accessObjectFilter,
-			DatabaseName:       database,
-			TableName:          table,
-			ColumnName:         column,
-			GranteeUserName:    granteeUserName,
-			GranteeRoleName:    granteeRoleName,
-			GrantOption:        grantOption,
+			AccessType:      accessType,
+			AccessObject:    accessObject,
+			DatabaseName:    database,
+			TableName:       table,
+			ColumnName:      column,
+			GranteeUserName: granteeUserName,
+			GranteeRoleName: granteeRoleName,
+			GrantOption:     grantOption,
 		})
 
 		return nil
@@ -378,4 +339,15 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 	}
 
 	return ret, nil
+}
+
+var plainIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// sourceFilterTargets renders a filtered source as system.grants shows it; identifier-like filters may appear unquoted.
+func sourceFilterTargets(source, filter string) []string {
+	targets := []string{fmt.Sprintf("%s(%s)", source, querybuilder.QuoteChar(filter, '`'))}
+	if plainIdentifier.MatchString(filter) {
+		targets = append(targets, fmt.Sprintf("%s(%s)", source, filter))
+	}
+	return targets
 }

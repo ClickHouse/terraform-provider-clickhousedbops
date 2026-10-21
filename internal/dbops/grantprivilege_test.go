@@ -10,6 +10,7 @@ import (
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/chcontainer"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/tests"
 )
 
 func TestGetAllGrantsForGrantee(t *testing.T) {
@@ -114,6 +115,77 @@ func TestGrantPrivilege(t *testing.T) {
 							require.NotNil(t, got)
 						}
 						require.Zero(t, lagging.misses, "lagging reads left")
+					})
+				}
+			}
+		})
+	}
+}
+
+func TestGrantPrivilege_sourceFilter(t *testing.T) {
+	filtered := func(filter string) GrantPrivilege {
+		return GrantPrivilege{AccessType: "READ", AccessObject: new("URL"), SourceFilter: new(filter)}
+	}
+
+	regexp, regexpStored := filtered(`https://example\.com/.*`), "URL(`https://example\\\\.com/.*`)"
+	cases := map[string][]struct {
+		name        string
+		existing    string
+		grant       GrantPrivilege
+		wantStored  string
+		wantOverlap bool
+	}{
+		"latest": {
+			{name: "grants the filter", grant: regexp, wantStored: regexpStored},
+			{name: "grants an identifier-like filter shown unquoted", grant: filtered("bucket_1"), wantStored: "URL(bucket_1)"},
+			{name: "grants a filter shown escaped", grant: filtered("a`b\tc\n"), wantStored: "URL(`a\\`b\\tc\\n`)"},
+			{name: "grants the filter beside another filter", existing: "READ ON URL('other')", grant: regexp, wantStored: regexpStored},
+			{name: "grants the source beside a filter", existing: "READ ON URL('other')", grant: GrantPrivilege{AccessType: "READ", AccessObject: new("URL")}, wantStored: "URL"},
+			{name: "reports a filter absorbed by an unfiltered grant", existing: "READ ON URL", grant: regexp, wantOverlap: true},
+		},
+		"26.6": {
+			{name: "keeps a source exact before 26.7", grant: regexp, wantStored: regexpStored},
+		},
+	}
+
+	for version, tcs := range cases {
+		t.Run(version, func(t *testing.T) {
+			container := chcontainer.StartWithConfig(t, version, tests.ConfigSingleReadWriteGrants)
+
+			for _, protocol := range protocols {
+				raw := container.Client(t, protocol)
+				client := newTestClient(t, raw)
+				user := acctest.RandomWithPrefix("tfacc")
+				mustExec(t, raw, fmt.Sprintf("CREATE USER `%s` IDENTIFIED WITH no_password", user))
+				execOnCleanup(t, raw, fmt.Sprintf("DROP USER IF EXISTS `%s`", user))
+
+				for _, tc := range tcs {
+					t.Run(protocol+"/"+tc.name, func(t *testing.T) {
+						execOnCleanup(t, raw, fmt.Sprintf("REVOKE ALL FROM `%s`", user))
+
+						if tc.existing != "" {
+							mustExec(t, raw, fmt.Sprintf("GRANT %s TO `%s`", tc.existing, user))
+						}
+
+						grant := tc.grant
+						grant.GranteeUserName = &user
+						got, err := client.GrantPrivilege(context.Background(), grant, nil)
+
+						if tc.wantOverlap {
+							var overlap *OverlapError
+							require.ErrorAs(t, err, &overlap)
+							return
+						}
+						require.NoError(t, err)
+						require.NotNil(t, got)
+
+						rows, err := client.GetAllGrantsForGrantee(context.Background(), &user, nil, nil)
+						require.NoError(t, err)
+						stored := make([]string, 0, len(rows))
+						for _, row := range rows {
+							stored = append(stored, *row.AccessObject)
+						}
+						require.Contains(t, stored, tc.wantStored)
 					})
 				}
 			}

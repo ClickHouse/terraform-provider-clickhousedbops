@@ -76,10 +76,10 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			accessObject = &s
 		}
 
-		var accessObjectFilter *string
-		if attrs["access_object_filter"] != "" {
-			s := attrs["access_object_filter"]
-			accessObjectFilter = &s
+		var sourceFilter *string
+		if attrs["source_filter"] != "" {
+			s := attrs["source_filter"]
+			sourceFilter = &s
 		}
 
 		var granteeUserName, granteeRoleName *string
@@ -97,7 +97,7 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			TableName:           table,
 			ColumnName:          column,
 			AccessObject:        accessObject,
-			AccessObjectFilter:  accessObjectFilter,
+			SourceFilter:        sourceFilter,
 			GranteeUserName:     granteeUserName,
 			GranteeRoleName:     granteeRoleName,
 		}
@@ -133,10 +133,10 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			accessObject = &s
 		}
 
-		var accessObjectFilter *string
-		if attrs["access_object_filter"] != nil {
-			s := attrs["access_object_filter"].(string)
-			accessObjectFilter = &s
+		var sourceFilter *string
+		if attrs["source_filter"] != nil {
+			s := attrs["source_filter"].(string)
+			sourceFilter = &s
 		}
 
 		var granteeUserName, granteeRoleName *string
@@ -165,7 +165,7 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			TableName:           table,
 			ColumnName:          column,
 			AccessObject:        accessObject,
-			AccessObjectFilter:  accessObjectFilter,
+			SourceFilter:        sourceFilter,
 			GranteeUserName:     granteeUserName,
 			GranteeRoleName:     granteeRoleName,
 			GrantOption:         grantOption,
@@ -200,8 +200,8 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			return fmt.Errorf("wrong value for access_object attribute")
 		}
 
-		if !nilcompare.NilCompare(grantprivilege.AccessObjectFilter, attrs["access_object_filter"]) {
-			return fmt.Errorf("wrong value for access_object_filter attribute")
+		if !nilcompare.NilCompare(grantprivilege.SourceFilter, attrs["source_filter"]) {
+			return fmt.Errorf("wrong value for source_filter attribute")
 		}
 
 		if !nilcompare.NilCompare(clusterName, attrs["cluster_name"]) {
@@ -449,12 +449,12 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 		},
 		{
 			Name:     "Grant SOURCE-scoped READ with regexp filter to role using Native protocol on a single replica",
-			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single-read-write-grants.xml"},
 			Protocol: "native",
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithStringAttribute("privilege_name", "READ").
 				WithStringAttribute("access_object", "URL").
-				WithStringAttribute("access_object_filter", `https://example\.com/files/.*`).
+				WithStringAttribute("source_filter", `https://example\.com/files/.*`).
 				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
 				AddDependency(granteeRoleResource.Build()).
 				Build(),
@@ -462,6 +462,21 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Grant SOURCE-scoped READ with regexp filter fails without read/write grants using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("privilege_name", "READ").
+				WithStringAttribute("access_object", "URL").
+				WithStringAttribute("source_filter", `https://example\.com/files/.*`).
+				WithResourceFieldReference("grantee_role_name", "clickhousedbops_role", granteeRoleName, "name").
+				AddDependency(granteeRoleResource.Build()).
+				Build(),
+			ResourceName:    resourceName,
+			ResourceAddress: fmt.Sprintf("%s.%s", resourceType, resourceName),
+			ExpectError:     regexp.MustCompile(`access_control_improvements\.enable_read_write_grants`),
 		},
 		// Single replica, HTTP
 		{
@@ -783,6 +798,10 @@ func TestGrantprivilege_ValidateConfig(t *testing.T) {
 		{"no member supports the table", map[string]string{"privilege_name": "ALTER DATABASE", "database_name": "db", "table_name": "t"}, nil, []string{"table_name"}},
 		{"database pattern", map[string]string{"privilege_name": "SELECT", "database_name": "db*"}, nil, nil},
 		{"database pattern rejected with a table", map[string]string{"privilege_name": "SELECT", "database_name": "db*", "table_name": "t"}, nil, []string{"database_name"}},
+		{"filtered source", map[string]string{"privilege_name": "READ", "access_object": "URL", "source_filter": `https://example\.com/.*`}, nil, nil},
+		{"access object rejected for a group with members of other scopes", map[string]string{"privilege_name": "ACCESS MANAGEMENT", "access_object": "bob"}, nil, []string{"access_object"}},
+		{"filter rejected for a group with non-source members", map[string]string{"privilege_name": "ALL", "access_object": "URL", "source_filter": "x"}, nil, []string{"access_object", "source_filter"}},
+		{"filtered source requires the canonical name", map[string]string{"privilege_name": "READ", "access_object": "MySQL", "source_filter": ".*"}, nil, []string{"access_object"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

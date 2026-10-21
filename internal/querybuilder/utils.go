@@ -3,13 +3,24 @@ package querybuilder
 import (
 	"fmt"
 	"strings"
-
-	"github.com/pingcap/errors"
 )
 
-// backtick escapes the ` characted in strings to make them safe for use in SQL queries as literal values.
+// escapeChars escapes as ClickHouse writeAnyEscapedString: https://github.com/ClickHouse/ClickHouse/blob/master/src/IO/WriteHelpers.h#L341
+var escapeChars = strings.NewReplacer(`\`, `\\`, "\x00", `\0`, "\b", `\b`, "\f", `\f`, "\n", `\n`, "\r", `\r`, "\t", `\t`)
+
+// Escape control characters in the string to use it safely in SQL queries as literal values.
+func Escape(s string) string {
+	return escapeChars.Replace(s)
+}
+
+// QuoteChar quotes the string with a rune `c` and escapes any `c` within the string.
+func QuoteChar(s string, c rune) string {
+	return fmt.Sprintf("%c%s%c", c, strings.ReplaceAll(Escape(s), string(c), `\`+string(c)), c)
+}
+
+// backtick escapes the ` character in strings to make them safe for use in SQL queries as literal values.
 func backtick(s string) string {
-	return fmt.Sprintf("`%s`", strings.ReplaceAll(backslash(s), "`", "\\`"))
+	return QuoteChar(s, '`')
 }
 
 func backtickAll(s []string) []string {
@@ -24,11 +35,7 @@ func backtickAll(s []string) []string {
 }
 
 func quote(s string) string {
-	return fmt.Sprintf("'%s'", strings.ReplaceAll(backslash(s), "'", "\\'"))
-}
-
-func backslash(s string) string {
-	return strings.ReplaceAll(s, "\\", "\\\\")
+	return QuoteChar(s, '\'')
 }
 
 // granteeClause renders a TO clause target: ALL EXCEPT a list, ALL, or an explicit grantee list; empty when nothing is set.
@@ -60,34 +67,4 @@ func identifierOrPattern(s string) string {
 		return s
 	}
 	return backtick(s)
-}
-
-// privilegeTarget renders one of ClickHouse's two ON target families:
-// database/table targets and global-with-parameter targets. The latter includes
-// users, named collections, table engines, sources, and source regexp filters.
-func privilegeTarget(database, table, accessObject, accessObjectFilter *string, parameterized bool) (string, error) {
-	if accessObjectFilter != nil && accessObject == nil {
-		return "", errors.New("AccessObjectFilter requires AccessObject")
-	}
-	if accessObject != nil && (database != nil || table != nil) {
-		return "", errors.New("AccessObject cannot be combined with Database or Table")
-	}
-	if parameterized && (database != nil || table != nil) {
-		return "", errors.New("a parameterized privilege target cannot use Database or Table")
-	}
-
-	switch {
-	case accessObjectFilter != nil:
-		return fmt.Sprintf("%s(%s)", identifierOrPattern(*accessObject), quote(*accessObjectFilter)), nil
-	case accessObject != nil:
-		return identifierOrPattern(*accessObject), nil
-	case parameterized:
-		return "*", nil
-	case database != nil && table != nil:
-		return fmt.Sprintf("%s.%s", identifierOrPattern(*database), identifierOrPattern(*table)), nil
-	case database != nil:
-		return fmt.Sprintf("%s.*", identifierOrPattern(*database)), nil
-	default:
-		return "*.*", nil
-	}
 }
