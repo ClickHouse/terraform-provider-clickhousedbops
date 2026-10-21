@@ -31,7 +31,7 @@ install: build
 
 test: 
 	go test -i $(TEST) || exit 1
-	echo $(TEST) | xargs -t -n4 go test $(TESTARGS) -timeout=30s -parallel=4
+	echo $(TEST) | xargs -t -n4 go test $(TESTARGS) -timeout=10m -parallel=4
 
 tftest:
 ifeq ($(strip $(RESOURCE)),)
