@@ -3,6 +3,8 @@ package dbops
 import (
 	"context"
 	"time"
+
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 )
 
 type Client interface {
@@ -32,6 +34,7 @@ type Client interface {
 	GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string) (*GrantPrivilege, error)
 	RevokeGrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege, clusterName *string) error
 	GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string, clusterName *string) ([]GrantPrivilege, error)
+	GetPrivileges(ctx context.Context) (grants.Catalog, error)
 
 	CreateRowPolicy(ctx context.Context, rp RowPolicy, clusterName *string) (*RowPolicy, error)
 	GetRowPolicy(ctx context.Context, rp *RowPolicy, clusterName *string) (*RowPolicy, error)

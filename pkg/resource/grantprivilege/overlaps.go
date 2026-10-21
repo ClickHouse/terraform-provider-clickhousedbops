@@ -8,8 +8,8 @@ import (
 )
 
 // overlaps reports whether an already-granted privilege covers the one in current.
-func overlaps(current GrantPrivilege, existing dbops.GrantPrivilege) bool {
-	return grants.Covers(existing.AsGrant(), current.asGrant())
+func overlaps(privileges grants.Catalog, current GrantPrivilege, existing dbops.GrantPrivilege) bool {
+	return privileges.Covers(existing.AsGrant(), current.asGrant())
 }
 
 func explainOverlap(current GrantPrivilege, existing dbops.GrantPrivilege) string {

@@ -22,16 +22,15 @@ type GrantPrivilege struct {
 
 func (g GrantPrivilege) toGrant() dbops.GrantPrivilege {
 	return dbops.GrantPrivilege{
-		AccessType:          g.Privilege.ValueString(),
-		ExpandedAccessTypes: grants.AllDescendants(grants.Parsed().Groups, g.Privilege.ValueString()),
-		DatabaseName:        g.Database.ValueStringPointer(),
-		TableName:           g.Table.ValueStringPointer(),
-		ColumnName:          g.Column.ValueStringPointer(),
-		AccessObject:        g.AccessObject.ValueStringPointer(),
-		GranteeUserName:     g.GranteeUserName.ValueStringPointer(),
-		GranteeRoleName:     g.GranteeRoleName.ValueStringPointer(),
-		GrantOption:         g.GrantOption.ValueBool(),
-		CurrentGrants:       g.CurrentGrants.ValueBool(),
+		AccessType:      g.Privilege.ValueString(),
+		DatabaseName:    g.Database.ValueStringPointer(),
+		TableName:       g.Table.ValueStringPointer(),
+		ColumnName:      g.Column.ValueStringPointer(),
+		AccessObject:    g.AccessObject.ValueStringPointer(),
+		GranteeUserName: g.GranteeUserName.ValueStringPointer(),
+		GranteeRoleName: g.GranteeRoleName.ValueStringPointer(),
+		GrantOption:     g.GrantOption.ValueBool(),
+		CurrentGrants:   g.CurrentGrants.ValueBool(),
 	}
 }
 

@@ -28,44 +28,68 @@ var parsed = sync.OnceValue(func() Catalog { return ParseGrantsTSV(grantsTSV) })
 // Parsed returns the catalog parsed from the embedded grants.tsv, cached once.
 func Parsed() Catalog { return parsed() }
 
+// Privilege is a privilege as SHOW PRIVILEGES lists it; nil Scope or ParentGroup means none.
+type Privilege struct {
+	Name        string
+	Aliases     []string
+	Scope       *string
+	ParentGroup *string
+}
+
+// NewCatalog builds the catalog from a list of privileges.
+func NewCatalog(privileges []Privilege) Catalog {
+	catalog := Catalog{Aliases: make(map[string]string), Groups: make(map[string][]string), Scopes: make(map[string]string)}
+	for _, p := range privileges {
+		for _, alias := range p.Aliases {
+			if alias != p.Name {
+				catalog.Aliases[alias] = p.Name
+			}
+		}
+
+		if p.ParentGroup != nil {
+			catalog.Groups[*p.ParentGroup] = append(catalog.Groups[*p.ParentGroup], p.Name)
+		}
+
+		if p.Scope != nil {
+			catalog.Scopes[p.Name] = *p.Scope
+		}
+	}
+	return catalog
+}
+
 // ParseGrantsTSV builds the privilege catalog from ClickHouse's
 // 01271_show_privileges.reference TSV format.
 func ParseGrantsTSV(data string) Catalog {
-	aliases := make(map[string]string)
-	groups := make(map[string][]string)
-	scopes := make(map[string]string)
+	nullable := func(field string) *string {
+		if field == `\N` {
+			return nil
+		}
+		return &field
+	}
 
+	privileges := make([]Privilege, 0)
 	scanner := bufio.NewScanner(strings.NewReader(data))
 	for scanner.Scan() {
-		line := scanner.Text()
-		splitted := strings.Split(line, "\t")
+		splitted := strings.Split(scanner.Text(), "\t")
 
-		clean := strings.ReplaceAll(strings.Trim(splitted[1], "[]"), "'", "")
-		if clean != "" {
-			for a := range strings.SplitSeq(clean, ",") {
-				if a != splitted[0] {
-					aliases[a] = splitted[0]
-				}
-			}
+		var aliases []string
+		if clean := strings.ReplaceAll(strings.Trim(splitted[1], "[]"), "'", ""); clean != "" {
+			aliases = strings.Split(clean, ",")
 		}
 
-		if splitted[3] != "\\N" {
-			if groups[splitted[3]] == nil {
-				groups[splitted[3]] = make([]string, 0)
-			}
-			groups[splitted[3]] = append(groups[splitted[3]], splitted[0])
-		}
-
-		if splitted[2] != "\\N" {
-			scopes[splitted[0]] = splitted[2]
-		}
+		privileges = append(privileges, Privilege{
+			Name:        splitted[0],
+			Aliases:     aliases,
+			Scope:       nullable(splitted[2]),
+			ParentGroup: nullable(splitted[3]),
+		})
 	}
 
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
 	}
 
-	return Catalog{Aliases: aliases, Groups: groups, Scopes: scopes}
+	return NewCatalog(privileges)
 }
 
 // AllDescendants returns the privilege plus all its descendants (children,
