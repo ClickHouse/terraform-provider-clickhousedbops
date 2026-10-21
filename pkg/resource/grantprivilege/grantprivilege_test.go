@@ -732,6 +732,8 @@ func TestGrantprivilege_ValidateConfig(t *testing.T) {
 		{"some members support the database", map[string]string{"privilege_name": "ALTER", "database_name": "db"}, []string{"database_name"}, nil},
 		{"some members support the table", map[string]string{"privilege_name": "SHOW", "database_name": "db", "table_name": "t"}, []string{"table_name"}, nil},
 		{"no member supports the table", map[string]string{"privilege_name": "ALTER DATABASE", "database_name": "db", "table_name": "t"}, nil, []string{"table_name"}},
+		{"database pattern", map[string]string{"privilege_name": "SELECT", "database_name": "db*"}, nil, nil},
+		{"database pattern rejected with a table", map[string]string{"privilege_name": "SELECT", "database_name": "db*", "table_name": "t"}, nil, []string{"database_name"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

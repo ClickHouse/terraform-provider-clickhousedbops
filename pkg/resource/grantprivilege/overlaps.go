@@ -4,13 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
-	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
 )
-
-// overlaps reports whether an already-granted privilege covers the one in current.
-func overlaps(current GrantPrivilege, existing dbops.GrantPrivilege) bool {
-	return grants.Covers(existing.AsGrant(), current.asGrant())
-}
 
 func explainOverlap(current GrantPrivilege, existing dbops.GrantPrivilege) string {
 	// Prepare human-readable explanation of the overlap.
