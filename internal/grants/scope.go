@@ -8,6 +8,7 @@ type ScopeAttributes struct {
 	Table        bool
 	Column       bool
 	AccessObject bool
+	SourceFilter bool
 }
 
 var attributesByScope = map[string]ScopeAttributes{
@@ -19,9 +20,9 @@ var attributesByScope = map[string]ScopeAttributes{
 	"COLUMN":           {Database: true, Table: true, Column: true},
 	"USER_NAME":        {AccessObject: true},
 	"DEFINER":          {AccessObject: true},
-	"SOURCE":           {AccessObject: true},
+	"SOURCE":           {AccessObject: true, SourceFilter: true},
 	"NAMED_COLLECTION": {AccessObject: true},
-	"TABLE_ENGINE":     {},
+	"TABLE_ENGINE":     {AccessObject: true},
 }
 
 // ScopeAttributesFor returns the attributes supported by every scoped member of
@@ -29,7 +30,7 @@ var attributesByScope = map[string]ScopeAttributes{
 // whether any of them has a supported scope at all.
 func ScopeAttributesFor(privilege string) (ScopeAttributes, ScopeAttributes, bool) {
 	cat := Parsed()
-	attrs := ScopeAttributes{Database: true, Table: true, Column: true, AccessObject: true}
+	attrs := ScopeAttributes{Database: true, Table: true, Column: true, AccessObject: true, SourceFilter: true}
 
 	allAttrs := ScopeAttributes{}
 	supported := false
@@ -44,6 +45,7 @@ func ScopeAttributesFor(privilege string) (ScopeAttributes, ScopeAttributes, boo
 		attrs.Table = attrs.Table && a.Table
 		attrs.Column = attrs.Column && a.Column
 		attrs.AccessObject = attrs.AccessObject && a.AccessObject
+		attrs.SourceFilter = attrs.SourceFilter && a.SourceFilter
 		if !ok {
 			continue
 		}
@@ -52,6 +54,7 @@ func ScopeAttributesFor(privilege string) (ScopeAttributes, ScopeAttributes, boo
 		allAttrs.Table = allAttrs.Table || a.Table
 		allAttrs.Column = allAttrs.Column || a.Column
 		allAttrs.AccessObject = allAttrs.AccessObject || a.AccessObject
+		allAttrs.SourceFilter = allAttrs.SourceFilter || a.SourceFilter
 	}
 
 	if !supported {

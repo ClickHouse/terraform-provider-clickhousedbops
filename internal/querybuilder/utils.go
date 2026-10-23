@@ -5,9 +5,22 @@ import (
 	"strings"
 )
 
-// backtick escapes the ` characted in strings to make them safe for use in SQL queries as literal values.
+// escapeChars escapes as ClickHouse writeAnyEscapedString: https://github.com/ClickHouse/ClickHouse/blob/master/src/IO/WriteHelpers.h#L341
+var escapeChars = strings.NewReplacer(`\`, `\\`, "\x00", `\0`, "\b", `\b`, "\f", `\f`, "\n", `\n`, "\r", `\r`, "\t", `\t`)
+
+// Escape control characters in the string to use it safely in SQL queries as literal values.
+func Escape(s string) string {
+	return escapeChars.Replace(s)
+}
+
+// QuoteChar quotes the string with a rune `c` and escapes any `c` within the string.
+func QuoteChar(s string, c rune) string {
+	return fmt.Sprintf("%c%s%c", c, strings.ReplaceAll(Escape(s), string(c), `\`+string(c)), c)
+}
+
+// backtick escapes the ` character in strings to make them safe for use in SQL queries as literal values.
 func backtick(s string) string {
-	return fmt.Sprintf("`%s`", strings.ReplaceAll(backslash(s), "`", "\\`"))
+	return QuoteChar(s, '`')
 }
 
 func backtickAll(s []string) []string {
@@ -22,11 +35,7 @@ func backtickAll(s []string) []string {
 }
 
 func quote(s string) string {
-	return fmt.Sprintf("'%s'", strings.ReplaceAll(backslash(s), "'", "\\'"))
-}
-
-func backslash(s string) string {
-	return strings.ReplaceAll(s, "\\", "\\\\")
+	return QuoteChar(s, '\'')
 }
 
 // granteeClause renders a TO clause target: ALL EXCEPT a list, ALL, or an explicit grantee list; empty when nothing is set.

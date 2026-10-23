@@ -14,6 +14,7 @@ type RevokePrivilegeQueryBuilder interface {
 	WithTable(*string) RevokePrivilegeQueryBuilder
 	WithColumn(*string) RevokePrivilegeQueryBuilder
 	WithAccessObject(*string) RevokePrivilegeQueryBuilder
+	WithSourceFilter(*string) RevokePrivilegeQueryBuilder
 	WithCluster(*string) RevokePrivilegeQueryBuilder
 }
 
@@ -24,6 +25,7 @@ type revokePrivilegeQueryBuilder struct {
 	table        *string
 	column       *string
 	accessObject *string
+	sourceFilter *string
 	clusterName  *string
 }
 
@@ -54,6 +56,11 @@ func (q *revokePrivilegeQueryBuilder) WithAccessObject(accessObject *string) Rev
 	return q
 }
 
+func (q *revokePrivilegeQueryBuilder) WithSourceFilter(filter *string) RevokePrivilegeQueryBuilder {
+	q.sourceFilter = filter
+	return q
+}
+
 func (q *revokePrivilegeQueryBuilder) WithCluster(clusterName *string) RevokePrivilegeQueryBuilder {
 	q.clusterName = clusterName
 	return q
@@ -65,6 +72,9 @@ func (q *revokePrivilegeQueryBuilder) Build() (string, error) {
 	}
 	if q.from == "" {
 		return "", errors.New("From cannot be empty")
+	}
+	if q.sourceFilter != nil && q.accessObject == nil {
+		return "", errors.New("SourceFilter requires AccessObject")
 	}
 
 	tokens := []string{
@@ -87,6 +97,8 @@ func (q *revokePrivilegeQueryBuilder) Build() (string, error) {
 		tokens = append(tokens, "ON")
 
 		switch {
+		case q.accessObject != nil && q.sourceFilter != nil:
+			tokens = append(tokens, fmt.Sprintf("%s(%s)", identifierOrPattern(*q.accessObject), quote(*q.sourceFilter)))
 		case q.accessObject != nil:
 			tokens = append(tokens, identifierOrPattern(*q.accessObject))
 		case q.database != nil && q.table != nil:

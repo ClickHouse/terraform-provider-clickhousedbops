@@ -54,6 +54,17 @@ func Test_revokePrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Filtered source target",
+			builder: RevokePrivilege("READ", "reader").WithAccessObject(new("URL")).WithSourceFilter(new(`https://example\.com/.*`)),
+			want:    "REVOKE READ ON `URL`('https://example\\\\.com/.*') FROM `reader`;",
+			wantErr: false,
+		},
+		{
+			name:    "Source filter without access object",
+			builder: RevokePrivilege("READ", "reader").WithSourceFilter(new(".*")),
+			wantErr: true,
+		},
+		{
 			name:    "Missing access type",
 			builder: RevokePrivilege("", "user1"),
 			want:    "",

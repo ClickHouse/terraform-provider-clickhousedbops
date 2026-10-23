@@ -2,6 +2,8 @@ package dbops
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -36,6 +38,7 @@ var sourcesFamily = map[string]bool{
 type GrantPrivilege struct {
 	AccessType      string  `json:"access_type"`
 	AccessObject    *string `json:"access_object"`
+	SourceFilter    *string `json:"-"`
 	DatabaseName    *string `json:"database"`
 	TableName       *string `json:"table"`
 	ColumnName      *string `json:"column"`
@@ -91,6 +94,7 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 		WithTable(grantPrivilege.TableName).
 		WithColumn(grantPrivilege.ColumnName).
 		WithAccessObject(grantPrivilege.AccessObject).
+		WithSourceFilter(grantPrivilege.SourceFilter).
 		WithGrantOption(grantPrivilege.GrantOption).
 		WithCluster(clusterName).
 		WithCurrentGrants(grantPrivilege.CurrentGrants).
@@ -138,14 +142,17 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivi
 	database := name(grantPrivilege.DatabaseName)
 	table := name(grantPrivilege.TableName)
 	column := name(grantPrivilege.ColumnName)
-	accessObject := name(grantPrivilege.AccessObject)
+	accessObjects := []string{name(grantPrivilege.AccessObject)}
+	if grantPrivilege.SourceFilter != nil {
+		accessObjects = sourceFilterTargets(*grantPrivilege.AccessObject, *grantPrivilege.SourceFilter)
+	}
 
 	isReadWrite := false
 	var accessTypes []string
 	switch {
 	case capabilityFlags.SourcesGrantReadWriteSeparation && sourcesFamily[grantPrivilege.AccessType]:
 		accessTypes = []string{"READ", "WRITE"}
-		accessObject = grantPrivilege.AccessType
+		accessObjects = []string{grantPrivilege.AccessType}
 		isReadWrite = true
 	case len(grantPrivilege.ExpandedAccessTypes) > 0:
 		accessTypes = grantPrivilege.ExpandedAccessTypes
@@ -164,7 +171,7 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivi
 			name(row.DatabaseName) == database &&
 			name(row.TableName) == table &&
 			name(row.ColumnName) == column &&
-			name(row.AccessObject) == accessObject {
+			slices.Contains(accessObjects, name(row.AccessObject)) {
 			seen[row.AccessType] = true
 		}
 	}
@@ -203,6 +210,7 @@ func (i *impl) RevokeGrantPrivilege(ctx context.Context, grantPrivilege GrantPri
 		WithTable(grantPrivilege.TableName).
 		WithColumn(grantPrivilege.ColumnName).
 		WithAccessObject(grantPrivilege.AccessObject).
+		WithSourceFilter(grantPrivilege.SourceFilter).
 		WithCluster(clusterName).
 		Build()
 	if err != nil {
@@ -294,7 +302,8 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 			return errors.WithMessage(err, "error scanning query result, missing 'grant_option' field")
 		}
 
-		isWildcard := true
+		// Without is_wildcard any stored name may be a pattern, except a source.
+		isWildcard := grants.Parsed().Scopes[accessType] != "SOURCE"
 		if capabilityFlags.GrantsWildcardColumn {
 			isWildcard, err = data.GetBool("is_wildcard")
 			if err != nil {
@@ -330,4 +339,15 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 	}
 
 	return ret, nil
+}
+
+var plainIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// sourceFilterTargets renders a filtered source as system.grants shows it; identifier-like filters may appear unquoted.
+func sourceFilterTargets(source, filter string) []string {
+	targets := []string{fmt.Sprintf("%s(%s)", source, querybuilder.QuoteChar(filter, '`'))}
+	if plainIdentifier.MatchString(filter) {
+		targets = append(targets, fmt.Sprintf("%s(%s)", source, filter))
+	}
+	return targets
 }

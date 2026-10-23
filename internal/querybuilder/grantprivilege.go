@@ -14,6 +14,7 @@ type GrantPrivilegeQueryBuilder interface {
 	WithTable(*string) GrantPrivilegeQueryBuilder
 	WithColumn(*string) GrantPrivilegeQueryBuilder
 	WithAccessObject(*string) GrantPrivilegeQueryBuilder
+	WithSourceFilter(*string) GrantPrivilegeQueryBuilder
 	WithGrantOption(bool) GrantPrivilegeQueryBuilder
 	WithCluster(*string) GrantPrivilegeQueryBuilder
 	WithCurrentGrants(bool) GrantPrivilegeQueryBuilder
@@ -26,6 +27,7 @@ type grantPrivilegeQueryBuilder struct {
 	table         *string
 	column        *string
 	accessObject  *string
+	sourceFilter  *string
 	grantOption   bool
 	clusterName   *string
 	currentGrants bool
@@ -58,6 +60,11 @@ func (q *grantPrivilegeQueryBuilder) WithAccessObject(accessObject *string) Gran
 	return q
 }
 
+func (q *grantPrivilegeQueryBuilder) WithSourceFilter(filter *string) GrantPrivilegeQueryBuilder {
+	q.sourceFilter = filter
+	return q
+}
+
 func (q *grantPrivilegeQueryBuilder) WithCluster(clusterName *string) GrantPrivilegeQueryBuilder {
 	q.clusterName = clusterName
 	return q
@@ -80,6 +87,9 @@ func (q *grantPrivilegeQueryBuilder) Build() (string, error) {
 	if q.to == "" {
 		return "", errors.New("To cannot be empty")
 	}
+	if q.sourceFilter != nil && q.accessObject == nil {
+		return "", errors.New("SourceFilter requires AccessObject")
+	}
 
 	tokens := []string{
 		"GRANT",
@@ -100,6 +110,8 @@ func (q *grantPrivilegeQueryBuilder) Build() (string, error) {
 	// Target database/table/access object
 	var target string
 	switch {
+	case q.accessObject != nil && q.sourceFilter != nil:
+		target = fmt.Sprintf("%s(%s)", identifierOrPattern(*q.accessObject), quote(*q.sourceFilter))
 	case q.accessObject != nil:
 		target = identifierOrPattern(*q.accessObject)
 	case q.database != nil && q.table != nil:

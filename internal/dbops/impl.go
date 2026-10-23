@@ -49,12 +49,7 @@ func (i *impl) readAfterWriteTimeoutArgs() []time.Duration {
 
 func (i *impl) initCapabilities(ctx context.Context) {
 	i.initOnce.Do(func() {
-		version, err := i.GetVersion(ctx)
-		if err != nil {
-			i.initErr = err
-			return
-		}
-		i.CapabilityFlags = NewCapabilityFlags(version)
+		i.CapabilityFlags, i.initErr = i.detectCapabilityFlags(ctx)
 	})
 }
 

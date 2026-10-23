@@ -47,3 +47,18 @@ resource "clickhousedbops_grant_privilege" "use_collection" {
   access_object     = "my_collection"
   grantee_user_name = "my_user_name"
 }
+
+# TABLE ENGINE grants are restricted to one engine via access_object.
+resource "clickhousedbops_grant_privilege" "distributed_engine" {
+  privilege_name    = "TABLE ENGINE"
+  access_object     = "Distributed"
+  grantee_role_name = "ddl_role"
+}
+
+# ClickHouse 26.3+ can restrict source grants to a URI regexp.
+resource "clickhousedbops_grant_privilege" "read_public_exports" {
+  privilege_name    = "READ"
+  access_object     = "URL"
+  source_filter     = "https://example\\.com/public/.*"
+  grantee_role_name = "reader_role"
+}

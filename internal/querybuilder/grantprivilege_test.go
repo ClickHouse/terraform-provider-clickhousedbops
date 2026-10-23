@@ -108,6 +108,17 @@ func Test_grantPrivilegeQueryBuilder(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "Filtered source target",
+			builder: GrantPrivilege("READ", "reader").WithAccessObject(new("URL")).WithSourceFilter(new(`https://example\.com/.*`)),
+			want:    "GRANT READ ON `URL`('https://example\\\\.com/.*') TO `reader`;",
+			wantErr: false,
+		},
+		{
+			name:    "Source filter without access object",
+			builder: GrantPrivilege("READ", "reader").WithSourceFilter(new(".*")),
+			wantErr: true,
+		},
+		{
 			name:    "Missing access type",
 			builder: GrantPrivilege("", "user1"),
 			want:    "",
