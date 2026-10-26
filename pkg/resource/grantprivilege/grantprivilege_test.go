@@ -102,7 +102,7 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			GranteeRoleName:     granteeRoleName,
 		}
 
-		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
+		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, &grantPrivilege, clusterName, false)
 		return grantprivilege != nil, err
 	}
 
@@ -171,7 +171,7 @@ func TestGrantprivilege_acceptance(t *testing.T) {
 			GrantOption:         grantOption,
 		}
 
-		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
+		grantprivilege, err := dbopsClient.GetGrantPrivilege(ctx, &grantPrivilege, clusterName, false)
 		if err != nil {
 			return err
 		}

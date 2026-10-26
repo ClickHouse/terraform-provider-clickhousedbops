@@ -504,7 +504,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	grant, err := r.client.GetGrantPrivilege(ctx, new(state.toGrant()), state.ClusterName.ValueStringPointer())
+	grant, err := r.client.GetGrantPrivilege(ctx, new(state.toGrant()), state.ClusterName.ValueStringPointer(), true)
 	if _, ok := errors.AsType[*dbops.OverlapError](err); ok {
 		// A broader grant absorbed this one; forget it rather than revoke a part of that grant.
 		resp.State.RemoveResource(ctx)
