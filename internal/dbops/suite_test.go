@@ -2,7 +2,9 @@ package dbops
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -24,6 +26,37 @@ func (c *laggingClient) Select(ctx context.Context, sql string, callback func(cl
 		return nil
 	}
 	return c.ClickhouseClient.Select(ctx, sql, callback)
+}
+
+// countingClient counts SELECTs containing `match` and fails the first `failures` of them.
+type countingClient struct {
+	clickhouseclient.ClickhouseClient
+	match    string
+	selects  atomic.Int32
+	failures atomic.Int32
+}
+
+func (c *countingClient) Select(ctx context.Context, sql string, callback func(clickhouseclient.Row) error) error {
+	if strings.Contains(sql, c.match) {
+		c.selects.Add(1)
+		if c.failures.Add(-1) >= 0 {
+			return errors.New("injected failure")
+		}
+	}
+	return c.ClickhouseClient.Select(ctx, sql, callback)
+}
+
+// execHookClient calls onExec before running every statement.
+type execHookClient struct {
+	clickhouseclient.ClickhouseClient
+	onExec func()
+}
+
+func (c *execHookClient) Exec(ctx context.Context, sql string, params ...map[string]string) error {
+	if c.onExec != nil {
+		c.onExec()
+	}
+	return c.ClickhouseClient.Exec(ctx, sql, params...)
 }
 
 func newTestClient(t *testing.T, chClient clickhouseclient.ClickhouseClient) Client {

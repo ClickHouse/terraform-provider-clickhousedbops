@@ -3,9 +3,11 @@ package dbops
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/grants"
@@ -189,6 +191,132 @@ func TestGrantPrivilege_sourceFilter(t *testing.T) {
 					})
 				}
 			}
+		})
+	}
+}
+
+func TestGetGrantPrivilege_cached(t *testing.T) {
+	const grantsQuery = "FROM `system`.`grants`"
+	table := GrantPrivilege{AccessType: "SELECT", DatabaseName: new("db"), TableName: new("t")}
+	forUser := func(grant GrantPrivilege, user string) *GrantPrivilege {
+		grant.GranteeUserName = &user
+		return &grant
+	}
+
+	container := chcontainer.Start(t, "latest")
+	for _, protocol := range protocols {
+		raw := container.Client(t, protocol)
+		newUser := func(t *testing.T, grant string) string {
+			user := acctest.RandomWithPrefix("tfacc")
+			execOnCleanup(t, raw, fmt.Sprintf("DROP USER IF EXISTS `%s`", user))
+			mustExec(t, raw, fmt.Sprintf("CREATE USER `%s` IDENTIFIED WITH no_password", user))
+			if grant != "" {
+				mustExec(t, raw, fmt.Sprintf("GRANT %s TO `%s`", grant, user))
+			}
+			return user
+		}
+
+		t.Run(protocol+"/reads a grantee once", func(t *testing.T) {
+			user := newUser(t, "SELECT ON db.t")
+			counting := &countingClient{ClickhouseClient: raw, match: grantsQuery}
+			client := newTestClient(t, counting)
+
+			var wg sync.WaitGroup
+			for range 8 {
+				wg.Go(func() {
+					got, err := client.GetGrantPrivilege(context.Background(), forUser(table, user), nil, true)
+					assert.NoError(t, err)
+					assert.NotNil(t, got)
+				})
+			}
+			wg.Wait()
+
+			got, err := client.GetGrantPrivilege(context.Background(), forUser(GrantPrivilege{AccessType: "INSERT", DatabaseName: new("db"), TableName: new("t")}, user), nil, true)
+			require.NoError(t, err)
+			require.Nil(t, got)
+			require.EqualValues(t, 1, counting.selects.Load())
+		})
+
+		t.Run(protocol+"/reads every time without allowCached", func(t *testing.T) {
+			user := newUser(t, "SELECT ON db.t")
+			counting := &countingClient{ClickhouseClient: raw, match: grantsQuery}
+			client := newTestClient(t, counting)
+
+			for _, allowCached := range []bool{false, false, true} {
+				got, err := client.GetGrantPrivilege(context.Background(), forUser(table, user), nil, allowCached)
+				require.NoError(t, err)
+				require.NotNil(t, got)
+			}
+			require.EqualValues(t, 3, counting.selects.Load())
+		})
+
+		t.Run(protocol+"/keeps a user and a role with the same name apart", func(t *testing.T) {
+			user := newUser(t, "SELECT ON db.t")
+			mustExec(t, raw, fmt.Sprintf("CREATE ROLE `%s`", user))
+			execOnCleanup(t, raw, fmt.Sprintf("DROP ROLE IF EXISTS `%s`", user))
+			counting := &countingClient{ClickhouseClient: raw, match: grantsQuery}
+			client := newTestClient(t, counting)
+
+			got, err := client.GetGrantPrivilege(context.Background(), forUser(table, user), nil, true)
+			require.NoError(t, err)
+			require.NotNil(t, got)
+
+			role := table
+			role.GranteeRoleName = &user
+			got, err = client.GetGrantPrivilege(context.Background(), &role, nil, true)
+			require.NoError(t, err)
+			require.Nil(t, got)
+			require.EqualValues(t, 2, counting.selects.Load())
+		})
+
+		t.Run(protocol+"/reads again once after a statement", func(t *testing.T) {
+			user := newUser(t, "SELECT ON db.t")
+			counting := &countingClient{ClickhouseClient: raw, match: grantsQuery}
+			client := newTestClient(t, counting)
+
+			got, err := client.GetGrantPrivilege(context.Background(), forUser(table, user), nil, true)
+			require.NoError(t, err)
+			require.NotNil(t, got)
+
+			require.NoError(t, client.RevokeGrantPrivilege(context.Background(), *forUser(table, user), nil))
+
+			for range 2 {
+				got, err = client.GetGrantPrivilege(context.Background(), forUser(table, user), nil, true)
+				require.NoError(t, err)
+				require.Nil(t, got)
+			}
+			require.EqualValues(t, 2, counting.selects.Load())
+		})
+
+		t.Run(protocol+"/does not keep a failed read", func(t *testing.T) {
+			user := newUser(t, "SELECT ON db.t")
+			counting := &countingClient{ClickhouseClient: raw, match: grantsQuery}
+			counting.failures.Store(1)
+			client := newTestClient(t, counting)
+
+			_, err := client.GetGrantPrivilege(context.Background(), forUser(table, user), nil, true)
+			require.Error(t, err)
+
+			got, err := client.GetGrantPrivilege(context.Background(), forUser(table, user), nil, true)
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			require.EqualValues(t, 2, counting.selects.Load())
+		})
+
+		t.Run(protocol+"/does not keep grants read during a statement", func(t *testing.T) {
+			user := newUser(t, "SELECT ON db.t")
+			hooked := &execHookClient{ClickhouseClient: raw}
+			client := newTestClient(t, hooked)
+			hooked.onExec = func() {
+				_, err := client.GetGrantPrivilege(context.Background(), forUser(table, user), nil, true)
+				assert.NoError(t, err)
+			}
+
+			require.NoError(t, client.RevokeGrantPrivilege(context.Background(), *forUser(table, user), nil))
+
+			got, err := client.GetGrantPrivilege(context.Background(), forUser(table, user), nil, true)
+			require.NoError(t, err)
+			require.Nil(t, got)
 		})
 	}
 }

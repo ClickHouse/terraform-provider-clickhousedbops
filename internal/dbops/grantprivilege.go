@@ -117,11 +117,11 @@ func (i *impl) GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege
 
 	// Wait for the grant's rows, or for a broader grant that absorbed it, in which case ClickHouse writes none.
 	return retryWithBackoff(ctx, "grant privilege", identifier, func() (*GrantPrivilege, error) {
-		return i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName)
+		return i.GetGrantPrivilege(ctx, &grantPrivilege, clusterName, false)
 	}, i.readAfterWriteTimeoutArgs()...)
 }
 
-func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string) (*GrantPrivilege, error) {
+func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string, allowCached bool) (*GrantPrivilege, error) {
 	capabilityFlags, err := i.GetCapabilityFlags(ctx)
 	if err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func (i *impl) GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivi
 		accessTypes = []string{grantPrivilege.AccessType}
 	}
 
-	existing, err := i.GetAllGrantsForGrantee(ctx, grantPrivilege.GranteeUserName, grantPrivilege.GranteeRoleName, clusterName)
+	existing, err := i.grantsForGrantee(ctx, grantPrivilege.GranteeUserName, grantPrivilege.GranteeRoleName, clusterName, allowCached)
 	if err != nil {
 		return nil, err
 	}
@@ -339,6 +339,46 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 	}
 
 	return ret, nil
+}
+
+// grantsForGrantee with allowCached reads each grantee once until the next Exec clears the cache.
+func (i *impl) grantsForGrantee(ctx context.Context, granteeUserName, granteeRoleName, clusterName *string, allowCached bool) ([]GrantPrivilege, error) {
+	if !allowCached {
+		return i.GetAllGrantsForGrantee(ctx, granteeUserName, granteeRoleName, clusterName)
+	}
+
+	key := grantsCacheKey(granteeUserName, granteeRoleName, clusterName)
+	result, err, _ := i.grantsFills.Do(key, func() (any, error) {
+		if rows, ok := i.grantsCache.Load(key); ok {
+			return rows, nil
+		}
+		rows, err := i.GetAllGrantsForGrantee(ctx, granteeUserName, granteeRoleName, clusterName)
+		if err != nil {
+			return nil, err
+		}
+		i.grantsCache.Store(key, rows)
+		return rows, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.([]GrantPrivilege), nil
+}
+
+func grantsCacheKey(granteeUserName, granteeRoleName, clusterName *string) string {
+	var result string
+	if clusterName != nil {
+		result = *clusterName + ":"
+	}
+
+	switch {
+	case granteeUserName != nil:
+		result += "user:" + *granteeUserName
+	case granteeRoleName != nil:
+		result += "role:" + *granteeRoleName
+	}
+
+	return result
 }
 
 var plainIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
