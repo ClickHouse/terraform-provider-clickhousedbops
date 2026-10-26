@@ -12,6 +12,10 @@ import (
 
 // IsReplicatedStorage queries system tables and checks if the highest priority storage system for users and roles is 'replicated'.
 func (i *impl) IsReplicatedStorage(ctx context.Context) (bool, error) {
+	if replicated := i.replicatedStorage.Load(); replicated != nil {
+		return *replicated, nil
+	}
+
 	sql, err := querybuilder.
 		NewSelect([]querybuilder.Field{querybuilder.NewField("type"), querybuilder.NewField("precedence")}, "system.user_directories").
 		Where(querybuilder.WhereDiffers("type", "users_xml")).
@@ -44,7 +48,9 @@ func (i *impl) IsReplicatedStorage(ctx context.Context) (bool, error) {
 		return false, errors.WithMessage(err, "error running query")
 	}
 
-	return currentType == "replicated", nil
+	replicated := currentType == "replicated"
+	i.replicatedStorage.Store(&replicated)
+	return replicated, nil
 }
 
 // IsNamedCollectionsStorageReplicated reports whether named collections are stored in Keeper/ZooKeeper.
