@@ -802,6 +802,8 @@ func TestGrantprivilege_ValidateConfig(t *testing.T) {
 		{"access object rejected for a group with members of other scopes", map[string]string{"privilege_name": "ACCESS MANAGEMENT", "access_object": "bob"}, nil, []string{"access_object"}},
 		{"filter rejected for a group with non-source members", map[string]string{"privilege_name": "ALL", "access_object": "URL", "source_filter": "x"}, nil, []string{"access_object", "source_filter"}},
 		{"filtered source requires the canonical name", map[string]string{"privilege_name": "READ", "access_object": "MySQL", "source_filter": ".*"}, nil, []string{"access_object"}},
+		{"unfiltered source requires the canonical name", map[string]string{"privilege_name": "WRITE", "access_object": "PostgreSQL"}, nil, []string{"access_object"}},
+		{"table engine keeps its case", map[string]string{"privilege_name": "TABLE ENGINE", "access_object": "Distributed"}, nil, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

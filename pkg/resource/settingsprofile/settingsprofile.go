@@ -69,6 +69,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Description: "List of setting profile names to inherit from",
 				Validators: []validator.List{
 					listvalidator.SizeAtLeast(1),
+					listvalidator.UniqueValues(),
 				},
 			},
 		},

@@ -16,6 +16,7 @@
 
     <mlock_executable>true</mlock_executable>
 
+    <custom_settings_prefixes>SQL_</custom_settings_prefixes>
 
     <profiles>
         <!-- Default settings. -->
