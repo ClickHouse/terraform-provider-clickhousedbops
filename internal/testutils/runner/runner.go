@@ -39,6 +39,9 @@ type TestCase struct {
 
 	// SetupFunc runs after ClickHouse is up and before terraform, to seed out-of-band state.
 	SetupFunc func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error
+
+	// UpdateSetupFunc runs before the update step, to change state out of band.
+	UpdateSetupFunc func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error
 }
 
 // Compose 'up -d' returns before the socat proxies accept connections, so poll until the server is reachable.
@@ -131,6 +134,13 @@ func RunTests(t *testing.T, tests []TestCase) {
 								return tc.CheckAttributesFunc(ctx, dbopsClient, tc.ClusterName, attrs)
 							}),
 						},
+					}
+					if tc.UpdateSetupFunc != nil {
+						updateStep.PreConfig = func() {
+							if err := tc.UpdateSetupFunc(ctx, dbopsClient, tc.ClusterName); err != nil {
+								t.Fatal(err)
+							}
+						}
 					}
 					var expectedAction plancheck.ResourceActionType
 					switch {

@@ -108,7 +108,7 @@ resource "clickhousedbops_grant_privilege" "read_public_exports" {
 
 ### Optional
 
-- `access_object` (String) The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, a source name (e.g. `S3`) for source READ/WRITE grants, a named collection name for NAMED_COLLECTION-scoped privileges, or a table engine (e.g. `Distributed`) for TABLE ENGINE. Supports a trailing `*` prefix pattern.
+- `access_object` (String) The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, a canonical upper-case source name (e.g. `S3`, `MYSQL`) for source READ/WRITE grants, a named collection name for NAMED_COLLECTION-scoped privileges, or a table engine (e.g. `Distributed`) for TABLE ENGINE. Supports a trailing `*` prefix pattern.
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
