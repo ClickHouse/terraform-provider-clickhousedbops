@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	testutils "github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/compose"
@@ -30,6 +32,7 @@ type TestCase struct {
 	UpdateResource        *string
 	UpdateExpectNoReplace bool
 	UpdateExpectReplace   bool
+	UpdateExpectKnown     []string
 	ResourceName          string
 	ResourceAddress       string
 
@@ -139,11 +142,16 @@ func RunTests(t *testing.T, tests []TestCase) {
 					case tc.UpdateExpectReplace:
 						expectedAction = plancheck.ResourceActionReplace
 					}
+					var planChecks []plancheck.PlanCheck
 					if expectedAction != "" {
+						planChecks = append(planChecks, plancheck.ExpectResourceAction(tc.ResourceAddress, expectedAction))
+					}
+					for _, attr := range tc.UpdateExpectKnown {
+						planChecks = append(planChecks, plancheck.ExpectKnownValue(tc.ResourceAddress, tfjsonpath.New(attr), knownvalue.NotNull()))
+					}
+					if len(planChecks) > 0 {
 						updateStep.ConfigPlanChecks = resource.ConfigPlanChecks{
-							PreApply: []plancheck.PlanCheck{
-								plancheck.ExpectResourceAction(tc.ResourceAddress, expectedAction),
-							},
+							PreApply: planChecks,
 						}
 					}
 					steps = append(steps, updateStep)
