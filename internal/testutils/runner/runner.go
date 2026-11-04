@@ -142,17 +142,15 @@ func RunTests(t *testing.T, tests []TestCase) {
 					case tc.UpdateExpectReplace:
 						expectedAction = plancheck.ResourceActionReplace
 					}
-					var planChecks []plancheck.PlanCheck
 					if expectedAction != "" {
-						planChecks = append(planChecks, plancheck.ExpectResourceAction(tc.ResourceAddress, expectedAction))
+						updateStep.ConfigPlanChecks = resource.ConfigPlanChecks{
+							PreApply: []plancheck.PlanCheck{
+								plancheck.ExpectResourceAction(tc.ResourceAddress, expectedAction),
+							},
+						}
 					}
 					for _, attr := range tc.UpdateExpectKnown {
-						planChecks = append(planChecks, plancheck.ExpectKnownValue(tc.ResourceAddress, tfjsonpath.New(attr), knownvalue.NotNull()))
-					}
-					if len(planChecks) > 0 {
-						updateStep.ConfigPlanChecks = resource.ConfigPlanChecks{
-							PreApply: planChecks,
-						}
+						updateStep.ConfigPlanChecks.PreApply = append(updateStep.ConfigPlanChecks.PreApply, plancheck.ExpectKnownValue(tc.ResourceAddress, tfjsonpath.New(attr), knownvalue.NotNull()))
 					}
 					steps = append(steps, updateStep)
 				}
