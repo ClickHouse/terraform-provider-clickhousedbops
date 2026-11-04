@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	testutils "github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/compose"
@@ -30,6 +32,7 @@ type TestCase struct {
 	UpdateResource        *string
 	UpdateExpectNoReplace bool
 	UpdateExpectReplace   bool
+	UpdateExpectKnown     []string
 	ResourceName          string
 	ResourceAddress       string
 
@@ -145,6 +148,9 @@ func RunTests(t *testing.T, tests []TestCase) {
 								plancheck.ExpectResourceAction(tc.ResourceAddress, expectedAction),
 							},
 						}
+					}
+					for _, attr := range tc.UpdateExpectKnown {
+						updateStep.ConfigPlanChecks.PreApply = append(updateStep.ConfigPlanChecks.PreApply, plancheck.ExpectKnownValue(tc.ResourceAddress, tfjsonpath.New(attr), knownvalue.NotNull()))
 					}
 					steps = append(steps, updateStep)
 				}

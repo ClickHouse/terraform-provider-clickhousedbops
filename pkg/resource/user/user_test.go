@@ -336,6 +336,7 @@ func TestUser_acceptance(t *testing.T) {
 				Build(),
 			UpdateResource:        &legacyWOMigrationUpdate,
 			UpdateExpectNoReplace: true,
+			UpdateExpectKnown:     []string{"id"},
 			ResourceName:          resourceName,
 			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:    checkNotExistsFunc,
