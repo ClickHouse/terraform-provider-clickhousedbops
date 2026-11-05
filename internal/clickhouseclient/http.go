@@ -133,7 +133,7 @@ func (i *httpClient) runQuery(ctx context.Context, qry string, params map[string
 	reqURL := i.baseUrl
 	if len(params) > 0 {
 		q := reqURL.Query()
-		for k, v := range params {
+		for k, v := range escapeParams(params) {
 			q.Set("param_"+k, v)
 		}
 		reqURL.RawQuery = q.Encode()
