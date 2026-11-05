@@ -2,6 +2,8 @@ package database
 
 import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 )
 
 type Database struct {
@@ -13,5 +15,9 @@ type Database struct {
 	EngineArguments           types.List   `tfsdk:"engine_arguments"`
 	EngineSettings            types.Map    `tfsdk:"engine_settings"`
 	EngineParametersWO        types.Map    `tfsdk:"engine_parameters_wo"`
-	EngineParametersWOVersion types.Int64  `tfsdk:"engine_parameters_wo_version"`
+	EngineParametersWOVersion types.Int32  `tfsdk:"engine_parameters_wo_version"`
+}
+
+func (d Database) identity() dbops.Database {
+	return dbops.Database{UUID: d.UUID.ValueString(), Name: d.Name.ValueString()}
 }

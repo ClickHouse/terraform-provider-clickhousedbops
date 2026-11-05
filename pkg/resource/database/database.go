@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -28,6 +28,9 @@ import (
 
 //go:embed database.md
 var databaseResourceDescription string
+
+// engineTrackedKey names the private-state entry marking engine configuration in state as applied by this provider.
+const engineTrackedKey = "engine_tracked"
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
@@ -66,6 +69,9 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"uuid": schema.StringAttribute{
 				Computed:    true,
 				Description: "The system-assigned UUID for the database",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -91,18 +97,22 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"engine": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Database engine name. When omitted, ClickHouse chooses its default engine. Changing the engine recreates the database.",
+				Description: "Database engine. When omitted, ClickHouse uses its default engine. Changing it forces a replacement.",
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`), "must be a valid ClickHouse engine name"),
 				},
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
+					// State written before engine support has no engine until refreshed.
+					stringplanmodifier.RequiresReplaceIf(func(_ context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+						resp.RequiresReplace = !req.StateValue.IsNull()
+					}, "Changing the engine recreates the database.", "Changing the engine recreates the database."),
 				},
 			},
 			"engine_arguments": schema.ListAttribute{
 				Optional:    true,
 				ElementType: types.StringType,
-				Description: "Ordered SQL expressions passed to the database engine. Include ClickHouse quoting where required. Changing arguments recreates the database.",
+				Description: "Arguments of the database engine, as SQL expressions: quote string literals. Changing them forces a replacement.",
 				Validators: []validator.List{
 					listvalidator.SizeAtLeast(1),
 					listvalidator.ValueStringsAre(stringvalidator.RegexMatches(regexp.MustCompile(`\S`), "must not be blank")),
@@ -113,7 +123,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"engine_settings": schema.MapAttribute{
 				Optional:    true,
 				ElementType: types.StringType,
-				Description: "Database engine settings as setting-name to SQL-expression pairs. Values must include ClickHouse quoting where required. Changing settings recreates the database.",
+				Description: "Settings of the database engine, as literals: quote string values. Changing them forces a replacement.",
 				Validators: []validator.Map{
 					mapvalidator.SizeAtLeast(1),
 					mapvalidator.KeysAre(stringvalidator.RegexMatches(regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`), "must be a valid ClickHouse setting name")),
@@ -127,7 +137,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Sensitive:   true,
 				WriteOnly:   true,
 				ElementType: types.StringType,
-				Description: "Write-only string parameters referenced by engine arguments or settings, such as {catalog_credential:String}. The provider safely quotes substituted values and redacts them from logs and errors; they are not stored in state. Requires Terraform/OpenTofu >= 1.11.",
+				Description: "Values of the query parameters, such as {secret_access_key:String}, used in 'engine_arguments' or 'engine_settings', never written to the terraform state. Requires Terraform/OpenTofu >= 1.11. Bump 'engine_parameters_wo_version' to re-apply the values, ClickHouse never returns them so the provider cannot detect that they changed.",
 				Validators: []validator.Map{
 					mapvalidator.SizeAtLeast(1),
 					mapvalidator.KeysAre(stringvalidator.RegexMatches(regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`), "must be a valid ClickHouse query parameter name")),
@@ -137,11 +147,11 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 					),
 				},
 			},
-			"engine_parameters_wo_version": schema.Int64Attribute{
+			"engine_parameters_wo_version": schema.Int32Attribute{
 				Optional:    true,
-				Description: "Version of engine_parameters_wo. Bump this value to recreate the database with updated write-only parameters.",
-				Validators: []validator.Int64{
-					int64validator.AlsoRequires(path.MatchRoot("engine_parameters_wo")),
+				Description: "Version of 'engine_parameters_wo'. Bump it to re-apply every write-only value, which forces a replacement.",
+				Validators: []validator.Int32{
+					int32validator.AlsoRequires(path.MatchRoot("engine_parameters_wo")),
 				},
 				// ModifyPlan decides on replacement.
 			},
@@ -211,6 +221,8 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, engineTrackedKey, []byte("true"))...)
 }
 
 func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -241,10 +253,7 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 	}
 }
 
-// ModifyPlan recreates the database when its engine configuration changes. Imports and
-// older provider versions leave engine_arguments, engine_settings, and
-// engine_parameters_wo_version unset in state though, so configuring the engine the database
-// already has adopts it in place instead.
+// ModifyPlan recreates the database on engine configuration changes, but adopts it in place when state predates it.
 func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
@@ -257,6 +266,12 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		return
 	}
 
+	tracked, diags := req.Private.GetKey(ctx, engineTrackedKey)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	attributes := []struct {
 		path           path.Path
 		planned, prior attr.Value
@@ -265,73 +280,37 @@ func (r *Resource) ModifyPlan(ctx context.Context, req resource.ModifyPlanReques
 		{path.Root("engine_settings"), plan.EngineSettings, state.EngineSettings},
 		{path.Root("engine_parameters_wo_version"), plan.EngineParametersWOVersion, state.EngineParametersWOVersion},
 	}
-	var changed path.Paths
-	adoptable := true
+	var changed, adopted path.Paths
 	for _, a := range attributes {
-		if a.planned.Equal(a.prior) {
-			continue
+		switch {
+		case a.planned.Equal(a.prior):
+		case tracked == nil && a.prior.IsNull():
+			adopted = append(adopted, a.path)
+		default:
+			changed = append(changed, a.path)
 		}
-		changed = append(changed, a.path)
-		adoptable = adoptable && a.prior.IsNull() && !a.planned.IsUnknown()
 	}
-	if len(changed) == 0 {
+
+	if len(changed) > 0 {
+		resp.RequiresReplace = append(resp.RequiresReplace, changed...)
 		return
 	}
-
-	if adoptable {
-		matches, diags := r.engineMatchesDatabase(ctx, plan, state)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() || matches {
-			return
-		}
+	if !plan.ClusterName.Equal(state.ClusterName) || !plan.Name.Equal(state.Name) || !plan.Comment.Equal(state.Comment) || (!state.Engine.IsNull() && !plan.Engine.Equal(state.Engine)) {
+		// Replaced anyway, so the configured engine is applied on create.
+		return
 	}
-
-	resp.RequiresReplace = append(resp.RequiresReplace, changed...)
+	for _, p := range adopted {
+		resp.Diagnostics.AddAttributeWarning(
+			p,
+			"Engine configuration adopted without verification",
+			"The database was imported or created by an older provider version, so its state has no engine configuration. "+
+				"The configured value is recorded as-is: ClickHouse is not checked and the database is not changed. "+
+				"Replace the resource to apply a different engine configuration.",
+		)
+	}
 }
 
-// engineMatchesDatabase reports whether the database already has the planned engine,
-// comparing the engine arguments and settings that state does not have yet.
-func (r *Resource) engineMatchesDatabase(ctx context.Context, plan, state Database) (bool, diag.Diagnostics) {
-	var diags diag.Diagnostics
-
-	if plan.Engine.IsUnknown() {
-		return false, diags
-	}
-
-	db, err := r.client.FindDatabaseByName(ctx, state.Name.ValueString(), state.ClusterName.ValueStringPointer())
-	if err != nil {
-		diags.AddError("Error reading database", fmt.Sprintf("%+v\n", err))
-		return false, diags
-	}
-	if db == nil {
-		return false, diags
-	}
-
-	clause, ok := parseEngineFull(db.EngineFull)
-	if !ok || clause.name != plan.Engine.ValueString() {
-		return false, diags
-	}
-
-	if state.EngineArguments.IsNull() && !plan.EngineArguments.IsNull() {
-		var arguments []string
-		diags.Append(plan.EngineArguments.ElementsAs(ctx, &arguments, false)...)
-		if diags.HasError() || !clause.matchesArguments(arguments) {
-			return false, diags
-		}
-	}
-	if state.EngineSettings.IsNull() && !plan.EngineSettings.IsNull() {
-		var settings map[string]string
-		diags.Append(plan.EngineSettings.ElementsAs(ctx, &settings, false)...)
-		if diags.HasError() || !clause.matchesSettings(settings) {
-			return false, diags
-		}
-	}
-
-	return true, diags
-}
-
-// Update only runs when ModifyPlan adopts engine configuration the database already has, so
-// there is nothing to change in ClickHouse.
+// Update only records engine configuration adopted by ModifyPlan, nothing changes in ClickHouse.
 func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan Database
 	diags := req.Plan.Get(ctx, &plan)
@@ -340,24 +319,7 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
-	state, err := r.syncDatabaseState(ctx, plan)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Error syncing database",
-			fmt.Sprintf("%+v\n", err),
-		)
-		return
-	}
-
-	if state == nil {
-		resp.Diagnostics.AddError(
-			"Error syncing database",
-			"database was not found",
-		)
-		return
-	}
-
-	diags = resp.State.Set(ctx, state)
+	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 }
 
@@ -369,7 +331,7 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.DeleteDatabase(ctx, plan.Name.ValueString(), plan.ClusterName.ValueStringPointer())
+	err := r.client.DeleteDatabase(ctx, plan.identity(), plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error deleting database",
@@ -386,58 +348,37 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 	// Check if cluster name is specified
 	ref := req.ID
 	var clusterName *string
-	if cluster, databaseRef, found := strings.Cut(req.ID, ":"); found {
-		if cluster == "" || databaseRef == "" || strings.Contains(databaseRef, ":") {
-			resp.Diagnostics.AddError("Invalid database import identifier", "Expected <database ref> or <cluster name>:<database ref>.")
-			return
-		}
-		clusterName = &cluster
-		ref = databaseRef
+	if strings.Contains(req.ID, ":") {
+		clusterName = &strings.Split(req.ID, ":")[0]
+		ref = strings.Split(req.ID, ":")[1]
 	}
 
-	// Check if ref is a UUID
-	_, err := uuid.Parse(ref)
+	database := dbops.Database{Name: ref}
+	if _, err := uuid.Parse(ref); err == nil {
+		database = dbops.Database{UUID: ref}
+	}
+
+	db, err := r.client.GetDatabase(ctx, &database, clusterName)
 	if err != nil {
-		// Failed parsing UUID, try importing using the database name
-		db, err := r.client.FindDatabaseByName(ctx, ref, clusterName)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Cannot find database",
-				fmt.Sprintf("%+v\n", err),
-			)
-			return
-		}
-		if db == nil {
-			resp.Diagnostics.AddError("Cannot find database", fmt.Sprintf("database %q not found", ref))
-			return
-		}
-
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), db.UUID)...)
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), db.Name)...)
-	} else {
-		// Resolve the UUID once and persist the logical name. Subsequent reads use the
-		// name because local UUIDs (notably Atomic databases) may differ by replica.
-		db, err := r.client.GetDatabase(ctx, ref, clusterName)
-		if err != nil {
-			resp.Diagnostics.AddError("Cannot find database", fmt.Sprintf("%+v\n", err))
-			return
-		}
-		if db == nil {
-			resp.Diagnostics.AddError(
-				"Cannot find database",
-				fmt.Sprintf("Database UUID %q was not found. For clustered Atomic databases, import by name because UUIDs can differ between replicas.", ref),
-			)
-			return
-		}
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), db.UUID)...)
-		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), db.Name)...)
+		resp.Diagnostics.AddError(
+			"Cannot find database",
+			fmt.Sprintf("%+v\n", err),
+		)
+		return
 	}
+	if db == nil {
+		resp.Diagnostics.AddError("Cannot find database", fmt.Sprintf("database %q not found", ref))
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uuid"), db.UUID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), db.Name)...)
 
 	if clusterName != nil {
-		var dbUUID string
-		resp.Diagnostics.Append(resp.State.GetAttribute(ctx, path.Root("uuid"), &dbUUID)...)
+		var dbName string
+		resp.Diagnostics.Append(resp.State.GetAttribute(ctx, path.Root("name"), &dbName)...)
 
-		if err := r.client.CheckDatabaseReplicas(ctx, dbUUID, *clusterName); err != nil {
+		if err := r.client.CheckDatabaseReplicas(ctx, dbName, *clusterName); err != nil {
 			resp.Diagnostics.AddError("Cannot import database", fmt.Sprintf("%+v\n", err))
 			return
 		}
@@ -449,16 +390,13 @@ func (r *Resource) ImportState(ctx context.Context, req resource.ImportStateRequ
 // syncDatabaseState reads database settings from clickhouse and returns a DatabaseResourceModel
 func (r *Resource) syncDatabaseState(ctx context.Context, current Database) (*Database, error) {
 	clusterName := current.ClusterName.ValueStringPointer()
-	// UUIDs are not a unique database identity in ClickHouse: local engines may
-	// share the zero UUID, while clustered Atomic databases can have one UUID per
-	// replica. Treat the optionally cluster-qualified name as the logical identity.
-	db, err := r.client.FindDatabaseByName(ctx, current.Name.ValueString(), clusterName)
+	identity := current.identity()
+	db, err := r.client.GetDatabase(ctx, &identity, clusterName)
 	if err != nil {
 		return nil, errors.WithMessage(err, "cannot get database")
 	}
 
-	if db == nil {
-		// Database not found.
+	if db == nil || !db.SameAs(identity) {
 		return nil, nil
 	}
 
@@ -468,7 +406,7 @@ func (r *Resource) syncDatabaseState(ctx context.Context, current Database) (*Da
 	}
 
 	current.ClusterName = types.StringPointerValue(clusterName)
-	if current.UUID.IsNull() || current.UUID.IsUnknown() || current.UUID.ValueString() == "" {
+	if current.UUID.ValueString() == "" {
 		current.UUID = types.StringValue(db.UUID)
 	}
 	current.Name = types.StringValue(db.Name)

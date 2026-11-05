@@ -7,10 +7,9 @@ import (
 
 type Client interface {
 	CreateDatabase(ctx context.Context, database Database, clusterName *string) (*Database, error)
-	GetDatabase(ctx context.Context, uuid string, clusterName *string) (*Database, error)
-	DeleteDatabase(ctx context.Context, name string, clusterName *string) error
-	FindDatabaseByName(ctx context.Context, name string, clusterName *string) (*Database, error)
-	CheckDatabaseReplicas(ctx context.Context, uuid string, clusterName string) error
+	GetDatabase(ctx context.Context, database *Database, clusterName *string) (*Database, error)
+	DeleteDatabase(ctx context.Context, database Database, clusterName *string) error
+	CheckDatabaseReplicas(ctx context.Context, name string, clusterName string) error
 
 	CreateRole(ctx context.Context, role Role, clusterName *string) (*Role, error)
 	GetRole(ctx context.Context, id string, clusterName *string) (*Role, error)

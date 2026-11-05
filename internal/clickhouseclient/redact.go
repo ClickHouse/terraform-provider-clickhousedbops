@@ -2,8 +2,6 @@ package clickhouseclient
 
 import (
 	"context"
-	"sort"
-	"strings"
 )
 
 const redactedPlaceholder = "[REDACTED]"
@@ -39,17 +37,4 @@ func loggableResult(ctx context.Context, result string) string {
 	}
 
 	return result
-}
-
-func redactSensitiveValues(value string, sensitiveValues []string) string {
-	values := append([]string(nil), sensitiveValues...)
-	sort.Slice(values, func(i, j int) bool {
-		return len(values[i]) > len(values[j])
-	})
-	for _, sensitive := range values {
-		if sensitive != "" {
-			value = strings.ReplaceAll(value, sensitive, redactedPlaceholder)
-		}
-	}
-	return value
 }

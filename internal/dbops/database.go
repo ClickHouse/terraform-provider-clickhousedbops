@@ -3,9 +3,11 @@ package dbops
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/clickhouseclient"
@@ -13,16 +15,33 @@ import (
 )
 
 type Database struct {
-	UUID             string            `json:"uuid"`
-	Name             string            `json:"name"`
-	Comment          string            `json:"comment" ch:"comment"`
-	Engine           string            `json:"engine"`
-	EngineArguments  []string          `json:"-"`
-	EngineSettings   map[string]string `json:"-"`
+	UUID            string            `json:"uuid"`
+	Name            string            `json:"name"`
+	Comment         string            `json:"comment" ch:"comment"`
+	Engine          string            `json:"engine"`
+	EngineArguments []string          `json:"-"`
+	EngineSettings  map[string]string `json:"-"`
+	// EngineParameters bind the {name:Type} query parameters of EngineArguments and EngineSettings server-side.
 	EngineParameters map[string]string `json:"-"`
-	// EngineFull is the engine clause reported by system.databases, with secrets hidden by
-	// ClickHouse. FindDatabaseByName leaves it empty when cluster replicas disagree on it.
-	EngineFull string `json:"-"`
+}
+
+func (d Database) HasUUID() bool {
+	return d.parsedUUID() != uuid.Nil
+}
+
+func (d Database) SameAs(other Database) bool {
+	if d.HasUUID() || other.HasUUID() {
+		return d.parsedUUID() == other.parsedUUID()
+	}
+	return d.Name == other.Name
+}
+
+func (d Database) parsedUUID() uuid.UUID {
+	parsed, err := uuid.Parse(d.UUID)
+	if err != nil {
+		return uuid.Nil
+	}
+	return parsed
 }
 
 func (i *impl) CreateDatabase(ctx context.Context, database Database, clusterName *string) (*Database, error) {
@@ -31,141 +50,49 @@ func (i *impl) CreateDatabase(ctx context.Context, database Database, clusterNam
 		builder.WithComment(database.Comment)
 	}
 	if database.Engine != "" {
-		builder.WithEngine(database.Engine, database.EngineArguments, database.EngineSettings).
-			WithParameters(database.EngineParameters)
+		builder.WithEngine(database.Engine, database.EngineArguments, database.EngineSettings)
 	}
 	sql, err := builder.Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
 
-	var execErr error
-	if len(database.EngineParameters) > 0 {
-		redactedSQL, err := builder.RedactedQuery()
-		if err != nil {
-			return nil, errors.WithMessage(err, "error building redacted query")
-		}
-		sensitiveValues := make([]string, 0, len(database.EngineParameters))
-		for _, value := range database.EngineParameters {
-			sensitiveValues = append(sensitiveValues, value)
-		}
-		execErr = i.clickhouseClient.ExecSensitive(ctx, sql, redactedSQL, sensitiveValues)
-	} else {
-		execErr = i.clickhouseClient.Exec(ctx, sql)
-	}
-	if execErr != nil {
-		return nil, errors.WithMessage(execErr, "error running query")
-	}
-
-	return retryWithBackoff(ctx, "database", database.Name, func() (*Database, error) {
-		return i.FindDatabaseByName(ctx, database.Name, clusterName)
-	})
-}
-
-func (i *impl) GetDatabase(ctx context.Context, uuid string, clusterName *string) (*Database, error) {
-	sql, err := querybuilder.NewSelect(
-		[]querybuilder.Field{querybuilder.NewField("name"), querybuilder.NewField("comment"), querybuilder.NewField("engine")},
-		"system.databases",
-	).WithCluster(clusterName).Where(querybuilder.WhereEquals("uuid", uuid)).Build()
-	if err != nil {
-		return nil, errors.WithMessage(err, "error building query")
-	}
-
-	var database *Database
-
-	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-		n, err := data.GetString("name")
-		if err != nil {
-			return errors.WithMessage(err, "error scanning query result, missing 'name' field")
-		}
-		c, err := data.GetString("comment")
-		if err != nil {
-			return errors.WithMessage(err, "error scanning query result, missing 'comment' field")
-		}
-		e, err := data.GetString("engine")
-		if err != nil {
-			return errors.WithMessage(err, "error scanning query result, missing 'engine' field")
-		}
-		candidate := &Database{
-			UUID:    uuid,
-			Name:    n,
-			Comment: c,
-			Engine:  e,
-		}
-		if database == nil {
-			database = candidate
-			return nil
-		}
-		if database.Name != candidate.Name {
-			return errors.Errorf(
-				"database UUID %q matches multiple database names (%q and %q); import and manage this database by name instead",
-				uuid, database.Name, candidate.Name,
-			)
-		}
-		if database.Comment != candidate.Comment || database.Engine != candidate.Engine {
-			return errors.Errorf(
-				"database %q has inconsistent metadata across cluster replicas (comments %q/%q, engines %q/%q)",
-				database.Name, database.Comment, candidate.Comment, database.Engine, candidate.Engine,
-			)
-		}
-		return nil
-	})
+	err = i.clickhouseClient.Exec(ctx, sql, database.EngineParameters)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	if database == nil {
-		// Database not found
-		return nil, nil
-	}
-
-	return database, nil
+	return retryWithBackoff(ctx, "database", database.Name, func() (*Database, error) {
+		return i.GetDatabase(ctx, &Database{Name: database.Name}, clusterName)
+	}, i.readAfterWriteTimeoutArgs()...)
 }
 
-func (i *impl) DeleteDatabase(ctx context.Context, name string, clusterName *string) error {
-	database, err := i.FindDatabaseByName(ctx, name, clusterName)
-	if err != nil {
-		return errors.WithMessage(err, "error getting database name")
+func (i *impl) GetDatabase(ctx context.Context, database *Database, clusterName *string) (*Database, error) {
+	where := querybuilder.WhereEquals("name", database.Name)
+	switch {
+	case database.HasUUID():
+		where = querybuilder.WhereEquals("uuid", database.parsedUUID().String())
+	case database.Name == "":
+		return nil, errors.New("a database without its own UUID can only be found by name")
 	}
 
-	if database == nil {
-		// This is desired state.
-		return nil
-	}
-
-	sql, err := querybuilder.NewDropDatabase(database.Name).WithCluster(clusterName).Build()
-	if err != nil {
-		return errors.WithMessage(err, "error building query")
-	}
-
-	err = i.clickhouseClient.Exec(ctx, sql)
-	if err != nil {
-		return errors.WithMessage(err, "error running query")
-	}
-
-	return nil
-}
-
-func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName *string) (*Database, error) {
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{
 			querybuilder.NewField("uuid").ToString(),
 			querybuilder.NewField("name"),
 			querybuilder.NewField("comment"),
 			querybuilder.NewField("engine"),
-			querybuilder.NewField("engine_full"),
 		},
 		"system.databases",
-	).WithCluster(clusterName).Where(querybuilder.WhereEquals("name", name)).Build()
+	).WithClusterAllReplicas(clusterName).Where(where).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
 
-	var database *Database
-	engineFullConsistent := true
+	var found *Database
 
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
-		uuid, err := data.GetString("uuid")
+		u, err := data.GetString("uuid")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'uuid' field")
 		}
@@ -181,71 +108,82 @@ func (i *impl) FindDatabaseByName(ctx context.Context, name string, clusterName 
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'engine' field")
 		}
-		ef, err := data.GetString("engine_full")
-		if err != nil {
-			return errors.WithMessage(err, "error scanning query result, missing 'engine_full' field")
-		}
-		if database == nil {
-			database = &Database{UUID: uuid, Name: n, Comment: c, Engine: e, EngineFull: ef}
+		candidate := &Database{UUID: u, Name: n, Comment: c, Engine: e}
+		if found == nil {
+			found = candidate
 			return nil
 		}
-
-		if database.Name != n || database.Comment != c || database.Engine != e {
+		if found.UUID != candidate.UUID || found.Name != candidate.Name || found.Comment != candidate.Comment || found.Engine != candidate.Engine {
 			return errors.Errorf(
-				"database %q has inconsistent metadata across cluster replicas (comments %q/%q, engines %q/%q)",
-				name, database.Comment, c, database.Engine, e,
+				"database %q has inconsistent metadata across cluster replicas (UUIDs %q/%q, names %q/%q, comments %q/%q, engines %q/%q)",
+				found.Name, found.UUID, candidate.UUID, found.Name, candidate.Name, found.Comment, candidate.Comment, found.Engine, candidate.Engine,
 			)
 		}
-		if database.EngineFull != ef {
-			engineFullConsistent = false
-		}
-		// UUIDs for local engines such as Atomic may legitimately differ by replica.
-		// Pick a deterministic representative when resolving a name for the first time.
-		if uuid < database.UUID {
-			database.UUID = uuid
-		}
-
 		return nil
 	})
 	if err != nil {
 		return nil, errors.WithMessage(err, "error running query")
 	}
 
-	if database == nil {
-		return nil, nil
-	}
-	if !engineFullConsistent {
-		database.EngineFull = ""
-	}
-
-	return database, nil
+	return found, nil
 }
 
-// CheckDatabaseReplicas errors when the database UUID is present only on some replicas of the cluster.
-func (i *impl) CheckDatabaseReplicas(ctx context.Context, uuid string, clusterName string) error {
+func (i *impl) DeleteDatabase(ctx context.Context, database Database, clusterName *string) error {
+	found, err := i.GetDatabase(ctx, &database, clusterName)
+	if err != nil {
+		return errors.WithMessage(err, "error getting database name")
+	}
+
+	if found == nil || !found.SameAs(database) {
+		// This is desired state.
+		return nil
+	}
+
+	sql, err := querybuilder.NewDropDatabase(found.Name).WithCluster(clusterName).Build()
+	if err != nil {
+		return errors.WithMessage(err, "error building query")
+	}
+
+	err = i.clickhouseClient.Exec(ctx, sql)
+	if err != nil {
+		return errors.WithMessage(err, "error running query")
+	}
+
+	return nil
+}
+
+// CheckDatabaseReplicas errors when the database is missing on some replicas of the cluster or has different UUIDs on them.
+func (i *impl) CheckDatabaseReplicas(ctx context.Context, name string, clusterName string) error {
 	sql, err := querybuilder.
-		NewSelect([]querybuilder.Field{querybuilder.NewRawField("hostName()", "host")}, "system.databases").
+		NewSelect([]querybuilder.Field{
+			querybuilder.NewRawField("hostName()", "host"),
+			querybuilder.NewField("uuid").ToString(),
+		}, "system.databases").
 		WithClusterAllReplicas(&clusterName).
-		Where(querybuilder.WhereEquals("uuid", uuid)).
+		Where(querybuilder.WhereEquals("name", name)).
 		Build()
 	if err != nil {
 		return errors.WithMessage(err, "error building query")
 	}
 
-	var hosts []string
+	hostsByUUID := map[string][]string{}
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
 		host, err := data.GetString("host")
 		if err != nil {
 			return errors.WithMessage(err, "error scanning query result, missing 'host' field")
 		}
-		hosts = append(hosts, host)
+		uuid, err := data.GetString("uuid")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'uuid' field")
+		}
+		hostsByUUID[uuid] = append(hostsByUUID[uuid], host)
 		return nil
 	})
 	if err != nil {
-		return errors.WithMessage(err, fmt.Sprintf("cannot verify database with UUID %q on all replicas of cluster %q", uuid, clusterName))
+		return errors.WithMessage(err, fmt.Sprintf("cannot verify database %q on all replicas of cluster %q", name, clusterName))
 	}
 
-	if len(hosts) == 0 {
+	if len(hostsByUUID) == 0 {
 		return nil
 	}
 
@@ -254,9 +192,12 @@ func (i *impl) CheckDatabaseReplicas(ctx context.Context, uuid string, clusterNa
 		return err
 	}
 
-	if uint64(len(hosts)) < replicas {
-		slices.Sort(hosts)
-		return errors.Errorf("database with UUID %q exists on %d of %d replicas of cluster %q: %s", uuid, len(hosts), replicas, clusterName, strings.Join(hosts, ", "))
+	for _, uuid := range slices.Sorted(maps.Keys(hostsByUUID)) {
+		hosts := hostsByUUID[uuid]
+		if uint64(len(hosts)) < replicas {
+			slices.Sort(hosts)
+			return errors.Errorf("database with UUID %q exists on %d of %d replicas of cluster %q: %s", uuid, len(hosts), replicas, clusterName, strings.Join(hosts, ", "))
+		}
 	}
 
 	return nil
