@@ -111,8 +111,9 @@ func (q *alterSettingsProfileQueryBuilder) Build() (string, error) {
 		tokens = append(tokens, strings.Join(each, ", "))
 	}
 
+	// In ALTER, INHERIT also drops every setting of the profile; ADD PROFILES keeps them.
 	if len(q.inheritFrom) > 0 {
-		tokens = append(tokens, "INHERIT", strings.Join(backtickAll(q.inheritFrom), ", "))
+		tokens = append(tokens, "ADD", "PROFILES", strings.Join(backtickAll(q.inheritFrom), ", "))
 	}
 
 	return strings.Join(tokens, " ") + ";", nil
