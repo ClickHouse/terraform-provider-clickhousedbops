@@ -190,7 +190,10 @@ func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *str
 	return i.GetUser(ctx, uuid, clusterName)
 }
 
-func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
+// UpdateUser renames the user to user.Name and replaces its authentication methods with user.AuthMethods, unless
+// they are empty. With updateHostIPs it also replaces the hosts the user can connect from with user.HostIPs, any
+// host when empty.
+func (i *impl) UpdateUser(ctx context.Context, user User, updateHostIPs bool, clusterName *string) (*User, error) {
 	// Retrieve current user
 	existing, err := i.GetUser(ctx, user.ID, clusterName)
 	if err != nil {
@@ -205,6 +208,10 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 		WithCluster(clusterName).
 		RenameTo(&user.Name).
 		Identified(toQuerybuilderAuthMethods(user.AuthMethods))
+	if updateHostIPs {
+		builder = builder.HostIPs(user.HostIPs)
+	}
+
 	sql, err := builder.Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
