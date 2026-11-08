@@ -1,16 +1,20 @@
 package user
 
 import (
+	"context"
 	"regexp"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int32validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/resourcevalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
@@ -184,6 +188,25 @@ func secretAuthBlock(blockName string, description string, valueValidators ...va
 		Description:  description,
 		NestedObject: schema.NestedBlockObject{Attributes: secretAuthAttributes(blockName, valueValidators)},
 	}
+}
+
+// authChanged reports whether plan changes the authentication in state: a method, a value, a salt or a version.
+// Write-only values are null in both plan and state, so a write-only value counts as changed only with its version.
+func authChanged(ctx context.Context, plan tfsdk.Plan, state tfsdk.State) (bool, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	for _, p := range []path.Path{path.Root("auth"), path.Root("password_sha256_hash"), path.Root("password_sha256_hash_wo_version")} {
+		var planValue, stateValue attr.Value
+		diags.Append(plan.GetAttribute(ctx, p, &planValue)...)
+		diags.Append(state.GetAttribute(ctx, p, &stateValue)...)
+		if diags.HasError() {
+			return false, diags
+		}
+		if !planValue.Equal(stateValue) {
+			return true, diags
+		}
+	}
+
+	return false, diags
 }
 
 // resolveAuthMethods flattens the configured legacy password fields and the `auth` block into the

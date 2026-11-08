@@ -274,11 +274,23 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
-	updatedUser, err := r.client.UpdateUser(ctx, dbops.User{
-		ID:          state.ID.ValueString(),
-		Name:        plan.Name.ValueString(),
-		AuthMethods: resolveAuthMethods(plan, config),
-	}, plan.ClusterName.ValueStringPointer())
+	user := dbops.User{
+		ID:   state.ID.ValueString(),
+		Name: plan.Name.ValueString(),
+	}
+
+	// Write-only values come from config on every run. Sending them on any other change, such as a rename, would
+	// reset the password without a version bump, so authentication is sent only when it changes.
+	changed, diags := authChanged(ctx, req.Plan, req.State)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if changed {
+		user.AuthMethods = resolveAuthMethods(plan, config)
+	}
+
+	updatedUser, err := r.client.UpdateUser(ctx, user, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating ClickHouse User",
