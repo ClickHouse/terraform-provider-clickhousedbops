@@ -1,5 +1,6 @@
 # Databases can be imported by specifying the UUID.
 # Find the UUID of the database by checking system.databases table.
+# Databases of engines such as Memory, S3 or Filesystem share the zero UUID; import those by name.
 terraform import clickhousedbops_database.example xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 # It's also possible to import databases using the name:

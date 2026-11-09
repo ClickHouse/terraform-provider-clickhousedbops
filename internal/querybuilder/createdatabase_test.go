@@ -13,6 +13,9 @@ func Test_createdatabase(t *testing.T) {
 		comment      *string
 		clusterName  *string
 		identified   string
+		engineName   *string
+		engineArgs   []string
+		settings     map[string]string
 		want         string
 		wantErr      bool
 	}{
@@ -39,6 +42,43 @@ func Test_createdatabase(t *testing.T) {
 			want:         "CREATE DATABASE `database` ON CLUSTER 'default';",
 			wantErr:      false,
 		},
+		{
+			name:         "Create database with engine",
+			resourceType: resourceTypeDatabase,
+			resourceName: "database",
+			engineName:   new("Replicated"),
+			engineArgs:   []string{"'/clickhouse/databases/{uuid}'", "'{shard}'", "'{replica}'"},
+			want:         "CREATE DATABASE `database` ENGINE = Replicated('/clickhouse/databases/{uuid}', '{shard}', '{replica}');",
+		},
+		{
+			name:         "Create database with engine settings in deterministic order and query parameters kept verbatim",
+			resourceType: resourceTypeDatabase,
+			resourceName: "database",
+			engineName:   new("DataLakeCatalog"),
+			engineArgs:   []string{"{catalog_url:String}"},
+			settings: map[string]string{
+				"warehouse":    "'main'",
+				"catalog_type": "'rest'",
+			},
+			want: "CREATE DATABASE `database` ENGINE = DataLakeCatalog({catalog_url:String}) SETTINGS `catalog_type` = 'rest', `warehouse` = 'main';",
+		},
+		{
+			name:         "Create database with all clauses",
+			resourceType: resourceTypeDatabase,
+			resourceName: "database",
+			clusterName:  new("default"),
+			engineName:   new("Atomic"),
+			settings:     map[string]string{"lazy_load_tables": "1"},
+			comment:      new("database comment"),
+			want:         "CREATE DATABASE `database` ON CLUSTER 'default' ENGINE = Atomic SETTINGS `lazy_load_tables` = 1 COMMENT 'database comment';",
+		},
+		{
+			name:         "Empty engine is rejected",
+			resourceType: resourceTypeDatabase,
+			resourceName: "database",
+			engineName:   new(""),
+			wantErr:      true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -51,6 +91,9 @@ func Test_createdatabase(t *testing.T) {
 			}
 			if tt.comment != nil {
 				q = q.WithComment(*tt.comment)
+			}
+			if tt.engineName != nil {
+				q = q.WithEngine(*tt.engineName, tt.engineArgs, tt.settings)
 			}
 
 			got, err := q.Build()

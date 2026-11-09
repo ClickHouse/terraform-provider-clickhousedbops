@@ -13,6 +13,7 @@ type AlterUserQueryBuilder interface {
 	Identified(methods []AuthMethod) AlterUserQueryBuilder
 	DropSettingsProfile(profileName *string) AlterUserQueryBuilder
 	AddSettingsProfile(profileName *string) AlterUserQueryBuilder
+	HostIPs(ips []string) AlterUserQueryBuilder
 	WithCluster(clusterName *string) AlterUserQueryBuilder
 	Parameters() map[string]string
 }
@@ -25,6 +26,7 @@ type alterUserQueryBuilder struct {
 	newSettingsProfile *string
 	newName            *string
 	clusterName        *string
+	hostIPs            *[]string // nil leaves the hosts unchanged
 }
 
 func NewAlterUser(resourceName string) AlterUserQueryBuilder {
@@ -58,6 +60,12 @@ func (q *alterUserQueryBuilder) AddSettingsProfile(profileName *string) AlterUse
 	return q
 }
 
+// HostIPs replaces the hosts the user can connect from. An empty list allows any host.
+func (q *alterUserQueryBuilder) HostIPs(ips []string) AlterUserQueryBuilder {
+	q.hostIPs = &ips
+	return q
+}
+
 func (q *alterUserQueryBuilder) WithCluster(clusterName *string) AlterUserQueryBuilder {
 	q.clusterName = clusterName
 	return q
@@ -87,6 +95,20 @@ func (q *alterUserQueryBuilder) Build() (string, error) {
 	if q.identified != "" {
 		anyChanges = true
 		tokens = append(tokens, q.identified)
+	}
+
+	if q.hostIPs != nil {
+		anyChanges = true
+
+		if len(*q.hostIPs) == 0 {
+			tokens = append(tokens, "HOST", "ANY")
+		} else {
+			hosts := make([]string, 0, len(*q.hostIPs))
+			for _, ip := range *q.hostIPs {
+				hosts = append(hosts, "IP "+quote(ip))
+			}
+			tokens = append(tokens, "HOST", strings.Join(hosts, ", "))
+		}
 	}
 
 	if (q.oldSettingsProfile != nil && q.newSettingsProfile != nil && *q.oldSettingsProfile != *q.newSettingsProfile) ||
