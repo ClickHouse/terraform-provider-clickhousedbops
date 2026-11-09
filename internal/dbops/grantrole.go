@@ -70,7 +70,7 @@ func (i *impl) GetGrantRole(ctx context.Context, grantedRoleName string, grantee
 			querybuilder.NewField("with_admin_option"),
 		},
 		"system.role_grants").
-		WithCluster(clusterName).
+		WithClusterAllReplicas(clusterName).
 		Where(querybuilder.WhereEquals("granted_role_name", grantedRoleName), granteeWhere).
 		Build()
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/dbopsclient"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/resourcebuilder"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/runner"
@@ -160,6 +161,23 @@ func TestRowpolicy_acceptance(t *testing.T) {
 
 		if rp.IsRestrictive != isRestrictive {
 			return fmt.Errorf("expected is_restrictive to be %v, was %v", isRestrictive, rp.IsRestrictive)
+		}
+
+		// Every replica gives the policy its own id, and the policy must be found by the id of a replica the client is not connected to.
+		if clusterName != nil {
+			secondID, err := dbopsclient.SecondReplicaID(ctx, "system.row_policies", fmt.Sprintf("%s ON %s.%s", rp.Name, rp.Database, rp.Table))
+			if err != nil {
+				return err
+			}
+
+			second, err := dbopsClient.GetRowPolicyByID(ctx, secondID, clusterName)
+			if err != nil {
+				return err
+			}
+
+			if second == nil {
+				return fmt.Errorf("row policy with id %q of the second replica was not found", secondID)
+			}
 		}
 
 		return nil

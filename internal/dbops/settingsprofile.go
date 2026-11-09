@@ -53,7 +53,7 @@ func (i *impl) GetSettingsProfile(ctx context.Context, id string, clusterName *s
 			},
 			"system.settings_profiles",
 		).
-		WithCluster(clusterName).
+		WithClusterAllReplicas(clusterName).
 		Where(querybuilder.WhereEquals("id", id)).
 		Build()
 	if err != nil {
@@ -304,7 +304,7 @@ func (i *impl) FindSettingsProfileByName(ctx context.Context, name string, clust
 			},
 			"system.settings_profiles",
 		).
-		WithCluster(clusterName).
+		WithClusterAllReplicas(clusterName).
 		Where(querybuilder.WhereEquals("name", name)).
 		Build()
 	if err != nil {
