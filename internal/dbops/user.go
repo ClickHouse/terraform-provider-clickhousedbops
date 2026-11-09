@@ -14,7 +14,7 @@ type User struct {
 	Name             string       `json:"name"`
 	AuthMethods      []AuthMethod `json:"-"`
 	SettingsProfiles []string     `json:"-"`
-	HostIPs          []string     `json:"-"`
+	HostIPs          *[]string    `json:"-"` // nil leaves the hosts unchanged on update
 }
 
 // AuthMethod is one resolved authentication method. Type is the querybuilder render-key and Args are
@@ -51,8 +51,8 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 		Identified(toQuerybuilderAuthMethods(user.AuthMethods))
 
 	// Only set host IP restriction if provided
-	if len(user.HostIPs) > 0 {
-		builder = builder.HostIPs(user.HostIPs)
+	if user.HostIPs != nil {
+		builder = builder.HostIPs(*user.HostIPs)
 	}
 
 	sql, err := builder.WithCluster(clusterName).Build()
@@ -190,10 +190,7 @@ func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *str
 	return i.GetUser(ctx, uuid, clusterName)
 }
 
-// UpdateUser renames the user to user.Name and replaces its authentication methods with user.AuthMethods, unless
-// they are empty. With updateHostIPs it also replaces the hosts the user can connect from with user.HostIPs, any
-// host when empty.
-func (i *impl) UpdateUser(ctx context.Context, user User, updateHostIPs bool, clusterName *string) (*User, error) {
+func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (*User, error) {
 	// Retrieve current user
 	existing, err := i.GetUser(ctx, user.ID, clusterName)
 	if err != nil {
@@ -208,8 +205,8 @@ func (i *impl) UpdateUser(ctx context.Context, user User, updateHostIPs bool, cl
 		WithCluster(clusterName).
 		RenameTo(&user.Name).
 		Identified(toQuerybuilderAuthMethods(user.AuthMethods))
-	if updateHostIPs {
-		builder = builder.HostIPs(user.HostIPs)
+	if user.HostIPs != nil {
+		builder = builder.HostIPs(*user.HostIPs)
 	}
 
 	sql, err := builder.Build()

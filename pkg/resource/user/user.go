@@ -188,7 +188,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		user.HostIPs = hostIPs
+		user.HostIPs = &hostIPs
 	}
 
 	createdUser, err := r.client.CreateUser(ctx, user, plan.ClusterName.ValueStringPointer())
@@ -286,16 +286,19 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		user.AuthMethods = resolveAuthMethods(plan, config)
 	}
 
-	updateHostIPs := !plan.HostIPs.Equal(state.HostIPs)
-	if updateHostIPs && !plan.HostIPs.IsNull() {
-		diags = plan.HostIPs.ElementsAs(ctx, &user.HostIPs, false)
-		resp.Diagnostics.Append(diags...)
-		if resp.Diagnostics.HasError() {
-			return
+	if !plan.HostIPs.Equal(state.HostIPs) {
+		var hostIPs []string
+		if !plan.HostIPs.IsNull() {
+			diags = plan.HostIPs.ElementsAs(ctx, &hostIPs, false)
+			resp.Diagnostics.Append(diags...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
 		}
+		user.HostIPs = &hostIPs
 	}
 
-	updatedUser, err := r.client.UpdateUser(ctx, user, updateHostIPs, plan.ClusterName.ValueStringPointer())
+	updatedUser, err := r.client.UpdateUser(ctx, user, plan.ClusterName.ValueStringPointer())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating ClickHouse User",
