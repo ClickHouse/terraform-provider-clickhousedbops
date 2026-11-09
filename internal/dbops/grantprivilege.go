@@ -259,7 +259,7 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 	}
 
 	sql, err := querybuilder.NewSelect(fields, "system.grants").
-		WithCluster(clusterName).
+		WithClusterAllReplicas(clusterName).
 		Where(querybuilder.AndWhere(where...)).
 		Build()
 	if err != nil {

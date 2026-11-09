@@ -145,7 +145,7 @@ func TestGrantPrivilege_shards(t *testing.T) {
 		raw := container.Client(t, protocol)
 		for _, tc := range tests {
 			t.Run(protocol+"/"+tc.name, func(t *testing.T) {
-				// cluster() reads one replica of every shard, so each row comes back once per shard.
+				// clusterAllReplicas() reads every node, so each row comes back once per node.
 				sharded := &shardedClient{ClickhouseClient: raw, match: "FROM `system`.`grants`", shards: 5}
 				client := newTestClient(t, sharded)
 				user := acctest.RandomWithPrefix("tfacc")

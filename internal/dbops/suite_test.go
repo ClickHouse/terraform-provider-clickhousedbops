@@ -28,8 +28,8 @@ func (c *laggingClient) Select(ctx context.Context, sql string, callback func(cl
 	return c.ClickhouseClient.Select(ctx, sql, callback)
 }
 
-// shardedClient simulates cluster() on `shards` shards: every row of a SELECT containing `match` comes back `shards` times.
-// `repeated` counts those SELECTs.
+// shardedClient simulates a read over `shards` nodes, as clusterAllReplicas() does: every row of a SELECT containing
+// `match` comes back `shards` times. `repeated` counts those SELECTs.
 type shardedClient struct {
 	clickhouseclient.ClickhouseClient
 	match    string

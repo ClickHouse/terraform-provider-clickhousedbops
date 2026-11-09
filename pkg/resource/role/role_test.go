@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/dbopsclient"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/resourcebuilder"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/runner"
@@ -56,6 +57,23 @@ func TestRole_acceptance(t *testing.T) {
 
 		if !nilcompare.NilCompare(clusterName, attrs["cluster_name"]) {
 			return fmt.Errorf("wrong value for cluster_name attribute")
+		}
+
+		// Every replica gives the role its own id, and the role must be found by the id of a replica the client is not connected to.
+		if clusterName != nil {
+			secondID, err := dbopsclient.SecondReplicaID(ctx, "system.roles", role.Name)
+			if err != nil {
+				return err
+			}
+
+			second, err := dbopsClient.GetRole(ctx, secondID, clusterName)
+			if err != nil {
+				return err
+			}
+
+			if second == nil {
+				return fmt.Errorf("role with id %q of the second replica was not found", secondID)
+			}
 		}
 
 		return nil
