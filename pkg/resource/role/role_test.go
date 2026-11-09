@@ -61,6 +61,10 @@ func TestRole_acceptance(t *testing.T) {
 		return nil
 	}
 
+	renameUpdate := resourcebuilder.New(resourceType, resourceName).
+		WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+		Build()
+
 	tests := []runner.TestCase{
 		{
 			Name:     "Create Role using Native protocol on a single replica",
@@ -137,6 +141,21 @@ func TestRole_acceptance(t *testing.T) {
 			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:  checkNotExistsFunc,
 			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Rename Role in place",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)).
+				Build(),
+			UpdateResource:        &renameUpdate,
+			UpdateExpectNoReplace: true,
+			UpdateExpectKnown:     []string{"id"},
+			ResourceName:          resourceName,
+			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:    checkNotExistsFunc,
+			CheckAttributesFunc:   checkAttributesFunc,
 		},
 		{
 			Name:     "Import of a missing Role fails using Native protocol on a single replica",

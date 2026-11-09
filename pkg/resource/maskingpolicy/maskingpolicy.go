@@ -60,6 +60,9 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 			"id": schema.StringAttribute{
 				Computed:    true,
 				Description: "The system-assigned ID for the masking policy.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
@@ -269,7 +272,6 @@ func (r *Resource) Update(ctx context.Context, req resource.UpdateRequest, resp 
 		return
 	}
 
-	// id is computed and marked unknown in the plan on update, so key the ALTER on the prior state's id.
 	mp.ID = state.ID.ValueString()
 
 	updated, err := r.client.UpdateMaskingPolicy(ctx, mp)

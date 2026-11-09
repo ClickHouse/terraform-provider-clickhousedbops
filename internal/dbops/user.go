@@ -14,7 +14,7 @@ type User struct {
 	Name             string       `json:"name"`
 	AuthMethods      []AuthMethod `json:"-"`
 	SettingsProfiles []string     `json:"-"`
-	HostIPs          []string     `json:"-"`
+	HostIPs          *[]string    `json:"-"` // nil leaves the hosts unchanged on update
 }
 
 // AuthMethod is one resolved authentication method. Type is the querybuilder render-key and Args are
@@ -51,8 +51,8 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 		Identified(toQuerybuilderAuthMethods(user.AuthMethods))
 
 	// Only set host IP restriction if provided
-	if len(user.HostIPs) > 0 {
-		builder = builder.HostIPs(user.HostIPs)
+	if user.HostIPs != nil {
+		builder = builder.HostIPs(*user.HostIPs)
 	}
 
 	sql, err := builder.WithCluster(clusterName).Build()
@@ -205,6 +205,10 @@ func (i *impl) UpdateUser(ctx context.Context, user User, clusterName *string) (
 		WithCluster(clusterName).
 		RenameTo(&user.Name).
 		Identified(toQuerybuilderAuthMethods(user.AuthMethods))
+	if user.HostIPs != nil {
+		builder = builder.HostIPs(*user.HostIPs)
+	}
+
 	sql, err := builder.Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")

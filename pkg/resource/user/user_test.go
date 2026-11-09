@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/zclconf/go-cty/cty"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/factories"
@@ -86,6 +87,18 @@ func TestUser_acceptance(t *testing.T) {
 		WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
 			auth.WithBlock("ssl_certificate", func(m *resourcebuilder.BlockBuilder) {
 				m.WithStringAttribute("common_name", "cn_b")
+			})
+		}).
+		Build()
+
+	hostIPsName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	hostIPsUpdate := resourcebuilder.New(resourceType, resourceName).
+		WithStringAttribute("cluster_name", clusterName).
+		WithStringAttribute("name", hostIPsName).
+		WithListAttribute("host_ips", []cty.Value{cty.StringVal("127.0.0.1"), cty.StringVal("10.0.0.1")}).
+		WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+			auth.WithBlock("sha256_hash", func(m *resourcebuilder.BlockBuilder) {
+				m.WithFunction("value_wo", "sha256", "changeme").WithIntAttribute("value_wo_version", 1)
 			})
 		}).
 		Build()
@@ -299,6 +312,7 @@ func TestUser_acceptance(t *testing.T) {
 				Build(),
 			UpdateResource:        &rotateUpdate,
 			UpdateExpectNoReplace: true,
+			UpdateExpectKnown:     []string{"id"},
 			ResourceName:          resourceName,
 			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:    checkNotExistsFunc,
@@ -319,6 +333,7 @@ func TestUser_acceptance(t *testing.T) {
 				Build(),
 			UpdateResource:        &sslUpdate,
 			UpdateExpectNoReplace: true,
+			UpdateExpectKnown:     []string{"id"},
 			ResourceName:          resourceName,
 			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:    checkNotExistsFunc,
@@ -336,6 +351,31 @@ func TestUser_acceptance(t *testing.T) {
 				Build(),
 			UpdateResource:        &legacyWOMigrationUpdate,
 			UpdateExpectNoReplace: true,
+			UpdateExpectKnown:     []string{"id"},
+			ResourceName:          resourceName,
+			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:    checkNotExistsFunc,
+			CheckAttributesFunc:   checkAttributesFunc,
+		},
+		{
+			Name:        "Change host_ips in place on a cluster using localfile storage",
+			ChEnv:       map[string]string{"CONFIGFILE": "config-localfile.xml"},
+			Protocol:    "native",
+			ClusterName: &clusterName,
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithStringAttribute("cluster_name", clusterName).
+				WithStringAttribute("name", hostIPsName).
+				WithListAttribute("host_ips", []cty.Value{cty.StringVal("127.0.0.1")}).
+				WithBlock("auth", func(auth *resourcebuilder.BlockBuilder) {
+					auth.WithBlock("sha256_hash", func(m *resourcebuilder.BlockBuilder) {
+						m.WithFunction("value_wo", "sha256", "changeme").
+							WithIntAttribute("value_wo_version", 1)
+					})
+				}).
+				Build(),
+			UpdateResource:        &hostIPsUpdate,
+			UpdateExpectNoReplace: true,
+			UpdateExpectKnown:     []string{"id"},
 			ResourceName:          resourceName,
 			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:    checkNotExistsFunc,

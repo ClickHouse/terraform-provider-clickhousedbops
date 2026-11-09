@@ -7,10 +7,9 @@ import (
 
 type Client interface {
 	CreateDatabase(ctx context.Context, database Database, clusterName *string) (*Database, error)
-	GetDatabase(ctx context.Context, uuid string, clusterName *string) (*Database, error)
-	DeleteDatabase(ctx context.Context, uuid string, clusterName *string) error
-	FindDatabaseByName(ctx context.Context, name string, clusterName *string) (*Database, error)
-	CheckDatabaseReplicas(ctx context.Context, uuid string, clusterName string) error
+	GetDatabase(ctx context.Context, database *Database, clusterName *string) (*Database, error)
+	DeleteDatabase(ctx context.Context, database Database, clusterName *string) error
+	CheckDatabaseReplicas(ctx context.Context, name string, clusterName string) error
 
 	CreateRole(ctx context.Context, role Role, clusterName *string) (*Role, error)
 	GetRole(ctx context.Context, id string, clusterName *string) (*Role, error)
@@ -29,7 +28,7 @@ type Client interface {
 	RevokeGrantRole(ctx context.Context, grantedRoleName string, granteeUserName *string, granteeRoleName *string, clusterName *string) error
 
 	GrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege, clusterName *string) (*GrantPrivilege, error)
-	GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string) (*GrantPrivilege, error)
+	GetGrantPrivilege(ctx context.Context, grantPrivilege *GrantPrivilege, clusterName *string, allowCached bool) (*GrantPrivilege, error)
 	RevokeGrantPrivilege(ctx context.Context, grantPrivilege GrantPrivilege, clusterName *string) error
 	GetAllGrantsForGrantee(ctx context.Context, granteeUsername *string, granteeRoleName *string, clusterName *string) ([]GrantPrivilege, error)
 
