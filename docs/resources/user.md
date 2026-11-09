@@ -160,7 +160,7 @@ resource "clickhousedbops_user" "john" {
 - `cluster_name` (String) Name of the cluster to create the resource into. If omitted, resource will be created on the replica hit by the query.
 This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
-- `host_ips` (Set of String) IP addresses from which the user is allowed to connect. If not specified, user can connect from any host.
+- `host_ips` (Set of String) IP addresses from which the user is allowed to connect. If not specified, user can connect from any host. Changes to this field update the user in place.
 - `password_sha256_hash` (String, Sensitive, Deprecated) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu < 1.11. Conflicts with password_sha256_hash_wo. Changes to this field update the user in place.
 - `password_sha256_hash_wo` (String, Sensitive, Deprecated, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) SHA256 hash of the password to be set for the user. Use this for Terraform/OpenTofu >= 1.11. Conflicts with password_sha256_hash.
 - `password_sha256_hash_wo_version` (Number, Deprecated) Version of the password_sha256_hash_wo field. Bump this value to update the password on the user.
