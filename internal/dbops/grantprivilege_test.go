@@ -124,6 +124,58 @@ func TestGrantPrivilege(t *testing.T) {
 	}
 }
 
+func TestGrantPrivilege_shards(t *testing.T) {
+	source := func(accessType string) GrantPrivilege {
+		return GrantPrivilege{AccessType: accessType, ExpandedAccessTypes: grants.AllDescendants(grants.Parsed().Groups, accessType)}
+	}
+	tests := []struct {
+		name      string
+		existing  string
+		grant     GrantPrivilege
+		wantFound bool
+	}{
+		{name: "finds a source grant stored as READ and WRITE", grant: source("REMOTE"), wantFound: true},
+		{name: "finds another source grant stored as READ and WRITE", grant: source("S3"), wantFound: true},
+		{name: "finds a table grant without reporting an overlap", grant: GrantPrivilege{AccessType: "SELECT", DatabaseName: new("db"), TableName: new("t")}, wantFound: true},
+		{name: "does not take READ alone for a source grant", existing: "READ ON REMOTE", grant: source("REMOTE")},
+	}
+
+	container := chcontainer.Start(t, "latest")
+	for _, protocol := range protocols {
+		raw := container.Client(t, protocol)
+		for _, tc := range tests {
+			t.Run(protocol+"/"+tc.name, func(t *testing.T) {
+				// cluster() reads one replica of every shard, so each row comes back once per shard.
+				sharded := &shardedClient{ClickhouseClient: raw, match: "FROM `system`.`grants`", shards: 5}
+				client := newTestClient(t, sharded)
+				user := acctest.RandomWithPrefix("tfacc")
+				execOnCleanup(t, raw, fmt.Sprintf("DROP USER IF EXISTS `%s`", user))
+				mustExec(t, raw, fmt.Sprintf("CREATE USER `%s` IDENTIFIED WITH no_password", user))
+				if tc.existing != "" {
+					mustExec(t, raw, fmt.Sprintf("GRANT %s TO `%s`", tc.existing, user))
+				}
+
+				grant := tc.grant
+				grant.GranteeUserName = &user
+				if tc.wantFound {
+					created, err := client.GrantPrivilege(context.Background(), grant, nil)
+					require.NoError(t, err)
+					require.NotNil(t, created)
+				}
+
+				got, err := client.GetGrantPrivilege(context.Background(), &grant, nil, true)
+				require.NoError(t, err)
+				if tc.wantFound {
+					require.NotNil(t, got)
+				} else {
+					require.Nil(t, got)
+				}
+				require.NotZero(t, sharded.repeated, "no system.grants read was repeated")
+			})
+		}
+	}
+}
+
 func TestGrantPrivilege_sourceFilter(t *testing.T) {
 	filtered := func(filter string) GrantPrivilege {
 		return GrantPrivilege{AccessType: "READ", AccessObject: new("URL"), SourceFilter: new(filter)}
