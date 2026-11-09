@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/zclconf/go-cty/cty"
@@ -21,9 +22,10 @@ const (
 
 func TestSettingsProfileSettings_acceptance(t *testing.T) {
 	clusterName := "cluster1"
+	profileName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
 
 	settingProfileBuilder := resourcebuilder.New("clickhousedbops_settings_profile", "profile1").
-		WithStringAttribute("name", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+		WithStringAttribute("name", profileName)
 
 	checkNotExistsFunc := func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]string) (bool, error) {
 		profileID := attrs["settings_profile_id"]
@@ -107,6 +109,41 @@ func TestSettingsProfileSettings_acceptance(t *testing.T) {
 	}
 	timeoutsCreate := withCreateTimeout("1m")
 	timeoutsUpdate := withCreateTimeout("2m")
+
+	// checkStoredAs checks ClickHouse stored value, min and max in its own format.
+	checkStoredAs := func(stored map[string]interface{}) func(context.Context, dbops.Client, *string, map[string]interface{}) error {
+		return func(ctx context.Context, dbopsClient dbops.Client, clusterName *string, attrs map[string]interface{}) error {
+			setting, err := dbopsClient.GetSetting(ctx, attrs["settings_profile_id"].(string), attrs["name"].(string), clusterName)
+			if err != nil {
+				return err
+			}
+			if setting == nil {
+				return fmt.Errorf("setting named %q was not found", attrs["name"])
+			}
+
+			for name, got := range map[string]*string{"value": setting.Value, "min": setting.Min, "max": setting.Max} {
+				if !nilcompare.NilCompare(got, stored[name]) {
+					return fmt.Errorf("expected %s stored as %v", name, stored[name])
+				}
+			}
+
+			return nil
+		}
+	}
+	reformattedSizes := resourcebuilder.New(resourceType, resourceName).
+		AddDependency(settingProfileBuilder.Build()).
+		WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
+		WithStringAttribute("name", "max_memory_usage").
+		WithStringAttribute("value", "10G").
+		WithStringAttribute("min", "1k").
+		WithStringAttribute("max", "25G").
+		Build()
+	reformattedCustom := resourcebuilder.New(resourceType, resourceName).
+		AddDependency(settingProfileBuilder.Build()).
+		WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
+		WithStringAttribute("name", "SQL_tenant").
+		WithStringAttribute("value", "").
+		Build()
 
 	tests := []runner.TestCase{
 		{
@@ -222,6 +259,52 @@ func TestSettingsProfileSettings_acceptance(t *testing.T) {
 			ResourceAddress:       fmt.Sprintf("%s.%s", resourceType, resourceName),
 			CheckNotExistsFunc:    checkNotExistsFunc,
 			CheckAttributesFunc:   checkAttributesFunc,
+		},
+		{
+			Name:                "Keep configured size values ClickHouse expands using Native protocol on a single replica",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:            "native",
+			Resource:            reformattedSizes,
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkStoredAs(map[string]interface{}{"value": "10000000000", "min": "1000", "max": "25000000000"}),
+		},
+		{
+			Name:                "Keep configured custom setting value ClickHouse quotes using HTTP protocol on a single replica",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:            "http",
+			Resource:            reformattedCustom,
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkStoredAs(map[string]interface{}{"value": "''"}),
+		},
+		{
+			Name:                "Replace setting changed out of band using Native protocol on a single replica",
+			ChEnv:               map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol:            "native",
+			Resource:            reformattedSizes,
+			UpdateResource:      &reformattedSizes,
+			UpdateExpectReplace: true,
+			UpdateSetupFunc: func(ctx context.Context, dbopsClient dbops.Client, clusterName *string) error {
+				profile, err := dbopsClient.FindSettingsProfileByName(ctx, profileName, clusterName)
+				if err != nil {
+					return err
+				}
+				if profile == nil {
+					return fmt.Errorf("settings profile %q was not found", profileName)
+				}
+				if err := dbopsClient.DeleteSetting(ctx, profile.ID, "max_memory_usage", clusterName); err != nil {
+					return err
+				}
+				_, err = dbopsClient.CreateSetting(ctx, profile.ID, dbops.Setting{Name: "max_memory_usage", Value: new("20G")}, clusterName, time.Minute)
+				return err
+			},
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkStoredAs(map[string]interface{}{"value": "10000000000", "min": "1000", "max": "25000000000"}),
 		},
 	}
 

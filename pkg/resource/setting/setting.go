@@ -3,12 +3,14 @@ package setting
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -22,6 +24,16 @@ import (
 
 //go:embed setting.md
 var settingResourceDescription string
+
+// Private-state entry holding the setting as ClickHouse stored it, so Read can tell drift from ClickHouse reformatting the configured values.
+const storedValuesKey = "stored_values"
+
+type storedValues struct {
+	Value       *string `json:"value"`
+	Min         *string `json:"min"`
+	Max         *string `json:"max"`
+	Writability *string `json:"writability"`
+}
 
 var (
 	_ resource.Resource               = &Resource{}
@@ -215,19 +227,12 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	state := Setting{
-		ClusterName:       plan.ClusterName,
-		SettingsProfileID: plan.SettingsProfileID,
-		Timeouts:          plan.Timeouts,
-	}
-
-	modelFromApiResponse(&state, *createdSetting)
-
-	diags = resp.State.Set(ctx, state)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	resp.Diagnostics.Append(setStoredValues(ctx, resp.Private, *createdSetting)...)
 }
 
 func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -247,13 +252,29 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 		return
 	}
 
-	if settingsProfile != nil {
-		modelFromApiResponse(&state, *settingsProfile)
-
-		diags = resp.State.Set(ctx, &state)
-		resp.Diagnostics.Append(diags...)
-	} else {
+	if settingsProfile == nil {
 		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	stored, diags := getStoredValues(ctx, req.Private)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// State written before the private entry existed holds the values as ClickHouse stored them.
+	if stored == nil {
+		stored = &storedValues{Value: state.Value.ValueStringPointer(), Min: state.Min.ValueStringPointer(), Max: state.Max.ValueStringPointer(), Writability: state.Writability.ValueStringPointer()}
+	}
+
+	if !reflect.DeepEqual(storedValuesOf(*settingsProfile), *stored) {
+		modelFromApiResponse(&state, *settingsProfile)
+		resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		resp.Diagnostics.Append(setStoredValues(ctx, resp.Private, *settingsProfile)...)
 	}
 }
 
@@ -298,4 +319,41 @@ func modelFromApiResponse(state *Setting, settingsProfile dbops.Setting) {
 	state.Min = types.StringPointerValue(settingsProfile.Min)
 	state.Max = types.StringPointerValue(settingsProfile.Max)
 	state.Writability = types.StringPointerValue(settingsProfile.Writability)
+}
+
+func storedValuesOf(setting dbops.Setting) storedValues {
+	return storedValues{Value: setting.Value, Min: setting.Min, Max: setting.Max, Writability: setting.Writability}
+}
+
+// The framework's concrete private state type is in an internal package, so it can't be named directly.
+type privateState interface {
+	GetKey(ctx context.Context, key string) ([]byte, diag.Diagnostics)
+	SetKey(ctx context.Context, key string, value []byte) diag.Diagnostics
+}
+
+func setStoredValues(ctx context.Context, private privateState, setting dbops.Setting) diag.Diagnostics {
+	var diags diag.Diagnostics
+
+	encoded, err := json.Marshal(storedValuesOf(setting))
+	if err != nil {
+		diags.AddError("Error Storing ClickHouse Setting Private State", fmt.Sprintf("%+v\n", err))
+		return diags
+	}
+
+	return private.SetKey(ctx, storedValuesKey, encoded)
+}
+
+func getStoredValues(ctx context.Context, private privateState) (*storedValues, diag.Diagnostics) {
+	encoded, diags := private.GetKey(ctx, storedValuesKey)
+	if diags.HasError() || encoded == nil {
+		return nil, diags
+	}
+
+	var stored storedValues
+	if err := json.Unmarshal(encoded, &stored); err != nil {
+		diags.AddError("Error Reading ClickHouse Setting Private State", fmt.Sprintf("%+v\n", err))
+		return nil, diags
+	}
+
+	return &stored, diags
 }

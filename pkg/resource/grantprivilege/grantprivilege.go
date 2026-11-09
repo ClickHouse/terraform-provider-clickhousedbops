@@ -127,7 +127,7 @@ func resourceSchema(version int64) schema.Schema {
 			},
 			"access_object": schema.StringAttribute{
 				Optional:    true,
-				Description: "The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, a source name (e.g. `S3`) for source READ/WRITE grants, a named collection name for NAMED_COLLECTION-scoped privileges, or a table engine (e.g. `Distributed`) for TABLE ENGINE. Supports a trailing `*` prefix pattern.",
+				Description: "The object the privilege applies to: a user/role name for USER_NAME/DEFINER-scoped privileges, a canonical upper-case source name (e.g. `S3`, `MYSQL`) for source READ/WRITE grants, a named collection name for NAMED_COLLECTION-scoped privileges, or a table engine (e.g. `Distributed`) for TABLE ENGINE. Supports a trailing `*` prefix pattern.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -317,12 +317,12 @@ func validateScope(config GrantPrivilege, diags *diag.Diagnostics) {
 		return
 	}
 
-	// ClickHouse stores source aliases such as MySQL under their canonical name, which would never match a filtered grant on read.
-	if source := config.AccessObject.ValueString(); !config.SourceFilter.IsNull() && source != strings.ToUpper(source) {
+	// ClickHouse stores source aliases such as MySQL under their canonical name, which would never match the grant on read.
+	if source := config.AccessObject.ValueString(); upstrGrts.Scopes[config.Privilege.ValueString()] == "SOURCE" && source != strings.ToUpper(source) {
 		diags.AddAttributeError(
 			path.Root("access_object"),
 			"Invalid Grant Privilege",
-			fmt.Sprintf("%q must be a canonical ClickHouse source name such as URL or MYSQL when 'source_filter' is set", source),
+			fmt.Sprintf("%q must be a canonical ClickHouse source name such as URL or MYSQL", source),
 		)
 		return
 	}

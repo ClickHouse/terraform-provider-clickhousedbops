@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -88,6 +89,38 @@ func TestCreateSettingsProfile(t *testing.T) {
 				require.Equal(t, tc.wantMissesLeft, lagging.misses, "lookup misses left")
 			})
 		}
+	}
+}
+
+func TestUpdateSettingsProfile(t *testing.T) {
+	server := chcontainer.Start(t, "")
+
+	for _, protocol := range protocols {
+		raw := server.Client(t, protocol)
+		client := newTestClient(t, raw)
+
+		t.Run(protocol, func(t *testing.T) {
+			ctx := context.Background()
+			parent := acctest.RandomWithPrefix("tfacc")
+			name := acctest.RandomWithPrefix("tfacc")
+			renamed := acctest.RandomWithPrefix("tfacc")
+			execOnCleanup(t, raw, fmt.Sprintf("DROP SETTINGS PROFILE IF EXISTS `%s`, `%s`, `%s`", name, renamed, parent))
+			mustExec(t, raw, fmt.Sprintf("CREATE SETTINGS PROFILE `%s`", parent))
+
+			created, err := client.CreateSettingsProfile(ctx, SettingsProfile{Name: name, InheritFrom: []string{parent}}, nil)
+			require.NoError(t, err)
+			_, err = client.CreateSetting(ctx, created.ID, Setting{Name: "max_threads", Value: new("4")}, nil, 5*time.Second)
+			require.NoError(t, err)
+
+			updated, err := client.UpdateSettingsProfile(ctx, SettingsProfile{ID: created.ID, Name: renamed, InheritFrom: []string{"default", parent}}, nil)
+			require.NoError(t, err)
+			require.Equal(t, renamed, updated.Name)
+			require.Equal(t, []string{"default", parent}, updated.InheritFrom)
+
+			setting, err := client.GetSetting(ctx, created.ID, "max_threads", nil)
+			require.NoError(t, err)
+			require.NotNil(t, setting, "settings must survive a profile update")
+		})
 	}
 }
 
