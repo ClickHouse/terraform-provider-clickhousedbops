@@ -16,7 +16,7 @@ require (
 	github.com/pingcap/errors v0.11.4
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.45.0
-	github.com/zclconf/go-cty v1.19.0
+	github.com/zclconf/go-cty v1.20.0
 	golang.org/x/mod v0.42.0
 	golang.org/x/sync v0.25.0
 )
