@@ -128,16 +128,19 @@ func TestGrantPrivilege_shards(t *testing.T) {
 	source := func(accessType string) GrantPrivilege {
 		return GrantPrivilege{AccessType: accessType, ExpandedAccessTypes: grants.AllDescendants(grants.Parsed().Groups, accessType)}
 	}
+	table := GrantPrivilege{AccessType: "SELECT", DatabaseName: new("db"), TableName: new("t")}
 	tests := []struct {
-		name      string
-		existing  string
-		grant     GrantPrivilege
-		wantFound bool
+		name        string
+		existing    string
+		grant       GrantPrivilege
+		wantFound   bool
+		wantOverlap bool
 	}{
 		{name: "finds a source grant stored as READ and WRITE", grant: source("REMOTE"), wantFound: true},
 		{name: "finds another source grant stored as READ and WRITE", grant: source("S3"), wantFound: true},
-		{name: "finds a table grant without reporting an overlap", grant: GrantPrivilege{AccessType: "SELECT", DatabaseName: new("db"), TableName: new("t")}, wantFound: true},
+		{name: "finds a table grant without reporting an overlap", grant: table, wantFound: true},
 		{name: "does not take READ alone for a source grant", existing: "READ ON REMOTE", grant: source("REMOTE")},
+		{name: "reports a covering grant once", existing: "SELECT ON db.*", grant: table, wantOverlap: true},
 	}
 
 	container := chcontainer.Start(t, "latest")
@@ -164,10 +167,16 @@ func TestGrantPrivilege_shards(t *testing.T) {
 				}
 
 				got, err := client.GetGrantPrivilege(context.Background(), &grant, nil, true)
-				require.NoError(t, err)
-				if tc.wantFound {
+				switch {
+				case tc.wantOverlap:
+					var overlap *OverlapError
+					require.ErrorAs(t, err, &overlap)
+					require.Len(t, overlap.Covering, 1, "a covering grant is reported once, not once per node")
+				case tc.wantFound:
+					require.NoError(t, err)
 					require.NotNil(t, got)
-				} else {
+				default:
+					require.NoError(t, err)
 					require.Nil(t, got)
 				}
 				require.NotZero(t, sharded.repeated, "no system.grants read was repeated")
