@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -66,6 +67,22 @@ func (g GrantPrivilege) AsGrant() grants.Grant {
 		AccessObject: g.AccessObject,
 		GrantOption:  g.GrantOption,
 	}
+}
+
+// identity tells the grant from any other grant of the same grantee.
+func (g GrantPrivilege) identity() string {
+	deref := func(s *string) string {
+		if s == nil {
+			return "\x00"
+		}
+		return *s
+	}
+	return strings.Join([]string{
+		g.AccessType,
+		deref(g.DatabaseName), deref(g.TableName), deref(g.ColumnName), deref(g.AccessObject),
+		deref(g.GranteeUserName), deref(g.GranteeRoleName),
+		strconv.FormatBool(g.GrantOption),
+	}, "\x01")
 }
 
 // OverlapError reports existing grants that include the grant, so it has no row of its own.
@@ -267,6 +284,7 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 	}
 
 	ret := make([]GrantPrivilege, 0)
+	seen := make(map[string]bool)
 
 	err = i.clickhouseClient.Select(ctx, sql, func(data clickhouseclient.Row) error {
 		accessType, err := data.GetString("access_type")
@@ -321,7 +339,7 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 			database = new(*database + "*")
 		}
 
-		ret = append(ret, GrantPrivilege{
+		grant := GrantPrivilege{
 			AccessType:      accessType,
 			AccessObject:    accessObject,
 			DatabaseName:    database,
@@ -330,7 +348,13 @@ func (i *impl) GetAllGrantsForGrantee(ctx context.Context, granteeUsername *stri
 			GranteeUserName: granteeUserName,
 			GranteeRoleName: granteeRoleName,
 			GrantOption:     grantOption,
-		})
+		}
+		// clusterAllReplicas() returns every grant once per node; keep one.
+		if seen[grant.identity()] {
+			return nil
+		}
+		seen[grant.identity()] = true
+		ret = append(ret, grant)
 
 		return nil
 	})
