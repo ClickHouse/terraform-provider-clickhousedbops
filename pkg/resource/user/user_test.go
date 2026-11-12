@@ -11,6 +11,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/dbops"
+	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/dbopsclient"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/factories"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/nilcompare"
 	"github.com/ClickHouse/terraform-provider-clickhousedbops/internal/testutils/resourcebuilder"
@@ -56,6 +57,23 @@ func TestUser_acceptance(t *testing.T) {
 
 		if !nilcompare.NilCompare(clusterName, attrs["cluster_name"]) {
 			return fmt.Errorf("wrong value for cluster_name attribute")
+		}
+
+		// Every replica gives the user its own id, and the user must be found by the id of a replica the client is not connected to.
+		if clusterName != nil {
+			secondID, err := dbopsclient.SecondReplicaID(ctx, "system.users", user.Name)
+			if err != nil {
+				return err
+			}
+
+			second, err := dbopsClient.GetUser(ctx, secondID, clusterName)
+			if err != nil {
+				return err
+			}
+
+			if second == nil {
+				return fmt.Errorf("user with id %q of the second replica was not found", secondID)
+			}
 		}
 
 		return nil

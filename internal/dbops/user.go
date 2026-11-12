@@ -73,7 +73,7 @@ func (i *impl) CreateUser(ctx context.Context, user User, clusterName *string) (
 func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*User, error) { // nolint:dupl
 	sql, err := querybuilder.
 		NewSelect([]querybuilder.Field{querybuilder.NewField("name")}, "system.users").
-		WithCluster(clusterName).
+		WithClusterAllReplicas(clusterName).
 		Where(querybuilder.WhereEquals("id", id)).
 		Build()
 	if err != nil {
@@ -106,7 +106,7 @@ func (i *impl) GetUser(ctx context.Context, id string, clusterName *string) (*Us
 	{
 		sql, err = querybuilder.
 			NewSelect([]querybuilder.Field{querybuilder.NewField("inherit_profile")}, "system.settings_profile_elements").
-			WithCluster(clusterName).
+			WithClusterAllReplicas(clusterName).
 			Where(querybuilder.WhereEquals("user_name", user.Name)).
 			Build()
 		if err != nil {
@@ -162,7 +162,7 @@ func (i *impl) DeleteUser(ctx context.Context, id string, clusterName *string) e
 func (i *impl) FindUserByName(ctx context.Context, name string, clusterName *string) (*User, error) {
 	sql, err := querybuilder.
 		NewSelect([]querybuilder.Field{querybuilder.NewField("id").ToString()}, "system.users").
-		WithCluster(clusterName).
+		WithClusterAllReplicas(clusterName).
 		Where(querybuilder.WhereEquals("name", name)).
 		Build()
 	if err != nil {

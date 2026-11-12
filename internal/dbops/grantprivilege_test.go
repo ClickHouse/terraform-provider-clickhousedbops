@@ -124,6 +124,67 @@ func TestGrantPrivilege(t *testing.T) {
 	}
 }
 
+func TestGrantPrivilege_shards(t *testing.T) {
+	source := func(accessType string) GrantPrivilege {
+		return GrantPrivilege{AccessType: accessType, ExpandedAccessTypes: grants.AllDescendants(grants.Parsed().Groups, accessType)}
+	}
+	table := GrantPrivilege{AccessType: "SELECT", DatabaseName: new("db"), TableName: new("t")}
+	tests := []struct {
+		name        string
+		existing    string
+		grant       GrantPrivilege
+		wantFound   bool
+		wantOverlap bool
+	}{
+		{name: "finds a source grant stored as READ and WRITE", grant: source("REMOTE"), wantFound: true},
+		{name: "finds another source grant stored as READ and WRITE", grant: source("S3"), wantFound: true},
+		{name: "finds a table grant without reporting an overlap", grant: table, wantFound: true},
+		{name: "does not take READ alone for a source grant", existing: "READ ON REMOTE", grant: source("REMOTE")},
+		{name: "reports a covering grant once", existing: "SELECT ON db.*", grant: table, wantOverlap: true},
+	}
+
+	container := chcontainer.Start(t, "latest")
+	for _, protocol := range protocols {
+		raw := container.Client(t, protocol)
+		for _, tc := range tests {
+			t.Run(protocol+"/"+tc.name, func(t *testing.T) {
+				// clusterAllReplicas() reads every node, so each row comes back once per node.
+				sharded := &shardedClient{ClickhouseClient: raw, match: "FROM `system`.`grants`", shards: 5}
+				client := newTestClient(t, sharded)
+				user := acctest.RandomWithPrefix("tfacc")
+				execOnCleanup(t, raw, fmt.Sprintf("DROP USER IF EXISTS `%s`", user))
+				mustExec(t, raw, fmt.Sprintf("CREATE USER `%s` IDENTIFIED WITH no_password", user))
+				if tc.existing != "" {
+					mustExec(t, raw, fmt.Sprintf("GRANT %s TO `%s`", tc.existing, user))
+				}
+
+				grant := tc.grant
+				grant.GranteeUserName = &user
+				if tc.wantFound {
+					created, err := client.GrantPrivilege(context.Background(), grant, nil)
+					require.NoError(t, err)
+					require.NotNil(t, created)
+				}
+
+				got, err := client.GetGrantPrivilege(context.Background(), &grant, nil, true)
+				switch {
+				case tc.wantOverlap:
+					var overlap *OverlapError
+					require.ErrorAs(t, err, &overlap)
+					require.Len(t, overlap.Covering, 1, "a covering grant is reported once, not once per node")
+				case tc.wantFound:
+					require.NoError(t, err)
+					require.NotNil(t, got)
+				default:
+					require.NoError(t, err)
+					require.Nil(t, got)
+				}
+				require.NotZero(t, sharded.repeated, "no system.grants read was repeated")
+			})
+		}
+	}
+}
+
 func TestGrantPrivilege_sourceFilter(t *testing.T) {
 	filtered := func(filter string) GrantPrivilege {
 		return GrantPrivilege{AccessType: "READ", AccessObject: new("URL"), SourceFilter: new(filter)}
