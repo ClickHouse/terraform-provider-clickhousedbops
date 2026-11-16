@@ -20,13 +20,11 @@ type Setting struct {
 }
 
 func (i *impl) CreateSetting(ctx context.Context, settingsProfileID string, setting Setting, clusterName *string, timeout time.Duration) (*Setting, error) {
-	settingsProfile, err := i.GetSettingsProfile(ctx, settingsProfileID, clusterName)
+	settingsProfile, err := getDependency(ctx, "settings profile", settingsProfileID, func() (*SettingsProfile, error) {
+		return i.GetSettingsProfile(ctx, settingsProfileID, clusterName)
+	}, timeout)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error getting settings profile")
-	}
-
-	if settingsProfile == nil {
-		return nil, errors.New(fmt.Sprintf("settings profile with id %q was not found", settingsProfileID))
 	}
 
 	sql, err := querybuilder.NewAlterSettingsProfile(settingsProfile.Name).
