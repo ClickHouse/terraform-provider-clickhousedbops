@@ -9,4 +9,5 @@ type SettingsProfileAssociation struct {
 	SettingsProfileID types.String `tfsdk:"settings_profile_id"`
 	RoleID            types.String `tfsdk:"role_id"`
 	UserID            types.String `tfsdk:"user_id"`
+	UserName          types.String `tfsdk:"user_name"`
 }

@@ -1,2 +1,5 @@
 You can use the `clickhousedbops_settings_profile_association` resource to associate a `settings_profile` to a `role` or `user` in a `ClickHouse` instance.
 
+With `role_id` or `user_id`, the profile is set on the role or user with `ALTER ROLE` or `ALTER USER`.
+
+With `user_name`, the user is added to the profile's `TO` list with `ALTER SETTINGS PROFILE` instead. Use it for users that `ALTER USER` cannot change, such as [JWT](https://clickhouse.com/docs/concepts/features/security/external-authenticators/jwt) ephemeral users: their id is stable across tokens, so the assignment persists after a token expires. ClickHouse resolves the name when the statement runs, so the user must exist (for a JWT user: hold a live token on that replica) when the association is created. While the user does not exist, ClickHouse does not list it in `system.settings_profiles.apply_to_list`, and the provider keeps the association in state. Other entries of the `TO` list are kept, but entries that ClickHouse cannot resolve to a name at that moment are dropped whenever the list is rewritten. A profile set `TO ALL` is refused.

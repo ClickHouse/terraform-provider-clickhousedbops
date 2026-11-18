@@ -4,18 +4,30 @@ page_title: "clickhousedbops_settings_profile_association Resource - clickhoused
 subcategory: ""
 description: |-
   You can use the clickhousedbops_settings_profile_association resource to associate a settings_profile to a role or user in a ClickHouse instance.
+  With role_id or user_id, the profile is set on the role or user with ALTER ROLE or ALTER USER.
+  With user_name, the user is added to the profile's TO list with ALTER SETTINGS PROFILE instead. Use it for users that ALTER USER cannot change, such as JWT https://clickhouse.com/docs/concepts/features/security/external-authenticators/jwt ephemeral users: their id is stable across tokens, so the assignment persists after a token expires. ClickHouse resolves the name when the statement runs, so the user must exist (for a JWT user: hold a live token on that replica) when the association is created. While the user does not exist, ClickHouse does not list it in system.settings_profiles.apply_to_list, and the provider keeps the association in state. Other entries of the TO list are kept, but entries that ClickHouse cannot resolve to a name at that moment are dropped whenever the list is rewritten. A profile set TO ALL is refused.
 ---
 
 # clickhousedbops_settings_profile_association (Resource)
 
 You can use the `clickhousedbops_settings_profile_association` resource to associate a `settings_profile` to a `role` or `user` in a `ClickHouse` instance.
 
+With `role_id` or `user_id`, the profile is set on the role or user with `ALTER ROLE` or `ALTER USER`.
+
+With `user_name`, the user is added to the profile's `TO` list with `ALTER SETTINGS PROFILE` instead. Use it for users that `ALTER USER` cannot change, such as [JWT](https://clickhouse.com/docs/concepts/features/security/external-authenticators/jwt) ephemeral users: their id is stable across tokens, so the assignment persists after a token expires. ClickHouse resolves the name when the statement runs, so the user must exist (for a JWT user: hold a live token on that replica) when the association is created. While the user does not exist, ClickHouse does not list it in `system.settings_profiles.apply_to_list`, and the provider keeps the association in state. Other entries of the `TO` list are kept, but entries that ClickHouse cannot resolve to a name at that moment are dropped whenever the list is rewritten. A profile set `TO ALL` is refused.
+
 ## Example Usage
 
 ```terraform
 resource "clickhousedbops_settings_profile_association" "roleassociation" {
   settings_profile_id = clickhousedbops_settings_profile.profile1.id
-  role_id = clickhousedbops_role.role1.id
+  role_id             = clickhousedbops_role.role1.id
+}
+
+# A user that ALTER USER cannot change, such as a JWT ephemeral user.
+resource "clickhousedbops_settings_profile_association" "jwtuserassociation" {
+  settings_profile_id = clickhousedbops_settings_profile.profile1.id
+  user_name           = "JWT::https://idp.example.com::my-audience::analyst::<claims hash>"
 }
 ```
 
@@ -33,3 +45,4 @@ This field must be left null when using a ClickHouse Cloud cluster.
 When using a self hosted ClickHouse instance, this field should only be set when there is more than one replica and you are not using 'replicated' storage for user_directory.
 - `role_id` (String) ID of the SettingsProfileAssociation to associate the Settings profile to
 - `user_id` (String) ID of the User to associate the Settings profile to
+- `user_name` (String) Name of the user to associate the Settings profile to, added to the profile's TO list with ALTER SETTINGS PROFILE. Use it for users that ALTER USER cannot change, such as JWT ephemeral users. The user must exist when the association is created.

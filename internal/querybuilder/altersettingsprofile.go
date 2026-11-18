@@ -14,6 +14,7 @@ type AlterSettingsProfileQueryBuilder interface {
 	RemoveSetting(name string) AlterSettingsProfileQueryBuilder
 	InheritFrom(profileNames []string) AlterSettingsProfileQueryBuilder
 	WithCluster(clusterName *string) AlterSettingsProfileQueryBuilder
+	ApplyTo(names []string) AlterSettingsProfileQueryBuilder
 }
 
 type alterSettingsProfileQueryBuilder struct {
@@ -24,6 +25,8 @@ type alterSettingsProfileQueryBuilder struct {
 	clusterName    *string
 	dropProfiles   bool
 	inheritFrom    []string
+	setApplyTo     bool
+	applyTo        []string
 }
 
 func NewAlterSettingsProfile(resourceName string) AlterSettingsProfileQueryBuilder {
@@ -65,6 +68,13 @@ func (q *alterSettingsProfileQueryBuilder) WithCluster(clusterName *string) Alte
 func (q *alterSettingsProfileQueryBuilder) InheritFrom(profileNames []string) AlterSettingsProfileQueryBuilder {
 	q.dropProfiles = true
 	q.inheritFrom = profileNames
+	return q
+}
+
+// ApplyTo replaces the list of users and roles the profile applies to (TO clause). An empty list renders TO NONE.
+func (q *alterSettingsProfileQueryBuilder) ApplyTo(names []string) AlterSettingsProfileQueryBuilder {
+	q.setApplyTo = true
+	q.applyTo = names
 	return q
 }
 
@@ -114,6 +124,14 @@ func (q *alterSettingsProfileQueryBuilder) Build() (string, error) {
 	// In ALTER, INHERIT also drops every setting of the profile; ADD PROFILES keeps them.
 	if len(q.inheritFrom) > 0 {
 		tokens = append(tokens, "ADD", "PROFILES", strings.Join(backtickAll(q.inheritFrom), ", "))
+	}
+
+	if q.setApplyTo {
+		if len(q.applyTo) == 0 {
+			tokens = append(tokens, "TO", "NONE")
+		} else {
+			tokens = append(tokens, "TO", strings.Join(backtickAll(q.applyTo), ", "))
+		}
 	}
 
 	return strings.Join(tokens, " ") + ";", nil

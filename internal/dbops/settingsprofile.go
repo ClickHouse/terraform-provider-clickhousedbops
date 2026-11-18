@@ -2,6 +2,7 @@ package dbops
 
 import (
 	"context"
+	"slices"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pingcap/errors"
@@ -11,9 +12,16 @@ import (
 )
 
 type SettingsProfile struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	InheritFrom []string `json:"-"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	InheritFrom   []string `json:"-"`
+	ApplyToAll    bool     `json:"-"`
+	ApplyToList   []string `json:"-"`
+	ApplyToExcept []string `json:"-"`
+}
+
+func (p *SettingsProfile) AppliesTo(name string) bool {
+	return slices.Contains(p.ApplyToList, name)
 }
 
 func (i *impl) CreateSettingsProfile(ctx context.Context, profile SettingsProfile, clusterName *string) (*SettingsProfile, error) {
@@ -50,6 +58,9 @@ func (i *impl) GetSettingsProfile(ctx context.Context, id string, clusterName *s
 		NewSelect(
 			[]querybuilder.Field{
 				querybuilder.NewField("name"),
+				querybuilder.NewField("apply_to_all"),
+				querybuilder.NewRawField("arrayStringConcat(apply_to_list, '\\n')", "apply_to_list"),
+				querybuilder.NewRawField("arrayStringConcat(apply_to_except, '\\n')", "apply_to_except"),
 			},
 			"system.settings_profiles",
 		).
@@ -66,10 +77,28 @@ func (i *impl) GetSettingsProfile(ctx context.Context, id string, clusterName *s
 			return errors.WithMessage(err, "error scanning query result, missing 'name' field")
 		}
 
+		applyToAll, err := data.GetBool("apply_to_all")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'apply_to_all' field")
+		}
+
+		applyToList, err := data.GetString("apply_to_list")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'apply_to_list' field")
+		}
+
+		applyToExcept, err := data.GetString("apply_to_except")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'apply_to_except' field")
+		}
+
 		if profile == nil {
 			profile = &SettingsProfile{
-				ID:   id,
-				Name: name,
+				ID:            id,
+				Name:          name,
+				ApplyToAll:    applyToAll,
+				ApplyToList:   splitNonEmpty(applyToList),
+				ApplyToExcept: splitNonEmpty(applyToExcept),
 			}
 		}
 
@@ -294,6 +323,71 @@ func (i *impl) DisassociateSettingsProfile(ctx context.Context, id string, roleI
 	}
 
 	return errors.New("Neither roleId nor userId were specified")
+}
+
+// AddSettingsProfileApplyTo adds a user or role to the profile's TO list with ALTER SETTINGS PROFILE, for users that
+// ALTER USER cannot change, such as JWT ephemeral users. ClickHouse has no ADD TO, so the list is read and rewritten.
+func (i *impl) AddSettingsProfileApplyTo(ctx context.Context, id string, name string, clusterName *string) error {
+	i.applyToMu.Lock()
+	defer i.applyToMu.Unlock()
+
+	profile, err := i.GetSettingsProfile(ctx, id, clusterName)
+	if err != nil {
+		return errors.WithMessage(err, "error looking up settings profile")
+	}
+
+	if profile == nil {
+		return errors.New("No Settings Profile with such ID found")
+	}
+
+	if profile.ApplyToAll {
+		return errors.Errorf("settings profile %q applies to ALL, refusing to rewrite its TO list", profile.Name)
+	}
+
+	if profile.AppliesTo(name) {
+		return nil
+	}
+
+	return i.setSettingsProfileApplyTo(ctx, profile.Name, append(slices.Clone(profile.ApplyToList), name), clusterName)
+}
+
+// RemoveSettingsProfileApplyTo removes a user or role from the profile's TO list and keeps the other entries.
+func (i *impl) RemoveSettingsProfileApplyTo(ctx context.Context, id string, name string, clusterName *string) error {
+	i.applyToMu.Lock()
+	defer i.applyToMu.Unlock()
+
+	profile, err := i.GetSettingsProfile(ctx, id, clusterName)
+	if err != nil {
+		return errors.WithMessage(err, "error looking up settings profile")
+	}
+
+	if profile == nil || !profile.AppliesTo(name) {
+		// ClickHouse lists only the entries it can resolve to a name: a user that does not exist right now cannot be
+		// named in a TO clause, so it is left as is.
+		return nil
+	}
+
+	remaining := slices.DeleteFunc(slices.Clone(profile.ApplyToList), func(n string) bool { return n == name })
+
+	return i.setSettingsProfileApplyTo(ctx, profile.Name, remaining, clusterName)
+}
+
+func (i *impl) setSettingsProfileApplyTo(ctx context.Context, profileName string, names []string, clusterName *string) error {
+	sql, err := querybuilder.
+		NewAlterSettingsProfile(profileName).
+		WithCluster(clusterName).
+		ApplyTo(names).
+		Build()
+	if err != nil {
+		return errors.WithMessage(err, "error building query")
+	}
+
+	err = i.clickhouseClient.Exec(ctx, sql)
+	if err != nil {
+		return errors.WithMessage(err, "error running query")
+	}
+
+	return nil
 }
 
 func (i *impl) FindSettingsProfileByName(ctx context.Context, name string, clusterName *string) (*SettingsProfile, error) {
