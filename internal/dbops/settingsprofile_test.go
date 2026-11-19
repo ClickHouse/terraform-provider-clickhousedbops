@@ -172,3 +172,64 @@ func TestFindSettingsProfileByName_NotFound(t *testing.T) {
 		})
 	}
 }
+
+// TestSettingsProfileDependencyLag covers the race seen on ClickHouse Cloud: a settings profile or user
+// created a moment ago is not yet visible on the replica that serves the next request.
+func TestSettingsProfileDependencyLag(t *testing.T) {
+	server := chcontainer.Start(t, "")
+
+	const getProfileSQL = "`system`.`settings_profiles` WHERE (`id` = "
+	const getUserSQL = "`system`.`users` WHERE (`id` = "
+
+	for _, protocol := range protocols {
+		raw := server.Client(t, protocol)
+		direct := newTestClient(t, raw)
+
+		t.Run(protocol+"/setting retries a missing profile", func(t *testing.T) {
+			ctx := context.Background()
+			name := acctest.RandomWithPrefix("tfacc")
+			execOnCleanup(t, raw, fmt.Sprintf("DROP SETTINGS PROFILE IF EXISTS `%s`", name))
+			profile, err := direct.CreateSettingsProfile(ctx, SettingsProfile{Name: name}, nil)
+			require.NoError(t, err)
+
+			lagging := &laggingClient{ClickhouseClient: raw, match: getProfileSQL, misses: 2}
+			setting, err := newTestClient(t, lagging).CreateSetting(ctx, profile.ID, Setting{Name: "max_threads", Value: new("4")}, nil, 5*time.Second)
+			require.NoError(t, err)
+			require.NotNil(t, setting)
+			require.Zero(t, lagging.misses, "lookup misses left")
+		})
+
+		t.Run(protocol+"/setting fails once the profile never shows up", func(t *testing.T) {
+			ctx := context.Background()
+			lagging := &laggingClient{ClickhouseClient: raw, match: getProfileSQL, misses: 1000}
+			_, err := newTestClient(t, lagging).CreateSetting(ctx, "00000000-0000-0000-0000-000000000000", Setting{Name: "max_threads", Value: new("4")}, nil, 300*time.Millisecond)
+			require.ErrorContains(t, err, "was not found")
+		})
+
+		t.Run(protocol+"/association retries a missing profile and user", func(t *testing.T) {
+			ctx := context.Background()
+			profileName := acctest.RandomWithPrefix("tfacc")
+			userName := acctest.RandomWithPrefix("tfacc")
+			execOnCleanup(t, raw, fmt.Sprintf("DROP SETTINGS PROFILE IF EXISTS `%s`", profileName))
+			execOnCleanup(t, raw, fmt.Sprintf("DROP USER IF EXISTS `%s`", userName))
+			profile, err := direct.CreateSettingsProfile(ctx, SettingsProfile{Name: profileName}, nil)
+			require.NoError(t, err)
+			mustExec(t, raw, fmt.Sprintf("CREATE USER `%s` IDENTIFIED WITH no_password", userName))
+			user, err := retryWithBackoff(ctx, "user", userName, func() (*User, error) {
+				return direct.FindUserByName(ctx, userName, nil)
+			})
+			require.NoError(t, err)
+
+			laggingProfile := &laggingClient{ClickhouseClient: raw, match: getProfileSQL, misses: 2}
+			laggingUser := &laggingClient{ClickhouseClient: laggingProfile, match: getUserSQL, misses: 2}
+			err = newTestClient(t, laggingUser).AssociateSettingsProfile(ctx, profile.ID, nil, &user.ID, nil)
+			require.NoError(t, err)
+			require.Zero(t, laggingProfile.misses, "profile lookup misses left")
+			require.Zero(t, laggingUser.misses, "user lookup misses left")
+
+			associated, err := direct.GetUser(ctx, user.ID, nil)
+			require.NoError(t, err)
+			require.True(t, associated.HasSettingProfile(profileName))
+		})
+	}
+}

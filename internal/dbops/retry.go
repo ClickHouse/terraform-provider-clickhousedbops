@@ -2,11 +2,29 @@ package dbops
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
+
+// getDependency looks up a resource that another resource depends on, such as the settings
+// profile of a setting. Terraform may have created it moments ago, possibly on another replica,
+// so a miss is retried instead of failing right away.
+func getDependency[T any](
+	ctx context.Context,
+	resourceType string,
+	id string,
+	get func() (*T, error),
+	timeout ...time.Duration,
+) (*T, error) {
+	result, err := retryWithBackoff(ctx, resourceType, id, get, timeout...)
+	if err != nil && errors.Is(err, context.DeadlineExceeded) {
+		return nil, fmt.Errorf("%s with id %q was not found: %w", resourceType, id, err)
+	}
+	return result, err
+}
 
 // retryWithBackoff retries a retrieval function that may return nil due to lag.
 // It uses exponential backoff with context-aware cancellation.
