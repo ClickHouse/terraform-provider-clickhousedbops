@@ -793,7 +793,7 @@ func TestGrantprivilege_ValidateConfig(t *testing.T) {
 		errors   []string
 	}{
 		{"every member supports the database", map[string]string{"privilege_name": "ALTER VIEW", "database_name": "db"}, nil, nil},
-		{"some members support the database", map[string]string{"privilege_name": "ALTER", "database_name": "db"}, []string{"database_name"}, nil},
+		{"some members support the database", map[string]string{"privilege_name": "CREATE", "database_name": "db"}, []string{"database_name"}, nil},
 		{"some members support the table", map[string]string{"privilege_name": "SHOW", "database_name": "db", "table_name": "t"}, []string{"table_name"}, nil},
 		{"no member supports the table", map[string]string{"privilege_name": "ALTER DATABASE", "database_name": "db", "table_name": "t"}, nil, []string{"table_name"}},
 		{"database pattern", map[string]string{"privilege_name": "SELECT", "database_name": "db*"}, nil, nil},
