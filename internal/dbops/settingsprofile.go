@@ -2,6 +2,7 @@ package dbops
 
 import (
 	"context"
+	"slices"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/pingcap/errors"
@@ -14,6 +15,12 @@ type SettingsProfile struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
 	InheritFrom []string `json:"-"`
+	ApplyToAll  bool     `json:"-"`
+	ApplyToList []string `json:"-"`
+}
+
+func (p *SettingsProfile) AppliesTo(name string) bool {
+	return slices.Contains(p.ApplyToList, name)
 }
 
 func (i *impl) CreateSettingsProfile(ctx context.Context, profile SettingsProfile, clusterName *string) (*SettingsProfile, error) {
@@ -50,6 +57,8 @@ func (i *impl) GetSettingsProfile(ctx context.Context, id string, clusterName *s
 		NewSelect(
 			[]querybuilder.Field{
 				querybuilder.NewField("name"),
+				querybuilder.NewField("apply_to_all"),
+				querybuilder.NewRawField("arrayStringConcat(apply_to_list, '\\n')", "apply_to_list"),
 			},
 			"system.settings_profiles",
 		).
@@ -66,10 +75,22 @@ func (i *impl) GetSettingsProfile(ctx context.Context, id string, clusterName *s
 			return errors.WithMessage(err, "error scanning query result, missing 'name' field")
 		}
 
+		applyToAll, err := data.GetBool("apply_to_all")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'apply_to_all' field")
+		}
+
+		applyToList, err := data.GetString("apply_to_list")
+		if err != nil {
+			return errors.WithMessage(err, "error scanning query result, missing 'apply_to_list' field")
+		}
+
 		if profile == nil {
 			profile = &SettingsProfile{
-				ID:   id,
-				Name: name,
+				ID:          id,
+				Name:        name,
+				ApplyToAll:  applyToAll,
+				ApplyToList: splitNonEmpty(applyToList),
 			}
 		}
 
@@ -294,6 +315,65 @@ func (i *impl) DisassociateSettingsProfile(ctx context.Context, id string, roleI
 	}
 
 	return errors.New("Neither roleId nor userId were specified")
+}
+
+// AddSettingsProfileApplyTo adds a user or role to the profile's TO list with ALTER SETTINGS PROFILE, for users that
+// ALTER USER cannot change, such as JWT ephemeral users.
+func (i *impl) AddSettingsProfileApplyTo(ctx context.Context, id string, name string, clusterName *string) error {
+	return i.editSettingsProfileApplyTo(ctx, id, name, true, clusterName)
+}
+
+// RemoveSettingsProfileApplyTo removes a user or role from the profile's TO list and keeps the other entries.
+func (i *impl) RemoveSettingsProfileApplyTo(ctx context.Context, id string, name string, clusterName *string) error {
+	return i.editSettingsProfileApplyTo(ctx, id, name, false, clusterName)
+}
+
+// ClickHouse has no ADD TO, only TO, which replaces the list: read it and rewrite it.
+func (i *impl) editSettingsProfileApplyTo(ctx context.Context, id string, name string, add bool, clusterName *string) error {
+	i.applyToMu.Lock()
+	defer i.applyToMu.Unlock()
+
+	profile, err := i.GetSettingsProfile(ctx, id, clusterName)
+	if err != nil {
+		return errors.WithMessage(err, "error looking up settings profile")
+	}
+
+	if profile == nil {
+		if add {
+			return errors.New("No Settings Profile with such ID found")
+		}
+		return nil
+	}
+
+	// A name missing from the list on removal is a user that does not exist right now: it cannot be named in TO.
+	if profile.AppliesTo(name) == add {
+		return nil
+	}
+
+	if profile.ApplyToAll {
+		return errors.Errorf("settings profile %q applies to ALL, refusing to rewrite its TO list", profile.Name)
+	}
+
+	names := slices.DeleteFunc(slices.Clone(profile.ApplyToList), func(n string) bool { return n == name })
+	if add {
+		names = append(names, name)
+	}
+
+	sql, err := querybuilder.
+		NewAlterSettingsProfile(profile.Name).
+		WithCluster(clusterName).
+		ApplyTo(names).
+		Build()
+	if err != nil {
+		return errors.WithMessage(err, "error building query")
+	}
+
+	err = i.clickhouseClient.Exec(ctx, sql)
+	if err != nil {
+		return errors.WithMessage(err, "error running query")
+	}
+
+	return nil
 }
 
 func (i *impl) FindSettingsProfileByName(ctx context.Context, name string, clusterName *string) (*SettingsProfile, error) {

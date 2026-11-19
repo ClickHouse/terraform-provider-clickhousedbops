@@ -45,6 +45,8 @@ type Client interface {
 	FindSettingsProfileByName(ctx context.Context, name string, clusterName *string) (*SettingsProfile, error)
 	AssociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error
 	DisassociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error
+	AddSettingsProfileApplyTo(ctx context.Context, id string, name string, clusterName *string) error
+	RemoveSettingsProfileApplyTo(ctx context.Context, id string, name string, clusterName *string) error
 
 	CreateMaskingPolicy(ctx context.Context, maskingPolicy MaskingPolicy) (*MaskingPolicy, error)
 	GetMaskingPolicy(ctx context.Context, maskingPolicy *MaskingPolicy) (*MaskingPolicy, error)

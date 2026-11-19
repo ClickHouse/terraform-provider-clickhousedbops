@@ -50,9 +50,14 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 
 		userID := attrs["user_id"]
 		roleID := attrs["role_id"]
+		userName := attrs["user_name"]
 
-		if userID == "" && roleID == "" {
-			return false, fmt.Errorf("both user_id and role_id are nil")
+		if userID == "" && roleID == "" && userName == "" {
+			return false, fmt.Errorf("user_id, role_id and user_name are all nil")
+		}
+
+		if userName != "" {
+			return settingsProfile.AppliesTo(userName), nil
 		}
 
 		if userID != "" {
@@ -94,6 +99,7 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 
 		roleID := attrs["role_id"]
 		userID := attrs["user_id"]
+		userName := attrs["user_name"]
 
 		settingsProfile, err := dbopsClient.GetSettingsProfile(ctx, settingsProfileID.(string), clusterName)
 		if err != nil {
@@ -134,6 +140,10 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			}
 		}
 
+		if userName != nil && !settingsProfile.AppliesTo(userName.(string)) {
+			return fmt.Errorf("expected settings profile %q to apply to user %q but did not", settingsProfile.Name, userName.(string))
+		}
+
 		return nil
 	}
 
@@ -160,6 +170,36 @@ func TestSettingsProfileAssociation_acceptance(t *testing.T) {
 			Resource: resourcebuilder.New(resourceType, resourceName).
 				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
 				WithResourceFieldReference("user_id", "clickhousedbops_user", "user", "id").
+				AddDependency(user.Build()).
+				AddDependency(settingsProfile.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Apply settings profile to user by name using Native protocol on a single replica",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-single.xml"},
+			Protocol: "native",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
+				WithResourceFieldReference("user_name", "clickhousedbops_user", "user", "name").
+				AddDependency(user.Build()).
+				AddDependency(settingsProfile.Build()).
+				Build(),
+			ResourceName:        resourceName,
+			ResourceAddress:     fmt.Sprintf("%s.%s", resourceType, resourceName),
+			CheckNotExistsFunc:  checkNotExistsFunc,
+			CheckAttributesFunc: checkAttributesFunc,
+		},
+		{
+			Name:     "Apply settings profile to user by name using HTTP protocol on a cluster using replicated storage",
+			ChEnv:    map[string]string{"CONFIGFILE": "config-replicated.xml"},
+			Protocol: "http",
+			Resource: resourcebuilder.New(resourceType, resourceName).
+				WithResourceFieldReference("settings_profile_id", "clickhousedbops_settings_profile", "profile1", "id").
+				WithResourceFieldReference("user_name", "clickhousedbops_user", "user", "name").
 				AddDependency(user.Build()).
 				AddDependency(settingsProfile.Build()).
 				Build(),

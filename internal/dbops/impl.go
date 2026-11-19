@@ -20,6 +20,7 @@ type impl struct {
 	grantsCache           sync.Map
 	grantsFills           singleflight.Group
 	replicatedStorage     atomic.Pointer[bool]
+	applyToMu             sync.Mutex
 }
 
 // ClientOption configures optional behaviour of the dbops client.

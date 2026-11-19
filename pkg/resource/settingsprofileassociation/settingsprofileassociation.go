@@ -58,7 +58,7 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Optional:    true,
 				Description: "ID of the SettingsProfileAssociation to associate the Settings profile to",
 				Validators: []validator.String{
-					stringvalidator.ExactlyOneOf(path.MatchRoot("user_id")),
+					stringvalidator.ExactlyOneOf(path.MatchRoot("user_id"), path.MatchRoot("user_name")),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -68,7 +68,18 @@ func (r *Resource) Schema(_ context.Context, _ resource.SchemaRequest, resp *res
 				Optional:    true,
 				Description: "ID of the User to associate the Settings profile to",
 				Validators: []validator.String{
-					stringvalidator.ExactlyOneOf(path.MatchRoot("role_id")),
+					stringvalidator.ExactlyOneOf(path.MatchRoot("role_id"), path.MatchRoot("user_name")),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"user_name": schema.StringAttribute{
+				Optional:    true,
+				Description: "Name of the user to associate the Settings profile to, added to the profile's TO list with ALTER SETTINGS PROFILE. Use it for users that ALTER USER cannot change, such as JWT ephemeral users. The user must exist when the association is created.",
+				Validators: []validator.String{
+					stringvalidator.ExactlyOneOf(path.MatchRoot("role_id"), path.MatchRoot("user_id")),
+					stringvalidator.LengthAtLeast(1),
 				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -132,7 +143,12 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		return
 	}
 
-	err := r.client.AssociateSettingsProfile(ctx, plan.SettingsProfileID.ValueString(), plan.RoleID.ValueStringPointer(), plan.UserID.ValueStringPointer(), plan.ClusterName.ValueStringPointer())
+	var err error
+	if !plan.UserName.IsNull() {
+		err = r.client.AddSettingsProfileApplyTo(ctx, plan.SettingsProfileID.ValueString(), plan.UserName.ValueString(), plan.ClusterName.ValueStringPointer())
+	} else {
+		err = r.client.AssociateSettingsProfile(ctx, plan.SettingsProfileID.ValueString(), plan.RoleID.ValueStringPointer(), plan.UserID.ValueStringPointer(), plan.ClusterName.ValueStringPointer())
+	}
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Associating Settings Profile to Role",
@@ -147,6 +163,7 @@ func (r *Resource) Create(ctx context.Context, req resource.CreateRequest, resp 
 		SettingsProfileID: plan.SettingsProfileID,
 		RoleID:            plan.RoleID,
 		UserID:            plan.UserID,
+		UserName:          plan.UserName,
 	}
 
 	diags = resp.State.Set(ctx, state)
@@ -210,6 +227,27 @@ func (r *Resource) Read(ctx context.Context, req resource.ReadRequest, resp *res
 			resp.State.RemoveResource(ctx)
 			return
 		}
+	} else if !state.UserName.IsUnknown() && !state.UserName.IsNull() {
+		if settingsProfile.AppliesTo(state.UserName.ValueString()) {
+			return
+		}
+
+		// The TO list only shows users that exist right now. An absent user (e.g. a JWT user with no live token) keeps
+		// its entry, so the association is only drift when the user exists and is not listed.
+		user, err := r.client.FindUserByName(ctx, state.UserName.ValueString(), state.ClusterName.ValueStringPointer())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Error Getting User",
+				fmt.Sprintf("%+v\n", err),
+			)
+
+			return
+		}
+
+		if user != nil {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 	} else {
 		// This should never be the case, but in case it happens we can delete the resource as it would be pointless.
 		resp.State.RemoveResource(ctx)
@@ -229,7 +267,12 @@ func (r *Resource) Delete(ctx context.Context, req resource.DeleteRequest, resp 
 		return
 	}
 
-	err := r.client.DisassociateSettingsProfile(ctx, state.SettingsProfileID.ValueString(), state.RoleID.ValueStringPointer(), state.UserID.ValueStringPointer(), state.ClusterName.ValueStringPointer())
+	var err error
+	if !state.UserName.IsNull() {
+		err = r.client.RemoveSettingsProfileApplyTo(ctx, state.SettingsProfileID.ValueString(), state.UserName.ValueString(), state.ClusterName.ValueStringPointer())
+	} else {
+		err = r.client.DisassociateSettingsProfile(ctx, state.SettingsProfileID.ValueString(), state.RoleID.ValueStringPointer(), state.UserID.ValueStringPointer(), state.ClusterName.ValueStringPointer())
+	}
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Error Deleting ClickHouse SettingsProfileAssociation",
