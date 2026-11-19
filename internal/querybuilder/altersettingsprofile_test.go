@@ -30,8 +30,8 @@ func TestAlterSettingsProfile_Build(t *testing.T) {
 		},
 		{
 			name:    "apply to a JWT user name",
-			builder: NewAlterSettingsProfile("my_profile").ApplyTo([]string{"analyst", "JWT::https://idp.example.com::my-audience::jane::abc123"}),
-			want:    "ALTER SETTINGS PROFILE `my_profile` TO `analyst`, `JWT::https://idp.example.com::my-audience::jane::abc123`;",
+			builder: NewAlterSettingsProfile("my_profile").ApplyTo([]string{"analyst", "JWT::jane.doe::abc123"}),
+			want:    "ALTER SETTINGS PROFILE `my_profile` TO `analyst`, `JWT::jane.doe::abc123`;",
 		},
 		{
 			name:    "apply to a name with a backtick",
