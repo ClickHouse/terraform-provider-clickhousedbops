@@ -21,7 +21,7 @@ func TestScopeAttributesFor(t *testing.T) {
 		{"ALTER COLUMN", ScopeAttributes{Database: true, Table: true, Column: true}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
 		{"SHOW", ScopeAttributes{Database: true}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
 		{"ALTER DATABASE", ScopeAttributes{Database: true}, ScopeAttributes{Database: true}, true},
-		{"ALTER", ScopeAttributes{}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
+		{"ALTER", ScopeAttributes{Database: true}, ScopeAttributes{Database: true, Table: true, Column: true}, true},
 		{"TABLE ENGINE", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
 		{"READ", ScopeAttributes{AccessObject: true, SourceFilter: true}, ScopeAttributes{AccessObject: true, SourceFilter: true}, true},
 		{"NAMED COLLECTION", ScopeAttributes{AccessObject: true}, ScopeAttributes{AccessObject: true}, true},
