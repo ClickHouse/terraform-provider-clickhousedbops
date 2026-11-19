@@ -28,6 +28,30 @@ func (c *laggingClient) Select(ctx context.Context, sql string, callback func(cl
 	return c.ClickhouseClient.Select(ctx, sql, callback)
 }
 
+// shardedClient simulates a read over `shards` nodes, as clusterAllReplicas() does: every row of a SELECT containing
+// `match` comes back `shards` times. `repeated` counts those SELECTs.
+type shardedClient struct {
+	clickhouseclient.ClickhouseClient
+	match    string
+	shards   int
+	repeated int
+}
+
+func (c *shardedClient) Select(ctx context.Context, sql string, callback func(clickhouseclient.Row) error) error {
+	if !strings.Contains(sql, c.match) {
+		return c.ClickhouseClient.Select(ctx, sql, callback)
+	}
+	c.repeated++
+	return c.ClickhouseClient.Select(ctx, sql, func(row clickhouseclient.Row) error {
+		for range c.shards {
+			if err := callback(row); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // countingClient counts SELECTs containing `match` and fails the first `failures` of them.
 type countingClient struct {
 	clickhouseclient.ClickhouseClient
