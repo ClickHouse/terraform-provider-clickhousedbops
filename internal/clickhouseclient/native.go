@@ -148,7 +148,7 @@ func (i *nativeClient) Exec(ctx context.Context, qry string, params ...map[strin
 	tflog.Debug(ctx, "Running Query")
 
 	if len(params) > 0 {
-		ctx = clickhouse.Context(ctx, clickhouse.WithParameters(params[0]))
+		ctx = clickhouse.Context(ctx, clickhouse.WithParameters(escapeParams(params[0])))
 	}
 
 	err := i.connection.Exec(ctx, qry)
