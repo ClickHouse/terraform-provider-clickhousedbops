@@ -168,24 +168,21 @@ func (i *impl) UpdateSettingsProfile(ctx context.Context, settingsProfile Settin
 }
 
 func (i *impl) AssociateSettingsProfile(ctx context.Context, id string, roleId *string, userId *string, clusterName *string) error {
-	profile, err := i.GetSettingsProfile(ctx, id, clusterName)
+	profile, err := getDependency(ctx, "settings profile", id, func() (*SettingsProfile, error) {
+		return i.GetSettingsProfile(ctx, id, clusterName)
+	}, i.readAfterWriteTimeoutArgs()...)
 	if err != nil {
 		return errors.WithMessage(err, "error looking up settings profile name")
 	}
 
-	if profile == nil {
-		return errors.New("No Settings Profile with such ID found")
-	}
-
 	if roleId != nil {
-		role, err := i.GetRole(ctx, *roleId, clusterName)
+		role, err := getDependency(ctx, "role", *roleId, func() (*Role, error) {
+			return i.GetRole(ctx, *roleId, clusterName)
+		}, i.readAfterWriteTimeoutArgs()...)
 		if err != nil {
 			return errors.WithMessage(err, "Cannot find role")
 		}
 
-		if role == nil {
-			return errors.New("role not found")
-		}
 		sql, err := querybuilder.
 			NewAlterRole(role.Name).
 			WithCluster(clusterName).
@@ -202,13 +199,11 @@ func (i *impl) AssociateSettingsProfile(ctx context.Context, id string, roleId *
 
 		return nil
 	} else if userId != nil {
-		user, err := i.GetUser(ctx, *userId, clusterName)
+		user, err := getDependency(ctx, "user", *userId, func() (*User, error) {
+			return i.GetUser(ctx, *userId, clusterName)
+		}, i.readAfterWriteTimeoutArgs()...)
 		if err != nil {
 			return errors.WithMessage(err, "Cannot find user")
-		}
-
-		if user == nil {
-			return errors.New("user not found")
 		}
 
 		sql, err := querybuilder.
