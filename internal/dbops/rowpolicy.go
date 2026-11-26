@@ -79,7 +79,7 @@ func (i *impl) getRowPolicyWhere(ctx context.Context, where []querybuilder.Where
 			querybuilder.NewRawField("arrayStringConcat(apply_to_except, '\\n')", "apply_to_except"),
 		},
 		"system.row_policies",
-	).WithCluster(clusterName).Where(where...).Build()
+	).WithClusterAllReplicas(clusterName).Where(where...).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}

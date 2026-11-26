@@ -64,7 +64,7 @@ func (i *impl) GetSetting(ctx context.Context, settingsProfileID string, name st
 		querybuilder.NewField("max"),
 		querybuilder.NewField("writability").ToString(),
 	}, "system.settings_profile_elements").
-		WithCluster(clusterName).
+		WithClusterAllReplicas(clusterName).
 		Where(querybuilder.AndWhere(
 			querybuilder.WhereEquals("profile_name", settingsProfile.Name),
 			querybuilder.WhereEquals("setting_name", name),

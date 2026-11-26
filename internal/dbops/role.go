@@ -45,7 +45,7 @@ func (i *impl) GetRole(ctx context.Context, id string, clusterName *string) (*Ro
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("name")},
 		"system.roles",
-	).WithCluster(clusterName).Where(querybuilder.WhereEquals("id", id)).Build()
+	).WithClusterAllReplicas(clusterName).Where(querybuilder.WhereEquals("id", id)).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
@@ -76,7 +76,7 @@ func (i *impl) GetRole(ctx context.Context, id string, clusterName *string) (*Ro
 	{
 		sql, err = querybuilder.
 			NewSelect([]querybuilder.Field{querybuilder.NewField("inherit_profile")}, "system.settings_profile_elements").
-			WithCluster(clusterName).
+			WithClusterAllReplicas(clusterName).
 			Where(querybuilder.WhereEquals("role_name", role.Name)).
 			Build()
 		if err != nil {
@@ -133,7 +133,7 @@ func (i *impl) FindRoleByName(ctx context.Context, name string, clusterName *str
 	sql, err := querybuilder.NewSelect(
 		[]querybuilder.Field{querybuilder.NewField("id").ToString()},
 		"system.roles",
-	).Where(querybuilder.WhereEquals("name", name)).WithCluster(clusterName).Build()
+	).Where(querybuilder.WhereEquals("name", name)).WithClusterAllReplicas(clusterName).Build()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error building query")
 	}
